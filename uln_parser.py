@@ -1,0 +1,257 @@
+import re
+from typing import List, Dict, Any, Optional
+from dataclasses import dataclass, field
+
+@dataclass
+class InlineSpan:
+    text: str
+    bold: bool = False
+    italic: bool = False
+    underline: bool = False
+    uppercase: bool = False
+    color: Optional[str] = None      # e.g., "red", "#FF0000"
+    bg_color: Optional[str] = None   # e.g., "yellow", "#FFFF00"
+
+@dataclass
+class PicInfo:
+    description: str
+    pos: str = "center"   # "inline", "center", "right"
+    size: str = "medium"  # "small", "medium", "large"
+    filepath: Optional[str] = None
+
+@dataclass
+class ULNBlock:
+    tag: str  # "H1", "H2", "H3", "P0", "P1", "P2", "TAB2", "BOX", "QUOTE", "PIC", "P"
+    content: str = ""
+    col1: str = ""
+    col2: str = ""
+    col1_spans: List[InlineSpan] = field(default_factory=list)
+    col2_spans: List[InlineSpan] = field(default_factory=list)
+    spans: List[InlineSpan] = field(default_factory=list)
+    pic: Optional[PicInfo] = None
+    children: List['ULNBlock'] = field(default_factory=list)
+
+
+def parse_pic_tag(text: str) -> Optional[PicInfo]:
+    """
+    Parses [PIC: "description" | pos:center | size:medium]
+    """
+    m = re.search(r'\[PIC:\s*"(.*?)"(?:\s*\|\s*pos:(\w+))?(?:\s*\|\s*size:(\w+))?\s*\]', text, re.IGNORECASE)
+    if not m:
+        # Fallback without quotes
+        m = re.search(r'\[PIC:\s*([^\|\]]+)(?:\s*\|\s*pos:(\w+))?(?:\s*\|\s*size:(\w+))?\s*\]', text, re.IGNORECASE)
+    if m:
+        desc = m.group(1).strip()
+        pos = m.group(2).lower() if m.group(2) else "center"
+        size = m.group(3).lower() if m.group(3) else "medium"
+        return PicInfo(description=desc, pos=pos, size=size)
+    return None
+
+
+def parse_inline_spans(text: str) -> List[InlineSpan]:
+    """
+    Parses inline formatting elements:
+    - **bold**
+    - *italic*
+    - [text]{u}
+    - [text]{upper}
+    - [text]{color:NAME}
+    - [text]{bg:NAME}
+    - Combined e.g. [text]{u,color:red}
+    """
+    if not text:
+        return []
+
+    pattern = re.compile(
+        r'(?P<pic>\[PIC:[^\]]+\])|'
+        r'(?P<annot>\[(?P<ann_txt>[^\]]+)\]\{(?P<ann_mod>[^\}]+)\})|'
+        r'(?P<bold>\*\*(?P<b_txt>[^*]+)\*\*)|'
+        r'(?P<italic>\*(?P<i_txt>[^*]+)\*)'
+    )
+
+    spans = []
+    last_idx = 0
+
+    for match in pattern.finditer(text):
+        start, end = match.span()
+        if start > last_idx:
+            plain_txt = text[last_idx:start]
+            if plain_txt:
+                spans.append(InlineSpan(text=plain_txt))
+
+        gd = match.groupdict()
+
+        if gd['pic']:
+            spans.append(InlineSpan(text=gd['pic']))
+        elif gd['annot']:
+            ann_txt = gd['ann_txt']
+            ann_mod = gd['ann_mod'].strip().lower()
+            
+            bold = False
+            italic = False
+            underline = False
+            uppercase = False
+            color = None
+            bg_color = None
+
+            for mod in ann_mod.split(','):
+                mod = mod.strip()
+                if mod in ['u', 'underline']:
+                    underline = True
+                elif mod in ['upper', 'uppercase']:
+                    uppercase = True
+                    ann_txt = ann_txt.upper()
+                elif mod in ['b', 'bold']:
+                    bold = True
+                elif mod in ['i', 'italic']:
+                    italic = True
+                elif mod.startswith('color:'):
+                    color = mod.split(':', 1)[1].strip()
+                elif mod.startswith('bg:'):
+                    bg_color = mod.split(':', 1)[1].strip()
+
+            spans.append(InlineSpan(
+                text=ann_txt,
+                bold=bold,
+                italic=italic,
+                underline=underline,
+                uppercase=uppercase,
+                color=color,
+                bg_color=bg_color
+            ))
+        elif gd['bold']:
+            spans.append(InlineSpan(text=gd['b_txt'], bold=True))
+        elif gd['italic']:
+            spans.append(InlineSpan(text=gd['i_txt'], italic=True))
+
+        last_idx = end
+
+    if last_idx < len(text):
+        remaining = text[last_idx:]
+        if remaining:
+            spans.append(InlineSpan(text=remaining))
+
+    return spans
+
+
+class ULNParser:
+    """Parser to convert Universal Layout Notation (ULN) text into ULNBlock objects."""
+
+    @staticmethod
+    def parse(uln_text: str) -> List[ULNBlock]:
+        lines = uln_text.splitlines()
+        blocks: List[ULNBlock] = []
+        
+        in_box = False
+        box_lines: List[str] = []
+
+        in_quote = False
+        quote_lines: List[str] = []
+
+        for line in lines:
+            trimmed = line.strip()
+
+            # Handle multi-line [BOX] ... [/BOX]
+            if trimmed == "[BOX]" or trimmed.startswith("[BOX] "):
+                if trimmed == "[BOX]":
+                    in_box = True
+                    box_lines = []
+                    continue
+                else:
+                    rest = trimmed[5:].strip()
+                    if rest.endswith("[/BOX]"):
+                        box_content = rest[:-7].strip()
+                        blocks.append(ULNBlock(tag="BOX", content=box_content, spans=parse_inline_spans(box_content)))
+                        continue
+                    else:
+                        in_box = True
+                        box_lines = [rest]
+                        continue
+            
+            if in_box:
+                if trimmed == "[/BOX]":
+                    in_box = False
+                    box_content = "\n".join(box_lines)
+                    blocks.append(ULNBlock(tag="BOX", content=box_content, spans=parse_inline_spans(box_content)))
+                    box_lines = []
+                else:
+                    box_lines.append(line)
+                continue
+
+            # Handle multi-line [QUOTE] ... [/QUOTE]
+            if trimmed == "[QUOTE]" or trimmed.startswith("[QUOTE] "):
+                if trimmed == "[QUOTE]":
+                    in_quote = True
+                    quote_lines = []
+                    continue
+                else:
+                    rest = trimmed[7:].strip()
+                    if rest.endswith("[/QUOTE]"):
+                        q_content = rest[:-8].strip()
+                        blocks.append(ULNBlock(tag="QUOTE", content=q_content, spans=parse_inline_spans(q_content)))
+                        continue
+                    else:
+                        in_quote = True
+                        quote_lines = [rest]
+                        continue
+
+            if in_quote:
+                if trimmed == "[/QUOTE]":
+                    in_quote = False
+                    q_content = "\n".join(quote_lines)
+                    blocks.append(ULNBlock(tag="QUOTE", content=q_content, spans=parse_inline_spans(q_content)))
+                    quote_lines = []
+                else:
+                    quote_lines.append(line)
+                continue
+
+            if not trimmed:
+                continue
+
+            tag_match = re.match(r'^\[(H1|H2|H3|P0|P1|P2|TAB2|PIC)\]\s*(.*)$', trimmed, re.IGNORECASE)
+
+            if tag_match:
+                tag = tag_match.group(1).upper()
+                rest_content = tag_match.group(2)
+
+                if tag == "TAB2":
+                    parts = rest_content.split('\t', 1)
+                    col1_raw = parts[0].strip() if len(parts) > 0 else ""
+                    col2_raw = parts[1].strip() if len(parts) > 1 else ""
+
+                    c1_tag_match = re.match(r'^\[(P0|P1|P2)\]\s*(.*)$', col1_raw, re.IGNORECASE)
+                    if c1_tag_match:
+                        col1_raw = c1_tag_match.group(2)
+
+                    col1_spans = parse_inline_spans(col1_raw)
+                    col2_spans = parse_inline_spans(col2_raw)
+
+                    pic_info = parse_pic_tag(col2_raw) or parse_pic_tag(col1_raw)
+
+                    blocks.append(ULNBlock(
+                        tag="TAB2",
+                        col1=col1_raw,
+                        col2=col2_raw,
+                        col1_spans=col1_spans,
+                        col2_spans=col2_spans,
+                        pic=pic_info
+                    ))
+
+                elif tag == "PIC":
+                    pic_info = parse_pic_tag(f"[PIC] {rest_content}") or parse_pic_tag(rest_content)
+                    blocks.append(ULNBlock(tag="PIC", pic=pic_info))
+
+                else:
+                    spans = parse_inline_spans(rest_content)
+                    pic_info = parse_pic_tag(rest_content)
+                    blocks.append(ULNBlock(tag=tag, content=rest_content, spans=spans, pic=pic_info))
+
+            else:
+                pic_info = parse_pic_tag(trimmed)
+                if pic_info and trimmed.startswith("[PIC:"):
+                    blocks.append(ULNBlock(tag="PIC", pic=pic_info))
+                else:
+                    spans = parse_inline_spans(trimmed)
+                    blocks.append(ULNBlock(tag="P0", content=trimmed, spans=spans, pic=pic_info))
+
+        return blocks

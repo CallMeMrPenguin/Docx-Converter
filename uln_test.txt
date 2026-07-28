@@ -1,0 +1,18 @@
+[H1] SECTION A: PHONETICS
+[P0] Choose the word whose underlined part is pronounced differently:
+[P1] 1. A. [c]{u}at \t B. [c]{u}ity \t C. [c]{u}ar \t D. [c]{u}up
+
+[BOX] **Word Bank:** [ photosynthesis | chlorophyll | sunlight ] [/BOX]
+
+[P0] 2. Look at the diagram and answer:
+[TAB2] [P1] a) Identify the labeled organ: ____ \t [PIC: "Labeled diagram of a plant leaf" | pos:right | size:medium]
+[P2] i) What gas is released? ____
+
+[QUOTE]
+*Reading Passage:*
+Photosynthesis is the chemical process by which plants use **sunlight** to synthesize nutrients from *carbon dioxide* and water.
+[/QUOTE]
+
+[H2] SECTION B: MULTIPLE CHOICE
+[P0] 3. Water boils at ____ degrees Celsius under standard atmospheric pressure.
+[P1] A. 90°C \t B. 100°C \t C. 110°C \t D. 120°C
