@@ -2,7 +2,7 @@ import os
 import re
 import math
 from typing import List, Dict, Any, Optional
-from uln_parser import ULNBlock, InlineSpan, PicInfo
+from uln_parser import ULNBlock, InlineSpan, PicInfo, parse_pic_tag
 
 try:
     import pythoncom
