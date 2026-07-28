@@ -107,8 +107,29 @@ class ULNWordRenderer:
         self.margin_right = float(self.settings.get("margin_right", 1.5))
         self.line_spacing = float(self.settings.get("line_spacing", 1.15))
         self.space_before = float(self.settings.get("space_before", 4.0))
-        self.space_after = float(self.settings.get("space_after", 4.0))
         self.enable_page_numbers = self.settings.get("enable_page_numbers", True)
+        self.user_images = list(self.settings.get("user_images", []))
+        self.user_img_idx = 0
+
+    def get_next_image_path(self, pic: Optional[PicInfo] = None) -> Optional[str]:
+        """Returns next user-queued image in order, or falls back to test pic directory."""
+        if self.user_img_idx < len(self.user_images):
+            imgPath = self.user_images[self.user_img_idx]
+            self.user_img_idx += 1
+            if os.path.exists(imgPath):
+                return imgPath
+
+        if pic and pic.filepath and os.path.exists(pic.filepath):
+            return pic.filepath
+
+        test_pic_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test pic"))
+        if os.path.exists(test_pic_dir):
+            pics = [os.path.join(test_pic_dir, f) for f in os.listdir(test_pic_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+            if pics:
+                idx = abs(hash(pic.description if pic else "img")) % len(pics)
+                return pics[idx]
+
+        return None
 
     def configure_document(self, doc):
         """Applies page setup margins and optional page numbering."""
@@ -501,18 +522,8 @@ class ULNWordRenderer:
             idx_block += 1
 
     def render_pic(self, sel, doc, pic: PicInfo):
-        """Renders an image file if available, or picks a sample picture from 'test pic/' folder."""
-        import random
-        target_path = pic.filepath
-
-        if not target_path or not os.path.exists(target_path):
-            test_pic_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test pic"))
-            if os.path.exists(test_pic_dir):
-                pics = [os.path.join(test_pic_dir, f) for f in os.listdir(test_pic_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-                if pics:
-                    # Pick a deterministic image based on description text hash
-                    idx = abs(hash(pic.description)) % len(pics)
-                    target_path = pics[idx]
+        """Renders an image file from user queue in order, or falls back to 'test pic/' folder."""
+        target_path = self.get_next_image_path(pic)
 
         if target_path and os.path.exists(target_path):
             try:
@@ -730,13 +741,7 @@ class ULNWordRenderer:
 
             # Floating Picture Placement (In Front of Text, Aligned Top Option A to Bottom Option D, Flush Right Margin)
             if pic_info_found or has_pic:
-                target_path = pic_info_found.filepath if pic_info_found else None
-                if not target_path or not os.path.exists(target_path):
-                    test_pic_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test pic"))
-                    if os.path.exists(test_pic_dir):
-                        pics = [os.path.join(test_pic_dir, f) for f in os.listdir(test_pic_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-                        if pics:
-                            target_path = pics[0]
+                target_path = self.get_next_image_path(pic_info_found)
 
                 if target_path and os.path.exists(target_path):
                     try:

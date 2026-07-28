@@ -81,7 +81,24 @@ class ULNFormatterApp:
         # Open in Word after compile
         self.open_word_var = tk.BooleanVar(value=True)
         open_check = tk.Checkbutton(sidebar, text="Open DOCX in Word after saving", variable=self.open_word_var, bg="#1e293b", fg="#f8fafc", selectcolor="#0f172a", activebackground="#1e293b", activeforeground="#f8fafc")
-        open_check.pack(anchor="w", pady=(0, 15))
+        open_check.pack(anchor="w", pady=(0, 10))
+
+        # Image Queue (Order for [PIC] tags)
+        self.user_image_paths = []
+        img_frame = ttk.LabelFrame(sidebar, text=" 🖼️ Image Queue ([PIC] Order) ", padding=8)
+        img_frame.pack(fill="x", pady=(5, 10))
+
+        self.img_listbox = tk.Listbox(img_frame, height=4, bg="#090d16", fg="#e2e8f0", font=("Segoe UI", 9), selectbackground="#3b82f6")
+        self.img_listbox.pack(fill="x", pady=(0, 6))
+
+        img_btn_bar = tk.Frame(img_frame, bg="#1e293b")
+        img_btn_bar.pack(fill="x")
+
+        btn_add_img = tk.Button(img_btn_bar, text="➕ Add Images...", command=self.add_images, bg="#3b82f6", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", pady=3)
+        btn_add_img.pack(side="left", fill="x", expand=True, padx=(0, 2))
+
+        btn_clear_img = tk.Button(img_btn_bar, text="🗑️ Clear", command=self.clear_images, bg="#64748b", fg="#ffffff", font=("Segoe UI", 8), relief="flat", pady=3)
+        btn_clear_img.pack(side="right", padx=(2, 0))
 
         # Action Buttons on Sidebar
         btn_sample = tk.Button(sidebar, text="Load Sample ULN", command=self.load_sample, bg="#475569", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=6)
@@ -124,6 +141,27 @@ class ULNFormatterApp:
 
         # Preload default sample text
         self.load_sample()
+
+    def add_images(self):
+        files = filedialog.askopenfilenames(
+            title="Select Images for [PIC] Tags (In Order)",
+            filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.gif;*.bmp"), ("All Files", "*.*")]
+        )
+        if files:
+            for f in files:
+                abs_f = os.path.abspath(f)
+                if abs_f not in self.user_image_paths:
+                    self.user_image_paths.append(abs_f)
+            self.update_image_listbox()
+
+    def clear_images(self):
+        self.user_image_paths.clear()
+        self.update_image_listbox()
+
+    def update_image_listbox(self):
+        self.img_listbox.delete(0, tk.END)
+        for idx, p in enumerate(self.user_image_paths, 1):
+            self.img_listbox.insert(tk.END, f"{idx}. {os.path.basename(p)}")
 
     def load_sample(self):
         sample_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "uln_test.txt")
@@ -180,6 +218,7 @@ class ULNFormatterApp:
             "margin_left": self.m_left_var.get(),
             "margin_right": self.m_right_var.get(),
             "enable_page_numbers": self.pg_num_var.get(),
+            "user_images": list(self.user_image_paths),
         }
 
         try:

@@ -86,8 +86,17 @@ class ULNCompiler:
 
             if visible or keep_open:
                 try:
+                    doc.Saved = True
                     word.ScreenUpdating = True
                     word.Visible = True
+                    try:
+                        word.Selection.Collapse(0)
+                    except Exception:
+                        pass
+                    try:
+                        word.ActiveWindow.View.Type = 3  # wdPrintView = 3
+                    except Exception:
+                        pass
                     word.Activate()
                 except Exception:
                     pass
