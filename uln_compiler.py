@@ -64,8 +64,10 @@ class ULNCompiler:
             doc.SaveAs2(abs_output_path, FileFormat=16)
 
             if keep_open:
-                word.UserControl = True  # Transfer full user interactive mouse/keyboard control to user
-                word.Activate()
+                try:
+                    word.Activate()
+                except Exception:
+                    pass
 
             return abs_output_path
 
@@ -81,6 +83,11 @@ class ULNCompiler:
                         word.Quit()
                     except Exception:
                         pass
+            else:
+                # Detach COM references so Word runs independently as a user window
+                doc = None
+                word = None
+
             try:
                 pythoncom.CoUninitialize()
             except Exception:
