@@ -15,10 +15,10 @@ Place these tags at the very beginning of the line:
 - [H3] : Minor Heading or Category Title
 
 - [P0] : Base Paragraph / Main Instruction / Level 0 Question (Left Indent: 0 cm, e.g., "**I. Choose the correct answer.**", "1.", "Q3.")
-- [P1] : Sub-question / Option Level 1 (Left Indent: 0.5 cm, e.g., "a)", "b)", "A.", "B.", "1. A. cat \t B. city")
+- [P1] : Sub-question / Option Level 1 (Left Indent: 0.5 cm, e.g., "a)", "b)", "A.", "B.", "1. A. cat B. city C. car D. cup")
 - [P2] : Sub-sub-question / Sub-option Level 2 (Left Indent: 1.0 cm, e.g., "i)", "ii)", "1)")
 
-- [TAB2] : 2-Column Side-by-Side Paragraph Split Layout. Separate Column 1 and Column 2 using a standard tab character: \t
+- [TAB2] : 2-Column Side-by-Side Paragraph Split Layout (Separate Column 1 and Column 2 using two spaces or pipe | character)
 
 - [BOX] ... [/BOX] : Framing container for Word Banks, rule callouts, or framed text boxes.
 - [QUOTE] ... [/QUOTE] : Indented text block for reading passages, stories, or dialogs.
@@ -53,16 +53,16 @@ A. FILL-IN-THE-BLANK & ANSWERS:
    - If an answer key or filled text is provided, wrap it as underlined text: [answer]{u}
 
 B. MATCHING & COLUMN EXERCISES:
-   - Standard 2-Column Matching: [TAB2] [P1] 1. Photosynthesis \t A. Plant food synthesis
-   - Blank Column B for student response: [TAB2] [P1] 1. Photosynthesis \t Answer: _____
+   - Standard 2-Column Matching: [TAB2] [P1] 1. Photosynthesis  A. Plant food synthesis
+   - Blank Column B for student response: [TAB2] [P1] 1. Photosynthesis  Answer: _____
 
 C. CONTINUOUS CHOICE & PRONUNCIATION / STRESS GRIDS:
-   - Keep continuous option sets on a single line separated by tab characters:
-     [P1] 1. **A.** [c]{u}at \t **B.** [c]{u}ity \t **C.** [c]{u}ar \t **D.** [c]{u}up
-     [P1] 2. **A.** /'pəʊst/ \t **B.** /'gəʊ/ \t **C.** /'dɒg/ \t **D.** /'həʊm/
+   - Keep continuous option sets on a single line:
+     [P1] 1. **A.** [c]{u}at  **B.** [c]{u}ity  **C.** [c]{u}ar  **D.** [c]{u}up
+     [P1] 2. **A.** /'pəʊst/  **B.** /'gəʊ/  **C.** /'dɒg/  **D.** /'həʊm/
 
 D. IMAGE OPTIONS & DIAGRAM EXERCISES:
-   - Inline picture choices: [TAB2] [P1] **A.** [PIC: "A dog running" | pos:inline] \t **B.** [PIC: "A cat sleeping" | pos:inline]
+   - Inline picture choices: [TAB2] [P1] **A.** [PIC: "A dog running" | pos:inline]  **B.** [PIC: "A cat sleeping" | pos:inline]
 
 ---
 
@@ -84,10 +84,10 @@ Word Bank: [ photosynthesis | chlorophyll | sunlight ]
 Target ULN Output:
 [H1] **SECTION A: PHONETICS**
 [P0] **Choose the word whose underlined part is pronounced differently:**
-[P1] 1. **A.** [c]{u}at \t **B.** [c]{u}ity \t **C.** [c]{u}ar \t **D.** [c]{u}up
+[P1] 1. **A.** [c]{u}at  **B.** [c]{u}ity  **C.** [c]{u}ar  **D.** [c]{u}up
 
 [BOX] **Word Bank:** [ photosynthesis | chlorophyll | sunlight ] [/BOX]
 
 [P0] **2. Look at the diagram and answer:**
-[TAB2] [P1] a) Identify the labeled organ: ____ \t [PIC: "Labeled diagram of a plant leaf" | pos:right | size:medium]
+[TAB2] [P1] a) Identify the labeled organ: ____  [PIC: "Labeled diagram of a plant leaf" | pos:right | size:medium]
 [P2] i) What gas is released? _____

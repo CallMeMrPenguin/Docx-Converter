@@ -55,6 +55,44 @@ def parse_color_to_rgb_int(color_str: str) -> Optional[int]:
     return None
 
 
+def split_line_into_option_items(line_text: str) -> List[str]:
+    """
+    Splits line text into multi-column items automatically by detecting:
+    1. Explicit \t characters
+    2. Multiple option choices like a. text b. text c. text d. text
+    3. Multiple spaces / double spaces
+    """
+    if not line_text:
+        return []
+
+    if '\t' in line_text:
+        return [x.strip() for x in line_text.split('\t') if x.strip()]
+
+    # Search for option choices like a. b. c. d. or A. B. C. D.
+    matches = list(re.finditer(r'(?:\s+|^)([a-eA-E][\.\)])\s+', line_text))
+    if len(matches) >= 2:
+        items = []
+        first_start = matches[0].start()
+        q_prefix = line_text[:first_start].strip()
+
+        for i in range(len(matches)):
+            start = matches[i].start()
+            end = matches[i + 1].start() if i + 1 < len(matches) else len(line_text)
+            item_txt = line_text[start:end].strip()
+            if i == 0 and q_prefix:
+                item_txt = f"{q_prefix} {item_txt}"
+            items.append(item_txt)
+        return items
+
+    # Fallback to double space split if multiple columns exist
+    if '  ' in line_text:
+        parts = [p.strip() for p in re.split(r'\s{2,}', line_text) if p.strip()]
+        if len(parts) >= 2:
+            return parts
+
+    return [line_text.strip()]
+
+
 class ULNWordRenderer:
     """Renderer that executes pywin32 COM automation commands to construct Word (.docx) documents."""
 
@@ -233,9 +271,8 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.KeepWithNext = True if is_instruction else False
                 sel.ParagraphFormat.Alignment = 0
 
-                # Check if paragraph contains tab characters \t
-                if '\t' in block.content:
-                    items = block.content.split('\t')
+                items = split_line_into_option_items(block.content)
+                if len(items) > 1:
                     num_cols = len(items)
                     self.setup_tab_stops(sel, num_cols, left_indent_cm=0.0, printable_width_cm=printable_width_cm)
                     
@@ -259,9 +296,8 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
 
-                # Check if line contains tab stops \t (e.g. A. cat \t B. city \t C. car \t D. cup)
-                if '\t' in block.content:
-                    items = block.content.split('\t')
+                items = split_line_into_option_items(block.content)
+                if len(items) > 1:
                     num_cols = len(items)
                     self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
 

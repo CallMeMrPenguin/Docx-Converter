@@ -215,7 +215,14 @@ class ULNParser:
                 rest_content = tag_match.group(2)
 
                 if tag == "TAB2":
-                    parts = rest_content.split('\t', 1)
+                    # Split on \t, pipe |, or two or more spaces
+                    if '\t' in rest_content:
+                        parts = rest_content.split('\t', 1)
+                    elif ' | ' in rest_content:
+                        parts = rest_content.split(' | ', 1)
+                    else:
+                        parts = re.split(r'\s{2,}', rest_content, 1)
+
                     col1_raw = parts[0].strip() if len(parts) > 0 else ""
                     col2_raw = parts[1].strip() if len(parts) > 1 else ""
 
