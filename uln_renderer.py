@@ -469,19 +469,34 @@ class ULNWordRenderer:
             idx_block += 1
 
     def render_pic(self, sel, doc, pic: PicInfo):
-        """Renders an image file if available, or a clean visually framed diagram placeholder."""
-        if pic.filepath and os.path.exists(pic.filepath):
+        """Renders an image file if available, or picks a sample picture from 'test pic/' folder."""
+        import random
+        target_path = pic.filepath
+
+        if not target_path or not os.path.exists(target_path):
+            test_pic_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test pic"))
+            if os.path.exists(test_pic_dir):
+                pics = [os.path.join(test_pic_dir, f) for f in os.listdir(test_pic_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+                if pics:
+                    # Pick a deterministic image based on description text hash
+                    idx = abs(hash(pic.description)) % len(pics)
+                    target_path = pics[idx]
+
+        if target_path and os.path.exists(target_path):
             try:
-                shape = sel.InlineShapes.AddPicture(FileName=os.path.abspath(pic.filepath))
+                shape = sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
                 if pic.size == "small":
-                    shape.Width = cm_to_pt(4.0)
+                    shape.Width = cm_to_pt(3.5)
+                    shape.Height = cm_to_pt(2.5)
                 elif pic.size == "large":
-                    shape.Width = cm_to_pt(12.0)
+                    shape.Width = cm_to_pt(10.0)
+                    shape.Height = cm_to_pt(6.5)
                 else:
-                    shape.Width = cm_to_pt(7.0)
+                    shape.Width = cm_to_pt(6.0)
+                    shape.Height = cm_to_pt(4.0)
                 return
             except Exception as e:
-                print(f"[ULNRenderer] Warning adding picture {pic.filepath}: {e}")
+                print(f"[ULNRenderer] Warning adding picture {target_path}: {e}")
 
         # Visual Placeholder Box for OCR / Diagram References
         desc_text = f"🖼️ [ DIAGRAM / IMAGE: {pic.description} ]"
@@ -607,6 +622,7 @@ class ULNWordRenderer:
         Renders [TABLE] block structure:
         - If borderless: uses divided paragraph tab stop columns with custom spacing.
         - If bordered: uses a native MS Word table with cell margins & 1.0pt gridlines.
+        - Empty/blank cells (______): ignores literal underscore text inside cell bodies so bottom border acts as answer line!
         """
         if not tdata.rows:
             return
@@ -615,14 +631,17 @@ class ULNWordRenderer:
         num_cols = max(len(r.cells) for r in tdata.rows)
 
         if tdata.borderless:
-            # Borderless Table -> divided paragraph tab stop columns
             sel.ParagraphFormat.SpaceBefore = 3
             sel.ParagraphFormat.SpaceAfter = 3
             self.setup_tab_stops(sel, num_cols, left_indent_cm=0.5, printable_width_cm=printable_width_cm)
 
             for row in tdata.rows:
                 for idx_c, cell in enumerate(row.cells):
-                    self.write_inline_spans(sel, cell.spans, default_bold=cell.is_header)
+                    # In borderless mode, write text or clean blank
+                    if not re.match(r'^\s*_{2,}\s*$', cell.content):
+                        self.write_inline_spans(sel, cell.spans, default_bold=cell.is_header)
+                    else:
+                        sel.TypeText("___________")
                     if idx_c < len(row.cells) - 1:
                         sel.TypeText("\t")
                 sel.TypeParagraph()
@@ -631,14 +650,12 @@ class ULNWordRenderer:
             sel.ParagraphFormat.TabStops.ClearAll()
 
         else:
-            # Native Bordered Table
             table = doc.Tables.Add(Range=sel.Range, NumRows=num_rows, NumColumns=num_cols)
             try:
                 table.Rows.Alignment = 1  # Center table on page
             except Exception:
                 pass
 
-            # Cell margins / padding adjustment (Top/Bottom 0.15cm ~4.2pt, Left/Right 0.25cm ~7pt)
             try:
                 table.TopPadding = cm_to_pt(0.15)
                 table.BottomPadding = cm_to_pt(0.15)
@@ -665,10 +682,14 @@ class ULNWordRenderer:
                         p_range = cell_obj.Range
                         p_range.ParagraphFormat.SpaceBefore = 2
                         p_range.ParagraphFormat.SpaceAfter = 2
-                        p_range.ParagraphFormat.Alignment = 1 if cell.is_header else 0  # Center header text
+                        p_range.ParagraphFormat.Alignment = 1 if cell.is_header else 0
 
                         sel.Start = cell_obj.Range.Start
-                        self.write_inline_spans(sel, cell.spans, default_bold=cell.is_header)
+
+                        # MANDATE: If cell content is _____ or empty, IGNORE literal text so bottom border acts as answer line!
+                        is_blank_cell = bool(re.match(r'^\s*_{2,}\s*$', cell.content))
+                        if not is_blank_cell and cell.content.strip():
+                            self.write_inline_spans(sel, cell.spans, default_bold=cell.is_header)
 
             sel.Start = table.Range.End
             sel.TypeParagraph()
