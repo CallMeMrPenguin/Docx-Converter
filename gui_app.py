@@ -84,7 +84,7 @@ class ULNFormatterApp:
         open_check.pack(anchor="w", pady=(0, 5))
 
         # Background Mode Checkbox (Silent, 0 Mouse Interruption)
-        self.bg_mode_var = tk.BooleanVar(value=True)
+        self.bg_mode_var = tk.BooleanVar(value=False)
         bg_check = tk.Checkbutton(sidebar, text="⚡ Background Mode (0 Mouse Freeze)", variable=self.bg_mode_var, bg="#1e293b", fg="#38bdf8", selectcolor="#0f172a", activebackground="#1e293b", activeforeground="#38bdf8")
         bg_check.pack(anchor="w", pady=(0, 10))
 
