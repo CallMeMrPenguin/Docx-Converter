@@ -255,30 +255,42 @@ class ULNWordRenderer:
             tag = block.tag
 
             if tag == "H1":
+                try:
+                    sel.Style = doc.Styles("Heading 1")
+                except Exception:
+                    pass
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
-                sel.ParagraphFormat.SpaceBefore = 18
-                sel.ParagraphFormat.SpaceAfter = 12
+                sel.ParagraphFormat.SpaceBefore = 14
+                sel.ParagraphFormat.SpaceAfter = 6
                 sel.ParagraphFormat.KeepWithNext = True
                 sel.ParagraphFormat.Alignment = 0  # Left
                 self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True)
                 sel.TypeParagraph()
 
             elif tag == "H2":
+                try:
+                    sel.Style = doc.Styles("Heading 2")
+                except Exception:
+                    pass
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
-                sel.ParagraphFormat.SpaceBefore = 14
-                sel.ParagraphFormat.SpaceAfter = 8
+                sel.ParagraphFormat.SpaceBefore = 12
+                sel.ParagraphFormat.SpaceAfter = 4
                 sel.ParagraphFormat.KeepWithNext = True
                 sel.ParagraphFormat.Alignment = 0
                 self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True)
                 sel.TypeParagraph()
 
             elif tag == "H3":
+                try:
+                    sel.Style = doc.Styles("Heading 3")
+                except Exception:
+                    pass
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 10
-                sel.ParagraphFormat.SpaceAfter = 6
+                sel.ParagraphFormat.SpaceAfter = 4
                 sel.ParagraphFormat.KeepWithNext = True
                 sel.ParagraphFormat.Alignment = 0
                 self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True)
@@ -481,6 +493,11 @@ class ULNWordRenderer:
 
                     self.render_pic(sel, doc, block.pic)
                     sel.TypeParagraph()
+
+            try:
+                sel.ScrollIntoView()
+            except Exception:
+                pass
 
             idx_block += 1
 
@@ -709,7 +726,6 @@ class ULNWordRenderer:
                             self.write_inline_spans(sel, cell.spans, default_bold=cell.is_header)
 
             sel.Start = table.Range.End
-            sel.TypeParagraph()
 
     def render_pic_grid(self, sel, doc, children: List[ULNBlock], printable_width_cm: float):
         """

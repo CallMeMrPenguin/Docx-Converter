@@ -1,9 +1,7 @@
 import os
 from uln_compiler import ULNCompiler
 
-uln_input = """[H1] TEST FOR UNIT 1
-
-[P0] I. Choose the word whose underlined part is pronounced differently from the others.
+uln_input = """[P0] I. Choose the word whose underlined part is pronounced differently from the others.
 [P1] 1. A. [e]{u}xciting  B. [e]{u}xcellent  C. [e]{u}xperience  D. [e]{u}xpensive
 [P1] 2. A. hobb[y]{u}  B. c[y]{u}cle  C. b[y]{u}e  D. wh[y]{u}
 [P1] 3. A. p[o]{u}ttery  B. c[o]{u}llect  C. mel[o]{u}dy  D. m[o]{u}nopoly
