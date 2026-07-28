@@ -116,8 +116,13 @@ class ULNCompiler:
                     except Exception:
                         pass
             else:
-                # Detach COM references so Word runs independently as a user window
+                # Fully detach COM object references so Word operates as a standalone user window
+                try:
+                    doc.Saved = True
+                except Exception:
+                    pass
                 doc = None
+                word = None
                 word = None
 
             try:
