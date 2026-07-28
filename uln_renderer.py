@@ -515,9 +515,12 @@ class ULNWordRenderer:
                     sel.TypeParagraph()
 
             try:
-                sel.ScrollIntoView()
+                word.ActiveWindow.ScrollIntoView(sel.Range, True)
             except Exception:
-                pass
+                try:
+                    sel.ScrollIntoView()
+                except Exception:
+                    pass
 
             idx_block += 1
 

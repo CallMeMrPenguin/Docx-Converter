@@ -21,15 +21,13 @@ class ULNCompiler:
         self.output_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "output"))
         os.makedirs(self.output_dir, exist_ok=True)
 
-    def compile(self, uln_text: str, output_filepath: Optional[str] = None, visible: bool = False, keep_open: bool = False) -> str:
+    def compile(self, uln_text: str, output_filepath: Optional[str] = None, visible: bool = False, keep_open: bool = False, background_mode: bool = False) -> str:
         """
         Compiles raw ULN plain text into a formatted MS Word (.docx) file.
         Returns absolute path to generated file in output/ directory by default.
         """
         if not pywin32_available:
             raise RuntimeError("pywin32 package is not installed or available on this Python runtime.")
-
-        blocks = ULNParser.parse(uln_text)
 
         if not output_filepath:
             output_filepath = os.path.join(self.output_dir, "uln_document.docx")
@@ -42,6 +40,7 @@ class ULNCompiler:
         abs_output_path = os.path.abspath(output_filepath)
         os.makedirs(os.path.dirname(abs_output_path), exist_ok=True)
 
+        blocks = ULNParser.parse(uln_text)
         word = None
         doc = None
 
@@ -52,22 +51,23 @@ class ULNCompiler:
                 pass
 
             word = win32com.client.Dispatch("Word.Application")
-            word.Visible = True if (visible or keep_open) else False
+            is_live_view = (visible or keep_open) and not background_mode
+            word.Visible = True if is_live_view else False
             word.DisplayAlerts = 0  # wdAlertsNone
             
             try:
-                word.ScreenUpdating = True
+                word.ScreenUpdating = True if is_live_view else False
             except Exception:
                 pass
 
             doc = word.Documents.Add()
-            if visible or keep_open:
+            if is_live_view:
                 try:
                     word.Activate()
                 except Exception:
                     pass
             
-            # Execute pywin32 rendering live on screen
+            # Execute pywin32 rendering
             self.renderer.render(blocks, doc, word)
 
             # Save as DOCX (FileFormat = 16)

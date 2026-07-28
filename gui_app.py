@@ -81,7 +81,12 @@ class ULNFormatterApp:
         # Open in Word after compile
         self.open_word_var = tk.BooleanVar(value=True)
         open_check = tk.Checkbutton(sidebar, text="Open DOCX in Word after saving", variable=self.open_word_var, bg="#1e293b", fg="#f8fafc", selectcolor="#0f172a", activebackground="#1e293b", activeforeground="#f8fafc")
-        open_check.pack(anchor="w", pady=(0, 10))
+        open_check.pack(anchor="w", pady=(0, 5))
+
+        # Background Mode Checkbox (Silent, 0 Mouse Interruption)
+        self.bg_mode_var = tk.BooleanVar(value=True)
+        bg_check = tk.Checkbutton(sidebar, text="⚡ Background Mode (0 Mouse Freeze)", variable=self.bg_mode_var, bg="#1e293b", fg="#38bdf8", selectcolor="#0f172a", activebackground="#1e293b", activeforeground="#38bdf8")
+        bg_check.pack(anchor="w", pady=(0, 10))
 
         # Image Queue (Order for [PIC] tags)
         self.user_image_paths = []
@@ -224,7 +229,8 @@ class ULNFormatterApp:
         try:
             compiler = ULNCompiler(settings)
             keep_open_val = self.open_word_var.get()
-            compiled_file = compiler.compile(uln_text, out_path, keep_open=keep_open_val)
+            bg_mode_val = self.bg_mode_var.get()
+            compiled_file = compiler.compile(uln_text, out_path, keep_open=keep_open_val, background_mode=bg_mode_val)
             
             msg = f"Successfully generated DOCX file:\n{compiled_file}"
             messagebox.showinfo("Success", msg)
