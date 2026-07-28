@@ -52,17 +52,22 @@ class ULNCompiler:
                 pass
 
             word = win32com.client.Dispatch("Word.Application")
-            word.Visible = False  # Keep completely hidden in background during rendering
+            word.Visible = True if (visible or keep_open) else False
             word.DisplayAlerts = 0  # wdAlertsNone
             
             try:
-                word.ScreenUpdating = False
+                word.ScreenUpdating = True
             except Exception:
                 pass
 
             doc = word.Documents.Add()
+            if visible or keep_open:
+                try:
+                    word.Activate()
+                except Exception:
+                    pass
             
-            # Execute pywin32 rendering silently in memory (no window flicker or OS freeze)
+            # Execute pywin32 rendering live on screen
             self.renderer.render(blocks, doc, word)
 
             # Save as DOCX (FileFormat = 16)

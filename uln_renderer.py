@@ -213,6 +213,9 @@ class ULNWordRenderer:
             if re.match(r'^_{30,}$', text):
                 text = '_' * 35
 
+            # Replace <blank>, <BLANK>, [BLANK] tag strings with normalized student answer line _____
+            text = re.sub(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '___________', text)
+
             text = text.upper() if is_upper else text
             sel.TypeText(text)
 
@@ -290,7 +293,7 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.Alignment = 0
 
                 # Check if paragraph ends with a standalone answer line _____ or <blank> or [BLANK]
-                ends_with_blank = bool(re.search(r'^\s*_{3,}\s*$', block.content))
+                ends_with_blank = bool(re.search(r'^\s*(?:_{3,}|<blank>|\[BLANK\])\s*$', block.content, re.IGNORECASE))
 
                 if ends_with_blank:
                     # Flush right standalone blank line
@@ -322,7 +325,11 @@ class ULNWordRenderer:
                         sel.TypeParagraph()
 
             elif tag in ["P1", "P2"]:
-                left_indent_cm = 0.5 if tag == "P1" else 1.0
+                items = split_line_into_option_items(block.content)
+                starts_with_num = bool(re.match(r'^\s*\d+[\.\)]', block.content))
+
+                # Question lines starting with a number (1. A. ... B. ...) MUST start flush at 0cm left margin!
+                left_indent_cm = 0.0 if starts_with_num else (0.5 if tag == "P1" else 1.0)
 
                 sel.ParagraphFormat.SpaceBefore = 4 if tag == "P1" else 3
                 sel.ParagraphFormat.SpaceAfter = 3
@@ -330,7 +337,7 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.Alignment = 0
 
                 # Check if paragraph ends with a standalone answer line _____
-                ends_with_blank = bool(re.search(r'^\s*_{3,}\s*$', block.content))
+                ends_with_blank = bool(re.search(r'^\s*(?:_{3,}|<blank>|\[BLANK\])\s*$', block.content, re.IGNORECASE))
 
                 if ends_with_blank:
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
@@ -362,7 +369,6 @@ class ULNWordRenderer:
                                 sel.TypeText("\t")
                         sel.ParagraphFormat.TabStops.ClearAll()
                     else:
-                        items = split_line_into_option_items(block.content)
                         if len(items) > 1:
                             num_cols = len(items)
                             self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
@@ -563,6 +569,7 @@ class ULNWordRenderer:
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
         sel.ParagraphFormat.LeftIndent = left_offset_pt
+        sel.ParagraphFormat.KeepWithNext = True  # Group word bank text & box shape on same page
         sel.ParagraphFormat.TabStops.ClearAll()
 
         for c in range(1, cols):
