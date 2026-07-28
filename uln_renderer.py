@@ -670,94 +670,79 @@ class ULNWordRenderer:
                 for row in tdata.rows for cell in row.cells
             )
 
-            if has_pic and num_cols >= 2:
-                # Native Word Table for Borderless Picture-Option Alignment
-                table = doc.Tables.Add(Range=sel.Range, NumRows=num_rows, NumColumns=num_cols)
+            pic_info_found = None
+            text_rows = []
+
+            for row in tdata.rows:
+                row_text_parts = []
+                for cell in row.cells:
+                    if "[PIC" in cell.content.upper() or parse_pic_tag(cell.content) is not None:
+                        if not pic_info_found:
+                            pic_info_found = parse_pic_tag(cell.content) or PicInfo(description="Activity Picture", pos="center", size="medium")
+                    else:
+                        if cell.content.strip() and not re.match(r'^\s*(?:_{2,}|<blank>|\[BLANK\])\s*$', cell.content, re.IGNORECASE):
+                            row_text_parts.append(cell.content.strip())
+                if row_text_parts:
+                    text_rows.append(" ".join(row_text_parts))
+
+            # Mark start range of options section for anchor positioning
+            options_anchor_range = sel.Range.Duplicate
+
+            # Render text rows as standard paragraphs (NO MS Word Table object!)
+            for idx_r, txt_line in enumerate(text_rows):
+                from uln_parser import parse_inline_spans
+                spans = parse_inline_spans(txt_line)
                 
-                # Turn off all borders
-                try:
-                    table.Borders.Enable = False
-                    for border_id in [-1, -2, -3, -4, -5, -6]:
-                        try: table.Borders(border_id).LineStyle = 0  # wdLineStyleNone = 0
-                        except Exception: pass
-                except Exception:
-                    pass
+                is_opt_line = bool(re.match(r'^\s*\*?\*?[A-Da-d][\.\)]', txt_line))
+                left_ind_cm = 0.5 if is_opt_line else 0.0
 
-                # Calculate Column Widths for Flush Right Layout with 5mm gap
-                longest_c1_len = max(len(row.cells[0].content) for row in tdata.rows if row.cells)
-                col1_width_cm = max(6.0, min(printable_width_cm - 3.8, (longest_c1_len * 0.16) + 0.5))
-                col2_width_cm = printable_width_cm - col1_width_cm  # Flush right to margin
+                sel.ParagraphFormat.LeftIndent = cm_to_pt(left_ind_cm)
+                sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.SpaceBefore = 3
+                sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.LineSpacingRule = 0  # Single Line Spacing
+                sel.ParagraphFormat.Alignment = 0  # Left
 
-                try:
-                    table.Columns(1).Width = cm_to_pt(col1_width_cm)
-                    table.Columns(2).Width = cm_to_pt(col2_width_cm)
-                except Exception:
-                    pass
-
-                # Find which column contains the image
-                pic_col = 1  # 0-indexed column 2 by default
-                for row in tdata.rows:
-                    for c_idx, cell in enumerate(row.cells):
-                        if "[PIC" in cell.content.upper() or parse_pic_tag(cell.content) is not None:
-                            pic_col = c_idx
-                            break
-
-                # Merge option rows in the picture column so image matches total combined 4-options height!
-                # If row 0 is Question, options are rows 1..N-1 (1-indexed: rows 2..num_rows)
-                option_start_row = 2 if num_rows > 2 else 1
-                if num_rows >= option_start_row:
+                if idx_r == 1:
+                    # Update anchor to top of first option line
                     try:
-                        c_start = table.Cell(option_start_row, pic_col + 1)
-                        c_end = table.Cell(num_rows, pic_col + 1)
-                        c_start.Merge(c_end)
+                        options_anchor_range = sel.Range.Duplicate
                     except Exception:
                         pass
 
-                # Render cells
-                for r_idx, row in enumerate(tdata.rows):
-                    for c_idx, cell in enumerate(row.cells):
-                        # Skip writing to merged out cells in picture column after start row
-                        if c_idx == pic_col and r_idx + 1 > option_start_row and num_rows >= option_start_row:
-                            continue
+                self.write_inline_spans(sel, spans)
+                sel.TypeParagraph()
 
-                        try:
-                            cell_target_row = option_start_row if (c_idx == pic_col and r_idx + 1 > option_start_row) else (r_idx + 1)
-                            cell_obj = table.Cell(cell_target_row, c_idx + 1)
-                            cell_obj.VerticalAlignment = 1  # wdCellVerticalAlignmentCenter = 1
-                            
-                            p_range = cell_obj.Range
-                            p_range.ParagraphFormat.SpaceBefore = 2
-                            p_range.ParagraphFormat.SpaceAfter = 2
-                            p_range.ParagraphFormat.LineSpacingRule = 0  # Single Line Spacing
-                            p_range.ParagraphFormat.Alignment = 0  # Left
+            sel.ParagraphFormat.LeftIndent = 0
 
-                            sel.Start = cell_obj.Range.Start
+            # Floating Picture Placement (In Front of Text, Flush Right Margin, Aligned with Options)
+            if pic_info_found or has_pic:
+                target_path = pic_info_found.filepath if pic_info_found else None
+                if not target_path or not os.path.exists(target_path):
+                    test_pic_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test pic"))
+                    if os.path.exists(test_pic_dir):
+                        pics = [os.path.join(test_pic_dir, f) for f in os.listdir(test_pic_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
+                        if pics:
+                            target_path = pics[0]
 
-                            if "[PIC" in cell.content.upper() or parse_pic_tag(cell.content) is not None:
-                                pic_info = parse_pic_tag(cell.content) or PicInfo(description="Activity Picture", pos="center", size="medium")
-                                # Render picture scaled to match combined option rows height (~3.4cm)
-                                target_path = pic_info.filepath
-                                if not target_path or not os.path.exists(target_path):
-                                    test_pic_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test pic"))
-                                    if os.path.exists(test_pic_dir):
-                                        pics = [os.path.join(test_pic_dir, f) for f in os.listdir(test_pic_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-                                        if pics:
-                                            target_path = pics[0]
-                                if target_path and os.path.exists(target_path):
-                                    try:
-                                        shape = sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
-                                        # Set height to match combined 4 options height (3.4cm)
-                                        shape.Height = cm_to_pt(3.4)
-                                        shape.Width = cm_to_pt(3.4)
-                                    except Exception:
-                                        pass
-                            else:
-                                if not re.match(r'^\s*(?:_{2,}|<blank>|\[BLANK\])\s*$', cell.content, re.IGNORECASE):
-                                    self.write_inline_spans(sel, cell.spans, default_bold=cell.is_header)
-                        except Exception as cell_err:
-                            print(f"[ULNRenderer] Borderless table cell error: {cell_err}")
+                if target_path and os.path.exists(target_path):
+                    try:
+                        inline_shape = options_anchor_range.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
+                        shape = inline_shape.ConvertToShape()
 
-                sel.Start = table.Range.End
+                        shape.WrapFormat.Type = 3  # msoWrapFront = 3 (In Front of Text)
+                        shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
+                        shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
+
+                        img_size_pt = cm_to_pt(3.4)  # Height matching combined 4 options height
+                        shape.Height = img_size_pt
+                        shape.Width = img_size_pt
+
+                        # Position flush right to margin (printable_width_cm - img_size_cm)
+                        shape.Left = cm_to_pt(printable_width_cm - 3.4)
+                        shape.Top = cm_to_pt(0.0)  # Aligned with top of option section
+                    except Exception as pic_err:
+                        print(f"[ULNRenderer] Floating image positioning error: {pic_err}")
 
             else:
                 # Tab stop fallback for simple text-only borderless tables
