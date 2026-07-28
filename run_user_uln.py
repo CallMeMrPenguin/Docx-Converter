@@ -96,6 +96,6 @@ compiler = ULNCompiler({
 })
 
 output_file = os.path.join(compiler.output_dir, "unit_1_test_formatted.docx")
-print("Compiling ULN input to Word document...")
-compiled_path = compiler.compile(uln_input, output_file, keep_open=False)
-print(f"Compilation finished! Output saved to: {compiled_path}")
+print("Compiling ULN input to Word document with real-time visual editing...")
+compiled_path = compiler.compile(uln_input, output_file, keep_open=True)
+print(f"Compilation finished! Word is open and interactive on screen at: {compiled_path}")

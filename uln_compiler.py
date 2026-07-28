@@ -52,16 +52,20 @@ class ULNCompiler:
                 pass
 
             word = win32com.client.Dispatch("Word.Application")
-            word.Visible = visible
+            word.Visible = True if (visible or keep_open) else False
             word.DisplayAlerts = 0  # wdAlertsNone
 
             doc = word.Documents.Add()
             
-            # Execute pywin32 rendering
+            # Execute pywin32 rendering in real-time
             self.renderer.render(blocks, doc, word)
 
             # Save as DOCX (FileFormat = 16)
             doc.SaveAs2(abs_output_path, FileFormat=16)
+
+            if keep_open:
+                word.UserControl = True  # Transfer full user interactive mouse/keyboard control to user
+                word.Activate()
 
             return abs_output_path
 
@@ -77,10 +81,10 @@ class ULNCompiler:
                         word.Quit()
                     except Exception:
                         pass
-                try:
-                    pythoncom.CoUninitialize()
-                except Exception:
-                    pass
+            try:
+                pythoncom.CoUninitialize()
+            except Exception:
+                pass
 
     def compile_file(self, input_filepath: str, output_filepath: str, visible: bool = False) -> str:
         """Loads a .txt ULN file and compiles it to DOCX."""

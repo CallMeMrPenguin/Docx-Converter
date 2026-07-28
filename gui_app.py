@@ -184,13 +184,11 @@ class ULNFormatterApp:
 
         try:
             compiler = ULNCompiler(settings)
-            compiled_file = compiler.compile(uln_text, out_path, keep_open=False)
+            keep_open_val = self.open_word_var.get()
+            compiled_file = compiler.compile(uln_text, out_path, keep_open=keep_open_val)
             
             msg = f"Successfully generated DOCX file:\n{compiled_file}"
             messagebox.showinfo("Success", msg)
-
-            if self.open_word_var.get():
-                os.startfile(compiled_file)
 
         except Exception as e:
             messagebox.showerror("Compilation Error", f"Failed to generate Word document:\n{e}")
