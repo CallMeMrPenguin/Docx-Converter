@@ -135,7 +135,7 @@ class ULNWordRenderer:
                 end_range.Collapse(0)  # wdCollapseEnd = 0
                 doc.Fields.Add(Range=end_range, Type=-1, Text="NUMPAGES")
 
-    def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False):
+    def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False, default_uppercase: bool = False):
         """Writes formatted text runs strictly according to span AST properties."""
         for idx, span in enumerate(spans):
             text = span.text
@@ -156,6 +156,7 @@ class ULNWordRenderer:
             
             is_bold = span.bold or default_bold
             is_italic = span.italic or default_italic
+            is_upper = span.uppercase or default_uppercase
 
             # Auto-capitalize & bold option letters: "a. ", "b. ", "c. ", "d. ", "e. ", "f. ", "a) ", "b) "
             opt_match = re.match(r'^(\s*(?:\d+\.\s*)?)([a-zA-Z])([\.\)])(\s*.*)$', text)
@@ -212,7 +213,7 @@ class ULNWordRenderer:
             if re.match(r'^_{30,}$', text):
                 text = '_' * 35
 
-            text = text.upper() if span.uppercase else text
+            text = text.upper() if is_upper else text
             sel.TypeText(text)
 
             try:
@@ -257,7 +258,7 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.SpaceAfter = 12
                 sel.ParagraphFormat.KeepWithNext = True
                 sel.ParagraphFormat.Alignment = 0  # Left
-                self.write_inline_spans(sel, block.spans, default_bold=True)
+                self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True)
                 sel.TypeParagraph()
 
             elif tag == "H2":
@@ -267,7 +268,7 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.SpaceAfter = 8
                 sel.ParagraphFormat.KeepWithNext = True
                 sel.ParagraphFormat.Alignment = 0
-                self.write_inline_spans(sel, block.spans, default_bold=True)
+                self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True)
                 sel.TypeParagraph()
 
             elif tag == "H3":
@@ -277,7 +278,7 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.SpaceAfter = 6
                 sel.ParagraphFormat.KeepWithNext = True
                 sel.ParagraphFormat.Alignment = 0
-                self.write_inline_spans(sel, block.spans, default_bold=True)
+                self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True)
                 sel.TypeParagraph()
 
             elif tag in ["P0", "P"]:
@@ -444,13 +445,13 @@ class ULNWordRenderer:
                 self.render_box_shape(sel, doc, word, block, printable_width_cm)
 
             elif tag == "QUOTE":
-                # Reading passage rendered with standard 0.75 cm first-line indent
+                # Reading passage rendered justified (wdAlignParagraphJustify = 3) with standard first-line indent
                 sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
                 sel.ParagraphFormat.RightIndent = cm_to_pt(0.5)
-                sel.ParagraphFormat.FirstLineIndent = cm_to_pt(0.75)  # First line indent for passages
-                sel.ParagraphFormat.SpaceBefore = 4
+                sel.ParagraphFormat.FirstLineIndent = cm_to_pt(0.75)
+                sel.ParagraphFormat.SpaceBefore = 0
                 sel.ParagraphFormat.SpaceAfter = 4
-                sel.ParagraphFormat.Alignment = 0
+                sel.ParagraphFormat.Alignment = 3  # wdAlignParagraphJustify = 3 (Justified)
                 self.write_inline_spans(sel, block.spans, default_italic=False)
                 sel.TypeParagraph()
                 sel.ParagraphFormat.RightIndent = 0
