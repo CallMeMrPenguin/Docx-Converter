@@ -78,12 +78,12 @@ Option letters (A., B., C., D.) MUST ALWAYS be CAPITALIZED and BOLD (e.g., **A.*
 ### 3. EXERCISE-SPECIFIC SYNTAX & EDGE CASES
 
 A. FILL-IN-THE-BLANK & ANSWERS:
-   - Use '______' for empty student blanks.
+   - ALWAYS use '<blank>' for empty student blanks so compiler logic can determine optimal blank length and flush right.
    - If an answer key or filled text is provided, wrap it as underlined text: [answer]{u}
 
 B. ERROR CORRECTION & FLUSH RIGHT ANSWERS:
-   - Use [TAB2] for error correction lines so the answer blank is aligned flush right:
-     [TAB2] [P0] 1. Nam is my classmates. He watches TV every night.  ______
+   - Use [TAB2] for error correction lines so the answer blank is aligned flush right at the right margin:
+     [TAB2] [P0] 1. Nam is my classmates. He watches TV every night.  <blank>
 
 C. CONTINUOUS CHOICE & PRONUNCIATION / STRESS GRIDS:
    - Keep continuous option sets on a single line:

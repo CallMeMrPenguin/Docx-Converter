@@ -52,10 +52,9 @@ class ULNCompiler:
                 pass
 
             word = win32com.client.Dispatch("Word.Application")
-            word.Visible = True if (visible or keep_open) else False
+            word.Visible = False  # Keep completely hidden in background during rendering
             word.DisplayAlerts = 0  # wdAlertsNone
             
-            # Disable screen updating during document creation to prevent OS input freeze & focus locking
             try:
                 word.ScreenUpdating = False
             except Exception:
@@ -63,14 +62,8 @@ class ULNCompiler:
 
             doc = word.Documents.Add()
             
-            # Execute pywin32 rendering silently in memory
+            # Execute pywin32 rendering silently in memory (no window flicker or OS freeze)
             self.renderer.render(blocks, doc, word)
-
-            # Re-enable screen updating so Word displays the finished document instantly
-            try:
-                word.ScreenUpdating = True
-            except Exception:
-                pass
 
             # Save as DOCX (FileFormat = 16)
             try:
@@ -86,8 +79,10 @@ class ULNCompiler:
                 except Exception as save_err:
                     print(f"[ULNCompiler] Could not save DOCX file: {save_err}")
 
-            if keep_open:
+            if visible or keep_open:
                 try:
+                    word.ScreenUpdating = True
+                    word.Visible = True
                     word.Activate()
                 except Exception:
                     pass

@@ -27,10 +27,10 @@ uln_input = """[H1] TEST FOR UNIT 1
 [P0] 4. Do you want ______ mountain biking with me this weekend?
 
 [P0] VI. There is one mistake in each sentence. Underline and correct the mistake.
-[TAB2] [P0] 1. Nam is my classmates. He watches TV every night.  ______
-[TAB2] [P0] 2. I think collecting stamps are interesting.  ______
-[TAB2] [P0] 3. My dad cooks very good. He loves preparing meals for our family.  ______
-[TAB2] [P0] 4. I enjoy to ride my bike to school.  ______
+[TAB2] [P0] 1. Nam is my classmates. He watches TV every night.  <blank>
+[TAB2] [P0] 2. I think collecting stamps are interesting.  <blank>
+[TAB2] [P0] 3. My dad cooks very good. He loves preparing meals for our family.  <blank>
+[TAB2] [P0] 4. I enjoy to ride my bike to school.  <blank>
 
 [P0] VIII. Choose the word which best fits each gap.
 [QUOTE]

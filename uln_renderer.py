@@ -397,15 +397,16 @@ class ULNWordRenderer:
 
                 sel.ParagraphFormat.SpaceBefore = 3
                 sel.ParagraphFormat.SpaceAfter = 3
-                sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_tab_pos_cm)
-                sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-col1_needed_cm)
-                sel.ParagraphFormat.TabStops.ClearAll()
 
-                col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?_{2,}\s*$', block.col2))
+                # Check if Column 2 is an answer blank (e.g. ______ or <blank> or [BLANK])
+                col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?(?:_{2,}|<blank>|\[BLANK\])\s*$', block.col2, re.IGNORECASE))
 
                 if col2_is_blank:
-                    right_margin_pos_cm = printable_width_cm
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(right_margin_pos_cm), Alignment=2)
+                    # FLUSH RIGHT TAB STOP at right margin (Alignment = 2) for answer blanks
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)  # wdAlignTabRight = 2
 
                     self.write_inline_spans(sel, block.col1_spans)
                     sel.TypeText("\t")
@@ -418,6 +419,9 @@ class ULNWordRenderer:
                     sel.TypeParagraph()
 
                 else:
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_tab_pos_cm)
+                    sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-col1_needed_cm)
+                    sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
 
                     self.write_inline_spans(sel, block.col1_spans)
@@ -445,13 +449,13 @@ class ULNWordRenderer:
                 self.render_box_shape(sel, doc, word, block, printable_width_cm)
 
             elif tag == "QUOTE":
-                # Reading passage rendered justified (wdAlignParagraphJustify = 3) with standard first-line indent
-                sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
-                sel.ParagraphFormat.RightIndent = cm_to_pt(0.5)
+                # Reading passage: standard body text (Left/Right Indent = 0), only first line indented (0.75 cm), justified
+                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.RightIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = cm_to_pt(0.75)
                 sel.ParagraphFormat.SpaceBefore = 0
                 sel.ParagraphFormat.SpaceAfter = 4
-                sel.ParagraphFormat.Alignment = 3  # wdAlignParagraphJustify = 3 (Justified)
+                sel.ParagraphFormat.Alignment = 3  # wdAlignParagraphJustify = 3
                 self.write_inline_spans(sel, block.spans, default_italic=False)
                 sel.TypeParagraph()
                 sel.ParagraphFormat.RightIndent = 0
