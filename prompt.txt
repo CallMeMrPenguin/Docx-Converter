@@ -97,8 +97,9 @@ D. HORIZONTAL PICTURE CHOICE GRIDS:
      5. [PIC] | 6. [PIC] | 7. [PIC] | 8. [PIC]
      [/PIC_GRID]
 
-E. SIGN / NOTICE IDENTIFICATION EXERCISES:
-   - For activities where a sign or notice image is displayed on the left side of a question with 4 vertically stacked options (A, B, C, D) on the right, use `[TAB2]` on the question line to pair the sign picture tag with the question text:
+E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES (UNIVERSAL IMAGE-LEFT MANDATE):
+   - CRITICAL PLACEMENT MANDATE: Regardless of whether a sign, diagram, or notice image is visually located at the TOP, RIGHT, or BOTTOM of a question or option section in the raw source, ALWAYS MOVE THE IMAGE TO THE LEFT of the question + options section!
+   - Use `[TAB2]` on the question line placing the picture tag in Column 1 (Left) and the question text in Column 2 (Right):
      [TAB2] [PIC: "Red circular speed limit sign with number 40" | pos:inline | size:medium] [P0] 11. What does the sign (A) say?
      [P1] **A.** Maximum 40 vehicles are allowed on this road.
      [P1] **B.** You shouldn't exceed this maximum speed.
