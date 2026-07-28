@@ -92,7 +92,18 @@ C. CONTINUOUS CHOICE & PRONUNCIATION / STRESS GRIDS:
 
 D. HORIZONTAL PICTURE CHOICE GRIDS:
    - For picture activities with multiple items, output picture choices in 4-column horizontal rows:
-     [TAB2] [P1] 1. [PIC: "A child making models" | pos:inline | size:small] ______  2. [PIC: "A child with dollhouse" | pos:inline | size:small] ______  3. [PIC: "Gardening" | pos:inline | size:small] ______  4. [PIC: "Cooking" | pos:inline | size:small] ______
+     [PIC_GRID]
+     1. [PIC] | 2. [PIC] | 3. [PIC] | 4. [PIC]
+     5. [PIC] | 6. [PIC] | 7. [PIC] | 8. [PIC]
+     [/PIC_GRID]
+
+E. SIGN / NOTICE IDENTIFICATION EXERCISES:
+   - For activities where a sign or notice image is displayed on the left side of a question with 4 vertically stacked options (A, B, C, D) on the right, use `[TAB2]` on the question line to pair the sign picture tag with the question text:
+     [TAB2] [PIC: "Red circular speed limit sign with number 40" | pos:inline | size:medium] [P0] 11. What does the sign (A) say?
+     [P1] **A.** Maximum 40 vehicles are allowed on this road.
+     [P1] **B.** You shouldn't exceed this maximum speed.
+     [P1] **C.** Minimum 40 vehicles are allowed on this road.
+     [P1] **D.** You shouldn't move below this speed.
 
 ---
 
