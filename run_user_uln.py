@@ -77,8 +77,8 @@ There are many different paper craft techniques. Origami is one of ancient techn
 [P0] I. Look at the pictures and name the activities.
 [BOX] cooking | horse riding | collecting coins | jogging | making models | building dollhouses | gardening | doing yoga [/BOX]
 [PIC_GRID]
-1. [PIC: "A child making models" | size:small] | 2. [PIC: "A child with a dollhouse" | size:small] | 3. [PIC: "Hands gardening a plant" | size:small] | 4. [PIC: "A person cooking" | size:small]
-5. [PIC: "A person doing yoga outdoors" | size:small] | 6. [PIC: "Two people jogging" | size:small] | 7. [PIC: "A close-up of collecting coins" | size:small] | 8. [PIC: "A person horse riding" | size:small]
+1. [PIC] | 2. [PIC] | 3. [PIC] | 4. [PIC]
+5. [PIC] | 6. [PIC] | 7. [PIC] | 8. [PIC]
 [/PIC_GRID]
 
 [P0] A. Match each word with its meaning.

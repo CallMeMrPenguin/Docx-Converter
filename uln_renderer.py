@@ -701,67 +701,74 @@ class ULNWordRenderer:
 
     def render_pic_grid(self, sel, doc, children: List[ULNBlock], printable_width_cm: float):
         """
-        Renders [PIC_GRID] with exactly 4 pictures per row.
-        Below each picture, inserts an inline caption: '<number>. _________'
-        matching whole document font size, font family, and picture width.
+        Renders [PIC_GRID] using divided paragraph tab stops (NO MS Word Table object!).
+        Row 1: 4 pictures placed across 4 tab stops.
+        Row 2: 4 captions (<number>. _________) placed across 4 tab stops matching picture width.
         """
         if not children:
             return
 
         cols = 4
-        num_items = len(children)
-        num_rows = math.ceil(num_items / cols)
+        col_width_cm = printable_width_cm / cols
 
-        # Borderless 4-column table layout for cell alignment
-        table = doc.Tables.Add(Range=sel.Range, NumRows=num_rows * 2, NumColumns=cols)
-        try:
-            table.Rows.Alignment = 1  # Center table
-        except Exception:
-            pass
+        # Process in chunks of 4 items per row
+        for i in range(0, len(children), cols):
+            chunk = children[i:i + cols]
 
-        # Clear borders
-        for border_id in [-1, -2, -3, -4, -5, -6]:
-            try:
-                table.Borders(border_id).LineStyle = 0
-            except Exception:
-                pass
+            # -------------------------------------------------------------
+            # LINE 1: PICTURES LINE (4 tab-aligned pictures)
+            # -------------------------------------------------------------
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.ParagraphFormat.SpaceBefore = 6
+            sel.ParagraphFormat.SpaceAfter = 2
+            sel.ParagraphFormat.TabStops.ClearAll()
 
-        col_width_cm = (printable_width_cm - 0.5) / cols
+            for c in range(1, len(chunk)):
+                tab_pos_cm = col_width_cm * c
+                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(tab_pos_cm), Alignment=0)
 
-        for idx, item in enumerate(children):
-            r_img = (idx // cols) * 2 + 1
-            r_cap = r_img + 1
-            c_idx = (idx % cols) + 1
+            for idx_c, item in enumerate(chunk):
+                # Auto-determine picture dimensions by code (small 3.5cm x 2.5cm)
+                pic_info = item.pic or PicInfo(description=f"Activity Image {i + idx_c + 1}", size="small")
+                pic_info.size = "small"
+                self.render_pic(sel, doc, pic_info)
 
-            # Cell 1: Picture
-            cell_img = table.Cell(r_img, c_idx)
-            cell_img.VerticalAlignment = 1
-            sel.Start = cell_img.Range.Start
-            sel.ParagraphFormat.Alignment = 1  # Center image inside cell
+                if idx_c < len(chunk) - 1:
+                    sel.TypeText("\t")
 
-            if item.pic:
-                item.pic.size = "small"
-                self.render_pic(sel, doc, item.pic)
+            sel.TypeParagraph()
+            sel.ParagraphFormat.TabStops.ClearAll()
 
-            # Cell 2: Caption (<number>. _________)
-            cell_cap = table.Cell(r_cap, c_idx)
-            cell_cap.VerticalAlignment = 0
-            sel.Start = cell_cap.Range.Start
-            sel.ParagraphFormat.Alignment = 1
+            # -------------------------------------------------------------
+            # LINE 2: CAPTIONS LINE (<number>. _________)
+            # -------------------------------------------------------------
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
             sel.ParagraphFormat.SpaceBefore = 2
-            sel.ParagraphFormat.SpaceAfter = 6
+            sel.ParagraphFormat.SpaceAfter = 8
+            sel.ParagraphFormat.TabStops.ClearAll()
 
-            num_match = re.match(r'^\s*(\d+[\.\)])\s*', item.content)
-            num_str = f"{num_match.group(1)} " if num_match else f"{idx + 1}. "
+            for c in range(1, len(chunk)):
+                tab_pos_cm = col_width_cm * c
+                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(tab_pos_cm), Alignment=0)
 
-            sel.Font.Name = self.font_name
-            sel.Font.Size = self.font_size
-            sel.Font.Bold = 1
-            sel.TypeText(num_str)
+            for idx_c, item in enumerate(chunk):
+                item_idx = i + idx_c + 1
+                num_match = re.match(r'^\s*(\d+[\.\)])\s*', item.content)
+                num_str = f"{num_match.group(1)} " if num_match else f"{item_idx}. "
 
-            sel.Font.Bold = 0
-            sel.Font.Underline = 0
-            sel.TypeText("_________")
+                sel.Font.Name = self.font_name
+                sel.Font.Size = self.font_size
+                sel.Font.Bold = 1
+                sel.TypeText(num_str)
 
-        sel.Start = table.Range.End
-        sel.TypeParagraph()
+                sel.Font.Bold = 0
+                sel.Font.Underline = 0
+                sel.TypeText("_________")
+
+                if idx_c < len(chunk) - 1:
+                    sel.TypeText("\t")
+
+            sel.TypeParagraph()
+            sel.ParagraphFormat.TabStops.ClearAll()

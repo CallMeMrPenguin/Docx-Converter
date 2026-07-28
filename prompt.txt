@@ -45,18 +45,18 @@ Place these tags at the very beginning of the line:
 
 - [PIC_GRID] ... [/PIC_GRID] : 4-column picture grid container (4 pictures per row).
   - Inside `[PIC_GRID]`, separate items using pipes `|`.
+  - Use simple `[PIC]` tags for picture slots (picture size and dimensions are calculated automatically by compiler code).
   - Captions are automatically generated below each picture as `<number>. ______` matching document font size & picture width.
   - Example:
     [PIC_GRID]
-    1. [PIC: "A child making models" | size:small] | 2. [PIC: "A child with dollhouse" | size:small] | 3. [PIC: "Gardening" | size:small] | 4. [PIC: "Cooking" | size:small]
-    5. [PIC: "Doing yoga" | size:small] | 6. [PIC: "Jogging" | size:small] | 7. [PIC: "Collecting coins" | size:small] | 8. [PIC: "Horse riding" | size:small]
+    1. [PIC] | 2. [PIC] | 3. [PIC] | 4. [PIC]
+    5. [PIC] | 6. [PIC] | 7. [PIC] | 8. [PIC]
     [/PIC_GRID]
 
-- [PIC: "description" | pos:<inline|center|right> | size:<small|medium|large>] : Image/Diagram reference tag.
+- [PIC: "description" | pos:<inline|center|right> | size:<small|medium|large>] : Standalone image reference tag.
   - pos:inline -> Image is located inside a sentence, question, or choice item.
   - pos:center -> Image is a standalone block centered on its own line.
   - pos:right  -> Image is placed on the right side of 4 options (A, B, C, D) with a 5mm gap from longest option.
-  - size       -> Relative display scale (small, medium, large).
 
 ---
 
