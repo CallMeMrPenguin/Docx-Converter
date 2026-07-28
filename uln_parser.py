@@ -168,8 +168,39 @@ class ULNParser:
         table_lines: List[str] = []
         table_borderless = False
 
+        in_pic_grid = False
+        pic_grid_lines: List[str] = []
+
         for line in lines:
             trimmed = line.strip()
+
+            # Handle multi-line [PIC_GRID] ... [/PIC_GRID]
+            if trimmed.startswith("[PIC_GRID"):
+                in_pic_grid = True
+                pic_grid_lines = []
+                continue
+
+            if in_pic_grid:
+                if trimmed == "[/PIC_GRID]":
+                    in_pic_grid = False
+                    grid_children: List[ULNBlock] = []
+                    for gline in pic_grid_lines:
+                        gline_trim = gline.strip()
+                        if not gline_trim:
+                            continue
+                        g_items = gline_trim.split('|')
+                        for g_item in g_items:
+                            g_clean = g_item.strip()
+                            if g_clean:
+                                pic_info = parse_pic_tag(g_clean)
+                                g_spans = parse_inline_spans(g_clean)
+                                grid_children.append(ULNBlock(tag="PIC_ITEM", content=g_clean, spans=g_spans, pic=pic_info))
+                    
+                    blocks.append(ULNBlock(tag="PIC_GRID", children=grid_children))
+                    pic_grid_lines = []
+                else:
+                    pic_grid_lines.append(line)
+                continue
 
             # Handle multi-line [TABLE] ... [/TABLE]
             if trimmed.startswith("[TABLE") and (trimmed.endswith("]") or "TABLE" in trimmed):

@@ -106,6 +106,8 @@ class ULNWordRenderer:
         self.margin_left = float(self.settings.get("margin_left", 3.0))
         self.margin_right = float(self.settings.get("margin_right", 1.5))
         self.line_spacing = float(self.settings.get("line_spacing", 1.15))
+        self.space_before = float(self.settings.get("space_before", 4.0))
+        self.space_after = float(self.settings.get("space_after", 4.0))
         self.enable_page_numbers = self.settings.get("enable_page_numbers", True)
 
     def configure_document(self, doc):
@@ -435,6 +437,9 @@ class ULNWordRenderer:
                 if block.table_data:
                     self.render_table(sel, doc, block.table_data, printable_width_cm)
 
+            elif tag == "PIC_GRID":
+                self.render_pic_grid(sel, doc, block.children, printable_width_cm)
+
             elif tag == "BOX":
                 self.render_box_shape(sel, doc, word, block, printable_width_cm)
 
@@ -693,3 +698,70 @@ class ULNWordRenderer:
 
             sel.Start = table.Range.End
             sel.TypeParagraph()
+
+    def render_pic_grid(self, sel, doc, children: List[ULNBlock], printable_width_cm: float):
+        """
+        Renders [PIC_GRID] with exactly 4 pictures per row.
+        Below each picture, inserts an inline caption: '<number>. _________'
+        matching whole document font size, font family, and picture width.
+        """
+        if not children:
+            return
+
+        cols = 4
+        num_items = len(children)
+        num_rows = math.ceil(num_items / cols)
+
+        # Borderless 4-column table layout for cell alignment
+        table = doc.Tables.Add(Range=sel.Range, NumRows=num_rows * 2, NumColumns=cols)
+        try:
+            table.Rows.Alignment = 1  # Center table
+        except Exception:
+            pass
+
+        # Clear borders
+        for border_id in [-1, -2, -3, -4, -5, -6]:
+            try:
+                table.Borders(border_id).LineStyle = 0
+            except Exception:
+                pass
+
+        col_width_cm = (printable_width_cm - 0.5) / cols
+
+        for idx, item in enumerate(children):
+            r_img = (idx // cols) * 2 + 1
+            r_cap = r_img + 1
+            c_idx = (idx % cols) + 1
+
+            # Cell 1: Picture
+            cell_img = table.Cell(r_img, c_idx)
+            cell_img.VerticalAlignment = 1
+            sel.Start = cell_img.Range.Start
+            sel.ParagraphFormat.Alignment = 1  # Center image inside cell
+
+            if item.pic:
+                item.pic.size = "small"
+                self.render_pic(sel, doc, item.pic)
+
+            # Cell 2: Caption (<number>. _________)
+            cell_cap = table.Cell(r_cap, c_idx)
+            cell_cap.VerticalAlignment = 0
+            sel.Start = cell_cap.Range.Start
+            sel.ParagraphFormat.Alignment = 1
+            sel.ParagraphFormat.SpaceBefore = 2
+            sel.ParagraphFormat.SpaceAfter = 6
+
+            num_match = re.match(r'^\s*(\d+[\.\)])\s*', item.content)
+            num_str = f"{num_match.group(1)} " if num_match else f"{idx + 1}. "
+
+            sel.Font.Name = self.font_name
+            sel.Font.Size = self.font_size
+            sel.Font.Bold = 1
+            sel.TypeText(num_str)
+
+            sel.Font.Bold = 0
+            sel.Font.Underline = 0
+            sel.TypeText("_________")
+
+        sel.Start = table.Range.End
+        sel.TypeParagraph()

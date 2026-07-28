@@ -43,10 +43,19 @@ Place these tags at the very beginning of the line:
 - [BOX] ... [/BOX] : Framing container for Word Banks, rule callouts, or framed text boxes. Delimit multiple word bank items using pipes: `item 1 | item 2 | item 3`.
 - [QUOTE] ... [/QUOTE] : Indented text block for reading passages, stories, or dialogs (rendered in clean readable body text).
 
+- [PIC_GRID] ... [/PIC_GRID] : 4-column picture grid container (4 pictures per row).
+  - Inside `[PIC_GRID]`, separate items using pipes `|`.
+  - Captions are automatically generated below each picture as `<number>. ______` matching document font size & picture width.
+  - Example:
+    [PIC_GRID]
+    1. [PIC: "A child making models" | size:small] | 2. [PIC: "A child with dollhouse" | size:small] | 3. [PIC: "Gardening" | size:small] | 4. [PIC: "Cooking" | size:small]
+    5. [PIC: "Doing yoga" | size:small] | 6. [PIC: "Jogging" | size:small] | 7. [PIC: "Collecting coins" | size:small] | 8. [PIC: "Horse riding" | size:small]
+    [/PIC_GRID]
+
 - [PIC: "description" | pos:<inline|center|right> | size:<small|medium|large>] : Image/Diagram reference tag.
   - pos:inline -> Image is located inside a sentence, question, or choice item.
   - pos:center -> Image is a standalone block centered on its own line.
-  - pos:right  -> Image is placed on the right side of a question (use with [TAB2]).
+  - pos:right  -> Image is placed on the right side of 4 options (A, B, C, D) with a 5mm gap from longest option.
   - size       -> Relative display scale (small, medium, large).
 
 ---

@@ -76,14 +76,10 @@ There are many different paper craft techniques. Origami is one of ancient techn
 
 [P0] I. Look at the pictures and name the activities.
 [BOX] cooking | horse riding | collecting coins | jogging | making models | building dollhouses | gardening | doing yoga [/BOX]
-[P1] 1. [PIC: "A child making models" | pos:inline | size:small] _____
-[P1] 2. [PIC: "A child with a dollhouse" | pos:inline | size:small] _____
-[P1] 3. [PIC: "Hands gardening a plant" | pos:inline | size:small] _____
-[P1] 4. [PIC: "A person cooking" | pos:inline | size:small] _____
-[P1] 5. [PIC: "A person doing yoga outdoors" | pos:inline | size:small] _____
-[P1] 6. [PIC: "Two people jogging" | pos:inline | size:small] _____
-[P1] 7. [PIC: "A close-up of collecting coins" | pos:inline | size:small] _____
-[P1] 8. [PIC: "A person horse riding" | pos:inline | size:small] _____
+[PIC_GRID]
+1. [PIC: "A child making models" | size:small] | 2. [PIC: "A child with a dollhouse" | size:small] | 3. [PIC: "Hands gardening a plant" | size:small] | 4. [PIC: "A person cooking" | size:small]
+5. [PIC: "A person doing yoga outdoors" | size:small] | 6. [PIC: "Two people jogging" | size:small] | 7. [PIC: "A close-up of collecting coins" | size:small] | 8. [PIC: "A person horse riding" | size:small]
+[/PIC_GRID]
 
 [P0] A. Match each word with its meaning.
 [TAB2] [P1] 1. rest  A. an activity that you enjoy doing
