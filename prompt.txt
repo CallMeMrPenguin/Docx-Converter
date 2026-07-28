@@ -14,11 +14,11 @@ Place these tags at the very beginning of the line:
 - [H2] : Sub-heading / Sub-section Title (e.g., "**Section A: Vocabulary**")
 - [H3] : Minor Heading or Category Title
 
-- [P0] : Base Paragraph / Main Instruction / Level 0 Question (Left Indent: 0 cm, e.g., "**I. Choose the correct answer.**", "1.", "Q3.")
-  - Note: Roman numeral instruction headers (I., II., III.) and section titles MUST be wrapped in bold **...**.
-  - Plain numbered questions (1., 2., 3.) MUST NOT be bolded unless explicitly bold in the original text.
+- [P0] : Base Paragraph / Main Instruction / Level 0 Question (Left Indent: 0 cm, e.g., "**I. Choose the correct answer.**", "**A. Match each word with its meaning.**", "1. Question text...")
+  - CRITICAL BOLD MANDATE FOR INSTRUCTIONS: All Roman numerals (I., II., III., IV.), section letters (A., B., C.), and main exercise instruction headings MUST be wrapped in bold `**...**`.
+  - Plain numbered questions (1., 2., 3.) MUST NOT be bolded unless explicitly bold in the original source image/text.
 
-- [P1] : Sub-question / Option Level 1 (Left Indent: 0.5 cm, e.g., "a)", "b)", "A.", "B.", "1. A. cat B. city C. car D. cup")
+- [P1] : Sub-question / Option Level 1 (Left Indent: 0.5 cm, e.g., "a)", "b)", "A.", "B.", "1. **A.** cat **B.** city **C.** car **D.** cup")
 - [P2] : Sub-sub-question / Sub-option Level 2 (Left Indent: 1.0 cm, e.g., "i)", "ii)", "1)")
 
 - [TAB2] : 2-Column Side-by-Side Paragraph Split Layout (Column 1  Column 2)
@@ -38,7 +38,7 @@ Place these tags at the very beginning of the line:
 ### 2. INLINE TEXT FORMATTING & STYLING RULES
 Apply these syntax rules directly inside strings:
 
-- **text**          -> Bold text (MUST be applied to section headers and Roman numeral instructions I./II.)
+- **text**          -> Bold text (MUST be applied to all section headers, Roman numerals I./II., and instructions A./B.)
 - *text*            -> Italic text (applied ONLY to explicitly italicized text)
 - [text]{u}         -> Underlined text (ONLY wrap the exact underlined target letters/words, e.g. `[e]{u}xciting`, `[ch]{u}ildren`)
 - [text]{upper}     -> Uppercase / Small Caps formatting

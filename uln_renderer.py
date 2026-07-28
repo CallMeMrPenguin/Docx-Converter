@@ -14,7 +14,6 @@ except ImportError:
 def cm_to_pt(cm: float) -> float:
     return float(cm) * 28.346456692913385
 
-# Color converter helper for MS Word COM (RGB integer: R + (G * 256) + (B * 65536))
 COLOR_NAME_TO_RGB = {
     "red": 255,                 # RGB(255, 0, 0)
     "blue": 16711680,           # RGB(0, 0, 255)
@@ -94,7 +93,7 @@ def split_line_into_option_items(line_text: str) -> List[str]:
 
 
 class ULNWordRenderer:
-    """Renderer that executes pywin32 COM automation commands to construct Word (.docx) documents."""
+    """Pure tag-driven pywin32 COM document renderer with adaptive column calculation and zero text wrapping into column 1."""
 
     def __init__(self, settings: Optional[Dict[str, Any]] = None):
         self.settings = settings or {}
@@ -135,7 +134,7 @@ class ULNWordRenderer:
                 doc.Fields.Add(Range=end_range, Type=-1, Text="NUMPAGES")
 
     def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False):
-        """Writes formatted text runs to MS Word selection, auto-capitalizing option prefixes and strictly resetting underline."""
+        """Writes formatted text runs strictly according to span AST properties."""
         for idx, span in enumerate(spans):
             text = span.text
 
@@ -144,7 +143,6 @@ class ULNWordRenderer:
                 pic_info = parse_pic_tag(text)
                 if pic_info:
                     self.render_pic(sel, None, pic_info)
-                    # Reset Underline & Highlight immediately
                     try: sel.Font.Underline = 0
                     except Exception: pass
                     try: sel.Font.HighlightColorIndex = 0
@@ -165,20 +163,17 @@ class ULNWordRenderer:
                 opt_punct = opt_match.group(3)
                 rest_txt = opt_match.group(4)
 
-                # Write question number if present
                 if prefix_num:
                     sel.Font.Bold = 1 if default_bold else 0
                     sel.Font.Italic = 1 if default_italic else 0
                     sel.Font.Underline = 0
                     sel.TypeText(prefix_num)
 
-                # Write option letter in BOLD and CAPITALIZED
                 sel.Font.Bold = 1
                 sel.Font.Italic = 0
                 sel.Font.Underline = 0
                 sel.TypeText(f"{opt_let}{opt_punct} ")
 
-                # Remaining text
                 text = rest_txt
                 is_bold = span.bold
 
@@ -186,7 +181,6 @@ class ULNWordRenderer:
             sel.Font.Italic = 1 if is_italic else 0
             sel.Font.Underline = 1 if span.underline else 0
 
-            # Text color
             if span.color:
                 rgb_int = parse_color_to_rgb_int(span.color)
                 if rgb_int is not None:
@@ -196,11 +190,10 @@ class ULNWordRenderer:
                         pass
             else:
                 try:
-                    sel.Font.ColorIndex = 0  # wdAuto
+                    sel.Font.ColorIndex = 0
                 except Exception:
                     pass
 
-            # Background Highlight
             if span.bg_color:
                 hl_idx = HIGHLIGHT_NAME_TO_INDEX.get(span.bg_color.lower(), 7)
                 try:
@@ -209,7 +202,7 @@ class ULNWordRenderer:
                     pass
             else:
                 try:
-                    sel.Font.HighlightColorIndex = 0  # wdNoHighlight = 0
+                    sel.Font.HighlightColorIndex = 0
                 except Exception:
                     pass
 
@@ -220,7 +213,6 @@ class ULNWordRenderer:
             text = text.upper() if span.uppercase else text
             sel.TypeText(text)
 
-            # CRITICAL RESET: Always turn Underline and Highlight back OFF so formatting never leaks!
             try:
                 sel.Font.Underline = 0
             except Exception:
@@ -245,13 +237,13 @@ class ULNWordRenderer:
         return col_width_cm
 
     def render(self, blocks: List[ULNBlock], doc, word):
-        """Renders parsed ULNBlocks into the active document."""
+        """Renders parsed ULNBlocks into the active document purely driven by structural AST tags."""
         self.configure_document(doc)
         sel = word.Selection
 
         printable_width_cm = 21.0 - self.margin_left - self.margin_right
 
-        # Pre-process picture choice blocks for 4-column horizontal grid layout
+        # Group consecutive TAB2 blocks to calculate adaptive Column 1 width
         idx_block = 0
         while idx_block < len(blocks):
             block = blocks[idx_block]
@@ -285,13 +277,11 @@ class ULNWordRenderer:
                 sel.TypeParagraph()
 
             elif tag in ["P0", "P"]:
-                # ONLY Roman numerals (I., II., III., IV.) or SECTION titles are bold instruction headers
-                is_instruction = bool(re.match(r'^\s*(?:[I|V|X]+\.|\bSECTION\b)', block.content, re.IGNORECASE))
-
                 sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 6
                 sel.ParagraphFormat.SpaceAfter = 4
-                sel.ParagraphFormat.KeepWithNext = True if is_instruction else False
+                sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
 
                 items = split_line_into_option_items(block.content)
@@ -302,13 +292,13 @@ class ULNWordRenderer:
                     from uln_parser import parse_inline_spans
                     for idx_item, item in enumerate(items):
                         spans = parse_inline_spans(item.strip())
-                        self.write_inline_spans(sel, spans, default_bold=is_instruction)
+                        self.write_inline_spans(sel, spans)
                         if idx_item < len(items) - 1:
                             sel.TypeText("\t")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
-                    self.write_inline_spans(sel, block.spans, default_bold=is_instruction)
+                    self.write_inline_spans(sel, block.spans)
                     sel.TypeParagraph()
 
             elif tag in ["P1", "P2"]:
@@ -319,7 +309,7 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
 
-                # Detect horizontal picture choice grids (4 items per row)
+                # Detect horizontal picture choice grids
                 pic_matches = list(re.finditer(r'(?:\d+\.\s*)?\[PIC:[^\]]+\]\s*_{2,}', block.content))
                 if len(pic_matches) >= 2:
                     num_cols = min(4, len(pic_matches))
@@ -351,16 +341,31 @@ class ULNWordRenderer:
                         sel.ParagraphFormat.TabStops.ClearAll()
                     else:
                         sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
+                        sel.ParagraphFormat.FirstLineIndent = 0
                         self.write_inline_spans(sel, block.spans)
                         sel.TypeParagraph()
 
             elif tag == "TAB2":
-                # 2-Column Side-by-Side Paragraph Split Layout
-                left_indent_cm = 0.5 if "P1" in block.col1 else (1.0 if "P2" in block.col1 else 0.0)
-                
-                sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
+                # Adaptive 2-Column Side-by-Side Paragraph Split Layout
+                # Look ahead to measure max Column 1 text length across consecutive TAB2 blocks
+                tab2_group = [block]
+                lookahead = idx_block + 1
+                while lookahead < len(blocks) and blocks[lookahead].tag == "TAB2":
+                    tab2_group.append(blocks[lookahead])
+                    lookahead += 1
+
+                max_c1_len = max(len(b.col1) for b in tab2_group) if tab2_group else 10
+                base_indent_cm = 0.5 if "P1" in block.col1 else (1.0 if "P2" in block.col1 else 0.0)
+
+                # Formula for adaptive column 1 width
+                col1_needed_cm = max(3.5, min(10.0, (max_c1_len * 0.18) + 1.2))
+                col2_tab_pos_cm = base_indent_cm + col1_needed_cm
+
+                # Configure Hanging Indent for Column 2 wrapped text alignment
                 sel.ParagraphFormat.SpaceBefore = 3
                 sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_tab_pos_cm)
+                sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-col1_needed_cm)
                 sel.ParagraphFormat.TabStops.ClearAll()
 
                 # Check if Column 2 is an answer blank (e.g. ______ or Answer: _____)
@@ -369,12 +374,11 @@ class ULNWordRenderer:
                 if col2_is_blank:
                     # FLUSH RIGHT TAB STOP at right margin (Alignment = 2) for answer blanks
                     right_margin_pos_cm = printable_width_cm
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(right_margin_pos_cm), Alignment=2)  # wdAlignTabRight = 2
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(right_margin_pos_cm), Alignment=2)
 
                     self.write_inline_spans(sel, block.col1_spans)
                     sel.TypeText("\t")
 
-                    # Write clean right-aligned answer blank line
                     sel.Font.Name = self.font_name
                     sel.Font.Size = self.font_size
                     sel.Font.Bold = 0
@@ -383,10 +387,8 @@ class ULNWordRenderer:
                     sel.TypeParagraph()
 
                 else:
-                    # Standard 50/50 2-column tab stop
-                    col_width_cm = (printable_width_cm - left_indent_cm) / 2.0
-                    tab_pos_cm = left_indent_cm + col_width_cm
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(tab_pos_cm), Alignment=0)
+                    # Set Column 2 Tab Stop at col2_tab_pos_cm
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
 
                     self.write_inline_spans(sel, block.col1_spans)
                     sel.TypeText("\t")
@@ -398,25 +400,30 @@ class ULNWordRenderer:
 
                     sel.TypeParagraph()
 
+                # Reset indent
+                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.TabStops.ClearAll()
 
             elif tag == "BOX":
                 self.render_box_shape(sel, doc, word, block, printable_width_cm)
 
             elif tag == "QUOTE":
-                # Reading passage rendered in clean body text (non-italic) with 0.5 cm indent
                 sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
                 sel.ParagraphFormat.RightIndent = cm_to_pt(0.5)
+                sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 6
                 sel.ParagraphFormat.SpaceAfter = 6
                 sel.ParagraphFormat.Alignment = 0
                 self.write_inline_spans(sel, block.spans, default_italic=False)
                 sel.TypeParagraph()
                 sel.ParagraphFormat.RightIndent = 0
+                sel.ParagraphFormat.LeftIndent = 0
 
             elif tag == "PIC":
                 if block.pic:
                     sel.ParagraphFormat.LeftIndent = 0
+                    sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.SpaceBefore = 6
                     sel.ParagraphFormat.SpaceAfter = 6
                     if block.pic.pos == "center":
@@ -467,7 +474,6 @@ class ULNWordRenderer:
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
-        # Check if items are pipe-delimited
         if '|' in block.content:
             words = [w.strip() for w in block.content.split('|') if w.strip()]
         else:
@@ -476,7 +482,6 @@ class ULNWordRenderer:
         if not words:
             return
 
-        # Determine optimal column layout inside word box
         N = len(words)
         if N <= 5:
             cols = N
@@ -496,7 +501,6 @@ class ULNWordRenderer:
         text_group_width_pt = min(printable_width_pt, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
         left_offset_pt = max(0.0, (printable_width_pt - text_group_width_pt) / 2.0)
 
-        # Configure paragraph settings for shape-anchored word box
         sel.ParagraphFormat.SpaceBefore = 4
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
@@ -537,7 +541,6 @@ class ULNWordRenderer:
         p_end = sel.Range.Start
         box_range = doc.Range(p_start, p_end)
 
-        # Draw Rounded Rectangle Shape (msoShapeRoundedRectangle = 5) around word box
         try:
             padding_pt = 6.0
             box_width_pt = text_group_width_pt + (padding_pt * 2)
