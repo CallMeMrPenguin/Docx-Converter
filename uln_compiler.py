@@ -19,10 +19,11 @@ class ULNCompiler:
         self.settings = settings or {}
         self.renderer = ULNWordRenderer(self.settings)
 
-    def compile(self, uln_text: str, output_filepath: str, visible: bool = False) -> str:
+    def compile(self, uln_text: str, output_filepath: str, visible: bool = False, keep_open: bool = False) -> str:
         """
         Compiles raw ULN plain text into a formatted MS Word (.docx) file.
         Returns absolute path to generated file.
+        If keep_open is True, MS Word remains open on screen after compilation.
         """
         if not pywin32_available:
             raise RuntimeError("pywin32 package is not installed or available on this Python runtime.")
@@ -42,7 +43,7 @@ class ULNCompiler:
                 pass
 
             word = win32com.client.Dispatch("Word.Application")
-            word.Visible = visible
+            word.Visible = True if keep_open else visible
             word.DisplayAlerts = 0  # wdAlertsNone
 
             doc = word.Documents.Add()
@@ -52,23 +53,28 @@ class ULNCompiler:
 
             # Save as DOCX (FileFormat = 16)
             doc.SaveAs2(abs_output_path, FileFormat=16)
+            
+            if keep_open:
+                word.Activate()
+
             return abs_output_path
 
         finally:
-            if doc:
+            if not keep_open:
+                if doc:
+                    try:
+                        doc.Close(False)
+                    except Exception:
+                        pass
+                if word:
+                    try:
+                        word.Quit()
+                    except Exception:
+                        pass
                 try:
-                    doc.Close(False)
+                    pythoncom.CoUninitialize()
                 except Exception:
                     pass
-            if word:
-                try:
-                    word.Quit()
-                except Exception:
-                    pass
-            try:
-                pythoncom.CoUninitialize()
-            except Exception:
-                pass
 
     def compile_file(self, input_filepath: str, output_filepath: str, visible: bool = False) -> str:
         """Loads a .txt ULN file and compiles it to DOCX."""

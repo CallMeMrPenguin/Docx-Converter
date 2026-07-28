@@ -84,7 +84,7 @@ class ULNFormatterApp:
         open_check.pack(anchor="w", pady=(0, 15))
 
         # Action Buttons on Sidebar
-        btn_sample = tk.Button(sidebar, text="Load Sample ULN", command=self.load_sample, bg="#475569", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padding=6)
+        btn_sample = tk.Button(sidebar, text="Load Sample ULN", command=self.load_sample, bg="#475569", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=6)
         btn_sample.pack(fill="x", pady=4)
 
         # Right Text Area (Editor)
