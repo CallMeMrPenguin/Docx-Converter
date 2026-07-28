@@ -685,8 +685,8 @@ class ULNWordRenderer:
                 if row_text_parts:
                     text_rows.append(" ".join(row_text_parts))
 
-            # Mark start range of options section for anchor positioning
-            options_anchor_range = sel.Range.Duplicate
+            options_anchor_range = None
+            opt_start_top_pt = 0.0
 
             # Render text rows as standard paragraphs (NO MS Word Table object!)
             for idx_r, txt_line in enumerate(text_rows):
@@ -703,10 +703,11 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.LineSpacingRule = 0  # Single Line Spacing
                 sel.ParagraphFormat.Alignment = 0  # Left
 
-                if idx_r == 1:
-                    # Update anchor to top of first option line
+                if idx_r == 1 or (is_opt_line and options_anchor_range is None):
+                    # Capture anchor range and vertical position at top of Option A
                     try:
                         options_anchor_range = sel.Range.Duplicate
+                        opt_start_top_pt = options_anchor_range.Information(6)  # wdVerticalPositionRelativeToPage = 6
                     except Exception:
                         pass
 
@@ -715,7 +716,19 @@ class ULNWordRenderer:
 
             sel.ParagraphFormat.LeftIndent = 0
 
-            # Floating Picture Placement (In Front of Text, Flush Right Margin, Aligned with Options)
+            # Measure vertical position at bottom of Option D
+            opt_end_top_pt = 0.0
+            try:
+                opt_end_top_pt = sel.Range.Information(6)
+            except Exception:
+                pass
+
+            calc_options_height_pt = max(cm_to_pt(2.5), opt_end_top_pt - opt_start_top_pt) if (opt_end_top_pt > opt_start_top_pt > 0) else cm_to_pt(2.8)
+
+            if options_anchor_range is None:
+                options_anchor_range = sel.Range.Duplicate
+
+            # Floating Picture Placement (In Front of Text, Aligned Top Option A to Bottom Option D, Flush Right Margin)
             if pic_info_found or has_pic:
                 target_path = pic_info_found.filepath if pic_info_found else None
                 if not target_path or not os.path.exists(target_path):
@@ -734,13 +747,14 @@ class ULNWordRenderer:
                         shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
                         shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
 
-                        img_size_pt = cm_to_pt(3.4)  # Height matching combined 4 options height
-                        shape.Height = img_size_pt
-                        shape.Width = img_size_pt
+                        # Set height to match exact distance between Option A top and Option D bottom
+                        shape.LockAspectRatio = 0  # Allow exact vertical fit
+                        shape.Height = calc_options_height_pt
+                        shape.Width = calc_options_height_pt * 1.25  # Maintain 5:4 aspect ratio
 
-                        # Position flush right to margin (printable_width_cm - img_size_cm)
-                        shape.Left = cm_to_pt(printable_width_cm - 3.4)
-                        shape.Top = cm_to_pt(0.0)  # Aligned with top of option section
+                        # Position flush right against page margin (printable_width_cm - shape_width_cm)
+                        shape.Left = cm_to_pt(printable_width_cm) - shape.Width
+                        shape.Top = cm_to_pt(0.0)  # Aligned with top of Option A
                     except Exception as pic_err:
                         print(f"[ULNRenderer] Floating image positioning error: {pic_err}")
 
