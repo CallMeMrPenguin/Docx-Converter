@@ -226,9 +226,14 @@ class ULNParser:
                     col1_raw = parts[0].strip() if len(parts) > 0 else ""
                     col2_raw = parts[1].strip() if len(parts) > 1 else ""
 
-                    c1_tag_match = re.match(r'^\[(P0|P1|P2)\]\s*(.*)$', col1_raw, re.IGNORECASE)
+                    # Strip nested [P0], [P1], [P2] tags from col1 and col2
+                    c1_tag_match = re.match(r'^\s*\[(P0|P1|P2)\]\s*(.*)$', col1_raw, re.IGNORECASE)
                     if c1_tag_match:
                         col1_raw = c1_tag_match.group(2)
+
+                    c2_tag_match = re.match(r'^\s*\[(P0|P1|P2)\]\s*(.*)$', col2_raw, re.IGNORECASE)
+                    if c2_tag_match:
+                        col2_raw = c2_tag_match.group(2)
 
                     col1_spans = parse_inline_spans(col1_raw)
                     col2_spans = parse_inline_spans(col2_raw)

@@ -137,10 +137,18 @@ class ULNWordRenderer:
     def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False):
         """Writes formatted text runs to MS Word selection, auto-capitalizing and bolding option prefixes."""
         for idx, span in enumerate(spans):
+            text = span.text
+
+            # Check if span is an inline [PIC: ...] tag
+            if text.startswith("[PIC:"):
+                pic_info = parse_pic_tag(text)
+                if pic_info:
+                    self.render_pic(sel, None, pic_info)
+                    continue
+
             sel.Font.Name = self.font_name
             sel.Font.Size = self.font_size
             
-            text = span.text
             is_bold = span.bold or default_bold
             is_italic = span.italic or default_italic
 
@@ -197,6 +205,10 @@ class ULNWordRenderer:
                     sel.Font.HighlightColorIndex = 0  # wdNoHighlight = 0
                 except Exception:
                     pass
+
+            # Normalize excessive underscores (>50) so blank lines don't overflow page bounds
+            if re.match(r'^_{50,}$', text):
+                text = '_' * 45
 
             text = text.upper() if span.uppercase else text
             sel.TypeText(text)
@@ -396,9 +408,13 @@ class ULNWordRenderer:
         tightly anchored around paragraph text (Center Manager standard), replacing table borders.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
-        words = [w.strip() for w in block.content.split() if w.strip()]
+        
+        # Check if items are pipe-delimited
+        if '|' in block.content:
+            words = [w.strip() for w in block.content.split('|') if w.strip()]
+        else:
+            words = [w.strip() for w in block.content.split() if w.strip()]
 
-        # Parse text lines or word bank words
         if not words:
             return
 
