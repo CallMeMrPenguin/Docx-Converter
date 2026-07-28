@@ -15,13 +15,17 @@ Place these tags at the very beginning of the line:
 - [H3] : Minor Heading or Category Title
 
 - [P0] : Base Paragraph / Main Instruction / Level 0 Question (Left Indent: 0 cm, e.g., "**I. Choose the correct answer.**", "1.", "Q3.")
+  - Note: Roman numeral instruction headers (I., II., III.) and section titles MUST be wrapped in bold **...**.
+  - Plain numbered questions (1., 2., 3.) MUST NOT be bolded unless explicitly bold in the original text.
+
 - [P1] : Sub-question / Option Level 1 (Left Indent: 0.5 cm, e.g., "a)", "b)", "A.", "B.", "1. A. cat B. city C. car D. cup")
 - [P2] : Sub-sub-question / Sub-option Level 2 (Left Indent: 1.0 cm, e.g., "i)", "ii)", "1)")
 
-- [TAB2] : 2-Column Side-by-Side Paragraph Split Layout (Separate Column 1 and Column 2 using two spaces or pipe | character)
+- [TAB2] : 2-Column Side-by-Side Paragraph Split Layout (Column 1  Column 2)
+  - Used for 2-column matching, error correction with answer blanks on the right, or 2-column header tables.
 
-- [BOX] ... [/BOX] : Framing container for Word Banks, rule callouts, or framed text boxes.
-- [QUOTE] ... [/QUOTE] : Indented text block for reading passages, stories, or dialogs.
+- [BOX] ... [/BOX] : Framing container for Word Banks, rule callouts, or framed text boxes. Delimit multiple word bank items using pipes: `item 1 | item 2 | item 3`.
+- [QUOTE] ... [/QUOTE] : Indented text block for reading passages, stories, or dialogs (rendered in clean readable body text).
 
 - [PIC: "description" | pos:<inline|center|right> | size:<small|medium|large>] : Image/Diagram reference tag.
   - pos:inline -> Image is located inside a sentence, question, or choice item.
@@ -34,35 +38,35 @@ Place these tags at the very beginning of the line:
 ### 2. INLINE TEXT FORMATTING & STYLING RULES
 Apply these syntax rules directly inside strings:
 
-- **text**          -> Bold text (MUST be applied to all section headers, Roman numerals I./II., and instructions)
-- *text*            -> Italic text
-- [text]{u}         -> Underlined text
+- **text**          -> Bold text (MUST be applied to section headers and Roman numeral instructions I./II.)
+- *text*            -> Italic text (applied ONLY to explicitly italicized text)
+- [text]{u}         -> Underlined text (ONLY wrap the exact underlined target letters/words, e.g. `[e]{u}xciting`, `[ch]{u}ildren`)
 - [text]{upper}     -> Uppercase / Small Caps formatting
 - [text]{color:NAME}-> Text color (e.g., [red]{color:red}, [#FF0000]{color:#FF0000})
 - [text]{bg:NAME}   -> Background highlight / Fill color (e.g., [key word]{bg:yellow})
 
 CRITICAL OPTION STYLING RULE:
-Option letters (A., B., C., D. or a., b., c., d.) MUST ALWAYS be CAPITALIZED and BOLD (e.g., **A.**, **B.**, **C.**, **D.**).
+Option letters (A., B., C., D.) MUST ALWAYS be CAPITALIZED and BOLD (e.g., **A.**, **B.**, **C.**, **D.**).
 
 ---
 
 ### 3. EXERCISE-SPECIFIC SYNTAX & EDGE CASES
 
 A. FILL-IN-THE-BLANK & ANSWERS:
-   - Use '____' for empty student blanks.
+   - Use '______' for empty student blanks.
    - If an answer key or filled text is provided, wrap it as underlined text: [answer]{u}
 
-B. MATCHING & COLUMN EXERCISES:
-   - Standard 2-Column Matching: [TAB2] [P1] 1. Photosynthesis  A. Plant food synthesis
-   - Blank Column B for student response: [TAB2] [P1] 1. Photosynthesis  Answer: _____
+B. ERROR CORRECTION & FLUSH RIGHT ANSWERS:
+   - Use [TAB2] for error correction lines so the answer blank is aligned flush right:
+     [TAB2] [P0] 1. Nam is my classmates. He watches TV every night.  ______
 
 C. CONTINUOUS CHOICE & PRONUNCIATION / STRESS GRIDS:
    - Keep continuous option sets on a single line:
      [P1] 1. **A.** [c]{u}at  **B.** [c]{u}ity  **C.** [c]{u}ar  **D.** [c]{u}up
-     [P1] 2. **A.** /'pəʊst/  **B.** /'gəʊ/  **C.** /'dɒg/  **D.** /'həʊm/
 
-D. IMAGE OPTIONS & DIAGRAM EXERCISES:
-   - Inline picture choices: [TAB2] [P1] **A.** [PIC: "A dog running" | pos:inline]  **B.** [PIC: "A cat sleeping" | pos:inline]
+D. HORIZONTAL PICTURE CHOICE GRIDS:
+   - For picture activities with multiple items, output picture choices in 4-column horizontal rows:
+     [TAB2] [P1] 1. [PIC: "A child making models" | pos:inline | size:small] ______  2. [PIC: "A child with dollhouse" | pos:inline | size:small] ______  3. [PIC: "Gardening" | pos:inline | size:small] ______  4. [PIC: "Cooking" | pos:inline | size:small] ______
 
 ---
 
@@ -82,12 +86,14 @@ Word Bank: [ photosynthesis | chlorophyll | sunlight ]
 --------------------------------------------------
 
 Target ULN Output:
+```uln
 [H1] **SECTION A: PHONETICS**
 [P0] **Choose the word whose underlined part is pronounced differently:**
 [P1] 1. **A.** [c]{u}at  **B.** [c]{u}ity  **C.** [c]{u}ar  **D.** [c]{u}up
 
-[BOX] **Word Bank:** [ photosynthesis | chlorophyll | sunlight ] [/BOX]
+[BOX] **Word Bank:** photosynthesis | chlorophyll | sunlight [/BOX]
 
 [P0] **2. Look at the diagram and answer:**
-[TAB2] [P1] a) Identify the labeled organ: ____  [PIC: "Labeled diagram of a plant leaf" | pos:right | size:medium]
-[P2] i) What gas is released? _____
+[TAB2] [P1] a) Identify the labeled organ: ______  [PIC: "Labeled diagram of a plant leaf" | pos:right | size:medium]
+[P2] i) What gas is released? ______
+```

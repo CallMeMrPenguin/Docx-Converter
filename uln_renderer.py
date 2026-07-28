@@ -59,7 +59,7 @@ def split_line_into_option_items(line_text: str) -> List[str]:
     """
     Splits line text into multi-column items automatically by detecting:
     1. Explicit \t characters
-    2. Multiple option choices like a. text b. text c. text d. text
+    2. Multiple option choices like A. text B. text C. text D. text or a. b. c. d.
     3. Multiple spaces / double spaces
     """
     if not line_text:
@@ -68,7 +68,7 @@ def split_line_into_option_items(line_text: str) -> List[str]:
     if '\t' in line_text:
         return [x.strip() for x in line_text.split('\t') if x.strip()]
 
-    # Search for option choices like a. b. c. d. or A. B. C. D.
+    # Search for option choices like A. B. C. D. or a. b. c. d.
     matches = list(re.finditer(r'(?:\s+|^)([a-eA-E][\.\)])\s+', line_text))
     if len(matches) >= 2:
         items = []
@@ -135,7 +135,7 @@ class ULNWordRenderer:
                 doc.Fields.Add(Range=end_range, Type=-1, Text="NUMPAGES")
 
     def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False):
-        """Writes formatted text runs to MS Word selection, auto-capitalizing and bolding option prefixes."""
+        """Writes formatted text runs to MS Word selection, auto-capitalizing option prefixes and strictly resetting underline."""
         for idx, span in enumerate(spans):
             text = span.text
 
@@ -144,6 +144,11 @@ class ULNWordRenderer:
                 pic_info = parse_pic_tag(text)
                 if pic_info:
                     self.render_pic(sel, None, pic_info)
+                    # Reset Underline & Highlight immediately
+                    try: sel.Font.Underline = 0
+                    except Exception: pass
+                    try: sel.Font.HighlightColorIndex = 0
+                    except Exception: pass
                     continue
 
             sel.Font.Name = self.font_name
@@ -164,11 +169,13 @@ class ULNWordRenderer:
                 if prefix_num:
                     sel.Font.Bold = 1 if default_bold else 0
                     sel.Font.Italic = 1 if default_italic else 0
+                    sel.Font.Underline = 0
                     sel.TypeText(prefix_num)
 
                 # Write option letter in BOLD and CAPITALIZED
                 sel.Font.Bold = 1
                 sel.Font.Italic = 0
+                sel.Font.Underline = 0
                 sel.TypeText(f"{opt_let}{opt_punct} ")
 
                 # Remaining text
@@ -206,24 +213,25 @@ class ULNWordRenderer:
                 except Exception:
                     pass
 
-            # Normalize excessive underscores (>50) so blank lines don't overflow page bounds
-            if re.match(r'^_{50,}$', text):
-                text = '_' * 45
+            # Standardize excessive underscores (>45) to an optimal blank line length
+            if re.match(r'^_{30,}$', text):
+                text = '_' * 35
 
             text = text.upper() if span.uppercase else text
             sel.TypeText(text)
 
-            # Reset Highlight to prevent leak
+            # CRITICAL RESET: Always turn Underline and Highlight back OFF so formatting never leaks!
+            try:
+                sel.Font.Underline = 0
+            except Exception:
+                pass
             try:
                 sel.Font.HighlightColorIndex = 0
             except Exception:
                 pass
 
     def setup_tab_stops(self, sel, num_cols: int, left_indent_cm: float, printable_width_cm: float) -> float:
-        """
-        Calculates exact distance formulas for tab stops so text NEVER wraps unexpectedly
-        and tab stops are neither too close nor too far.
-        """
+        """Calculates exact distance formulas for tab stops so text NEVER wraps unexpectedly."""
         remaining_width_cm = printable_width_cm - left_indent_cm
         col_width_cm = remaining_width_cm / max(1, num_cols)
 
@@ -232,7 +240,7 @@ class ULNWordRenderer:
 
         for c in range(1, num_cols):
             tab_pos_cm = left_indent_cm + (col_width_cm * c)
-            sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(tab_pos_cm), Alignment=0)  # Left align tab stop
+            sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(tab_pos_cm), Alignment=0)
 
         return col_width_cm
 
@@ -243,7 +251,10 @@ class ULNWordRenderer:
 
         printable_width_cm = 21.0 - self.margin_left - self.margin_right
 
-        for block in blocks:
+        # Pre-process picture choice blocks for 4-column horizontal grid layout
+        idx_block = 0
+        while idx_block < len(blocks):
+            block = blocks[idx_block]
             tag = block.tag
 
             if tag == "H1":
@@ -274,8 +285,8 @@ class ULNWordRenderer:
                 sel.TypeParagraph()
 
             elif tag in ["P0", "P"]:
-                # Check if paragraph is an instruction heading (Roman numerals I., II., III., etc.)
-                is_instruction = bool(re.match(r'^\s*(?:[I|V|X]+\.|\d+\.)\s+[A-Z]', block.content))
+                # ONLY Roman numerals (I., II., III., IV.) or SECTION titles are bold instruction headers
+                is_instruction = bool(re.match(r'^\s*(?:[I|V|X]+\.|\bSECTION\b)', block.content, re.IGNORECASE))
 
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 6
@@ -308,57 +319,98 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
 
-                items = split_line_into_option_items(block.content)
-                if len(items) > 1:
-                    num_cols = len(items)
+                # Detect horizontal picture choice grids (4 items per row)
+                pic_matches = list(re.finditer(r'(?:\d+\.\s*)?\[PIC:[^\]]+\]\s*_{2,}', block.content))
+                if len(pic_matches) >= 2:
+                    num_cols = min(4, len(pic_matches))
                     self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
-
+                    
                     from uln_parser import parse_inline_spans
+                    items = split_line_into_option_items(block.content)
                     for idx_item, item in enumerate(items):
                         spans = parse_inline_spans(item.strip())
                         self.write_inline_spans(sel, spans)
-                        if idx_item < len(items) - 1:
+                        if (idx_item + 1) % num_cols == 0 or idx_item == len(items) - 1:
+                            sel.TypeParagraph()
+                        else:
                             sel.TypeText("\t")
-                    sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
-                    sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
-                    self.write_inline_spans(sel, block.spans)
-                    sel.TypeParagraph()
+                    items = split_line_into_option_items(block.content)
+                    if len(items) > 1:
+                        num_cols = len(items)
+                        self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
+
+                        from uln_parser import parse_inline_spans
+                        for idx_item, item in enumerate(items):
+                            spans = parse_inline_spans(item.strip())
+                            self.write_inline_spans(sel, spans)
+                            if idx_item < len(items) - 1:
+                                sel.TypeText("\t")
+                        sel.TypeParagraph()
+                        sel.ParagraphFormat.TabStops.ClearAll()
+                    else:
+                        sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
+                        self.write_inline_spans(sel, block.spans)
+                        sel.TypeParagraph()
 
             elif tag == "TAB2":
-                # 2-Column Side-by-Side Paragraph Split Layout using Tab Stops
+                # 2-Column Side-by-Side Paragraph Split Layout
                 left_indent_cm = 0.5 if "P1" in block.col1 else (1.0 if "P2" in block.col1 else 0.0)
-                self.setup_tab_stops(sel, num_cols=2, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
-
+                
+                sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
                 sel.ParagraphFormat.SpaceBefore = 3
                 sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.TabStops.ClearAll()
 
-                # Column 1
-                self.write_inline_spans(sel, block.col1_spans)
+                # Check if Column 2 is an answer blank (e.g. ______ or Answer: _____)
+                col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?_{2,}\s*$', block.col2))
 
-                # Tab over to Column 2
-                sel.TypeText("\t")
+                if col2_is_blank:
+                    # FLUSH RIGHT TAB STOP at right margin (Alignment = 2) for answer blanks
+                    right_margin_pos_cm = printable_width_cm
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(right_margin_pos_cm), Alignment=2)  # wdAlignTabRight = 2
 
-                # Column 2 (or Image)
-                if block.pic:
-                    self.render_pic(sel, doc, block.pic)
+                    self.write_inline_spans(sel, block.col1_spans)
+                    sel.TypeText("\t")
+
+                    # Write clean right-aligned answer blank line
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 0
+                    sel.Font.Underline = 0
+                    sel.TypeText("___________")
+                    sel.TypeParagraph()
+
                 else:
-                    self.write_inline_spans(sel, block.col2_spans)
+                    # Standard 50/50 2-column tab stop
+                    col_width_cm = (printable_width_cm - left_indent_cm) / 2.0
+                    tab_pos_cm = left_indent_cm + col_width_cm
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(tab_pos_cm), Alignment=0)
 
-                sel.TypeParagraph()
+                    self.write_inline_spans(sel, block.col1_spans)
+                    sel.TypeText("\t")
+
+                    if block.pic:
+                        self.render_pic(sel, doc, block.pic)
+                    else:
+                        self.write_inline_spans(sel, block.col2_spans)
+
+                    sel.TypeParagraph()
+
                 sel.ParagraphFormat.TabStops.ClearAll()
 
             elif tag == "BOX":
                 self.render_box_shape(sel, doc, word, block, printable_width_cm)
 
             elif tag == "QUOTE":
-                sel.ParagraphFormat.LeftIndent = cm_to_pt(1.0)
-                sel.ParagraphFormat.RightIndent = cm_to_pt(1.0)
+                # Reading passage rendered in clean body text (non-italic) with 0.5 cm indent
+                sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
+                sel.ParagraphFormat.RightIndent = cm_to_pt(0.5)
                 sel.ParagraphFormat.SpaceBefore = 6
                 sel.ParagraphFormat.SpaceAfter = 6
                 sel.ParagraphFormat.Alignment = 0
-                self.write_inline_spans(sel, block.spans, default_italic=True)
+                self.write_inline_spans(sel, block.spans, default_italic=False)
                 sel.TypeParagraph()
                 sel.ParagraphFormat.RightIndent = 0
 
@@ -374,6 +426,8 @@ class ULNWordRenderer:
 
                     self.render_pic(sel, doc, block.pic)
                     sel.TypeParagraph()
+
+            idx_block += 1
 
     def render_pic(self, sel, doc, pic: PicInfo):
         """Renders an image file if available, or a clean visually framed diagram placeholder."""
@@ -401,6 +455,10 @@ class ULNWordRenderer:
         except Exception:
             pass
         sel.TypeText(desc_text)
+        try:
+            sel.Font.ColorIndex = 0
+        except Exception:
+            pass
 
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
