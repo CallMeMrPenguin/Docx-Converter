@@ -65,8 +65,14 @@ There are many different paper craft techniques. Origami is one of ancient techn
 [P0] 4. Which is the best movie in Fast and Furious series?
 [P0] 5. The invitation cards are beautiful and creative.
 [P0] 6. What animals have the rough skin? - Elephants, frogs, etc.
-[TAB2] [P1] /f/ | /v/
-[TAB2] [P1] _____ | _____
+[TABLE]
+[TH] /f/ | /v/
+[TR] ______ | ______
+[TR] ______ | ______
+[TR] ______ | ______
+[TR] ______ | ______
+[TR] ______ | ______
+[/TABLE]
 
 [P0] I. Look at the pictures and name the activities.
 [BOX] cooking | horse riding | collecting coins | jogging | making models | building dollhouses | gardening | doing yoga [/BOX]

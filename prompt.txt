@@ -24,6 +24,22 @@ Place these tags at the very beginning of the line:
 - [TAB2] : 2-Column Side-by-Side Paragraph Split Layout (Column 1  Column 2)
   - Used for 2-column matching, error correction with answer blanks on the right, or 2-column header tables.
 
+- [TABLE] ... [/TABLE] or [TABLE: borderless] ... [/TABLE] : Multi-row data table container.
+  - Options: Use `[TABLE]` for native bordered grid tables, or `[TABLE: borderless]` for borderless multi-column layouts.
+  - Inside `[TABLE]`, use `[TH]` for header rows and `[TR]` for standard data rows.
+  - Separate cell columns using the pipe `|` symbol.
+  - Example Bordered Table:
+    [TABLE]
+    [TH] /f/ | /v/
+    [TR] ______ | ______
+    [TR] ______ | ______
+    [/TABLE]
+  - Example Borderless Table:
+    [TABLE: borderless]
+    [TH] /f/ | /v/
+    [TR] ______ | ______
+    [/TABLE]
+
 - [BOX] ... [/BOX] : Framing container for Word Banks, rule callouts, or framed text boxes. Delimit multiple word bank items using pipes: `item 1 | item 2 | item 3`.
 - [QUOTE] ... [/QUOTE] : Indented text block for reading passages, stories, or dialogs (rendered in clean readable body text).
 

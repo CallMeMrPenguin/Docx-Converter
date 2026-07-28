@@ -20,8 +20,24 @@ class PicInfo:
     filepath: Optional[str] = None
 
 @dataclass
+class ULNTableCell:
+    content: str
+    is_header: bool = False
+    spans: List[InlineSpan] = field(default_factory=list)
+
+@dataclass
+class ULNTableRow:
+    cells: List[ULNTableCell] = field(default_factory=list)
+    is_header: bool = False
+
+@dataclass
+class ULNTableData:
+    rows: List[ULNTableRow] = field(default_factory=list)
+    borderless: bool = False
+
+@dataclass
 class ULNBlock:
-    tag: str  # "H1", "H2", "H3", "P0", "P1", "P2", "TAB2", "BOX", "QUOTE", "PIC", "P"
+    tag: str  # "H1", "H2", "H3", "P0", "P1", "P2", "TAB2", "BOX", "QUOTE", "PIC", "TABLE", "P"
     content: str = ""
     col1: str = ""
     col2: str = ""
@@ -29,6 +45,7 @@ class ULNBlock:
     col2_spans: List[InlineSpan] = field(default_factory=list)
     spans: List[InlineSpan] = field(default_factory=list)
     pic: Optional[PicInfo] = None
+    table_data: Optional[ULNTableData] = None
     children: List['ULNBlock'] = field(default_factory=list)
 
 
@@ -38,7 +55,6 @@ def parse_pic_tag(text: str) -> Optional[PicInfo]:
     """
     m = re.search(r'\[PIC:\s*"(.*?)"(?:\s*\|\s*pos:(\w+))?(?:\s*\|\s*size:(\w+))?\s*\]', text, re.IGNORECASE)
     if not m:
-        # Fallback without quotes
         m = re.search(r'\[PIC:\s*([^\|\]]+)(?:\s*\|\s*pos:(\w+))?(?:\s*\|\s*size:(\w+))?\s*\]', text, re.IGNORECASE)
     if m:
         desc = m.group(1).strip()
@@ -116,13 +132,11 @@ def parse_inline_spans(text: str, default_bold: bool = False, default_italic: bo
 
         elif gd['bold']:
             b_inner = gd['b_txt']
-            # Recursively parse inner content inside bold block
             inner_spans = parse_inline_spans(b_inner, default_bold=True, default_italic=default_italic)
             spans.extend(inner_spans)
 
         elif gd['italic']:
             i_inner = gd['i_txt']
-            # Recursively parse inner content inside italic block
             inner_spans = parse_inline_spans(i_inner, default_bold=default_bold, default_italic=True)
             spans.extend(inner_spans)
 
@@ -150,8 +164,54 @@ class ULNParser:
         in_quote = False
         quote_lines: List[str] = []
 
+        in_table = False
+        table_lines: List[str] = []
+        table_borderless = False
+
         for line in lines:
             trimmed = line.strip()
+
+            # Handle multi-line [TABLE] ... [/TABLE]
+            if trimmed.startswith("[TABLE") and (trimmed.endswith("]") or "TABLE" in trimmed):
+                in_table = True
+                table_lines = []
+                table_borderless = "borderless" in trimmed.lower()
+                continue
+
+            if in_table:
+                if trimmed == "[/TABLE]":
+                    in_table = False
+                    # Parse table rows
+                    rows: List[ULNTableRow] = []
+                    for tline in table_lines:
+                        tline_trim = tline.strip()
+                        if not tline_trim:
+                            continue
+                        
+                        is_hdr = False
+                        row_content = tline_trim
+
+                        if tline_trim.startswith("[TH]"):
+                            is_hdr = True
+                            row_content = tline_trim[4:].strip()
+                        elif tline_trim.startswith("[TR]"):
+                            row_content = tline_trim[4:].strip()
+
+                        cell_texts = row_content.split('|')
+                        cells: List[ULNTableCell] = []
+                        for ctxt in cell_texts:
+                            c_clean = ctxt.strip()
+                            c_spans = parse_inline_spans(c_clean, default_bold=is_hdr)
+                            cells.append(ULNTableCell(content=c_clean, is_header=is_hdr, spans=c_spans))
+
+                        rows.append(ULNTableRow(cells=cells, is_header=is_hdr))
+
+                    tbl_data = ULNTableData(rows=rows, borderless=table_borderless)
+                    blocks.append(ULNBlock(tag="TABLE", table_data=tbl_data))
+                    table_lines = []
+                else:
+                    table_lines.append(line)
+                continue
 
             # Handle multi-line [BOX] ... [/BOX]
             if trimmed == "[BOX]" or trimmed.startswith("[BOX] "):
@@ -217,7 +277,6 @@ class ULNParser:
                 rest_content = tag_match.group(2)
 
                 if tag == "TAB2":
-                    # Split on \t, pipe |, or two or more spaces
                     if '\t' in rest_content:
                         parts = rest_content.split('\t', 1)
                     elif ' | ' in rest_content:
@@ -228,7 +287,6 @@ class ULNParser:
                     col1_raw = parts[0].strip() if len(parts) > 0 else ""
                     col2_raw = parts[1].strip() if len(parts) > 1 else ""
 
-                    # Strip nested [P0], [P1], [P2] tags from col1 and col2
                     c1_tag_match = re.match(r'^\s*\[(P0|P1|P2)\]\s*(.*)$', col1_raw, re.IGNORECASE)
                     if c1_tag_match:
                         col1_raw = c1_tag_match.group(2)

@@ -431,6 +431,10 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.TabStops.ClearAll()
 
+            elif tag == "TABLE":
+                if block.table_data:
+                    self.render_table(sel, doc, block.table_data, printable_width_cm)
+
             elif tag == "BOX":
                 self.render_box_shape(sel, doc, word, block, printable_width_cm)
 
@@ -598,9 +602,73 @@ class ULNWordRenderer:
         except Exception as e:
             print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
 
-        # Reset selection formatting after word box
-        sel.ParagraphFormat.SpaceBefore = 6
-        sel.ParagraphFormat.SpaceAfter = 4
-        sel.ParagraphFormat.LineSpacingRule = 0
-        sel.ParagraphFormat.LeftIndent = 0
-        sel.ParagraphFormat.TabStops.ClearAll()
+    def render_table(self, sel, doc, tdata, printable_width_cm: float):
+        """
+        Renders [TABLE] block structure:
+        - If borderless: uses divided paragraph tab stop columns with custom spacing.
+        - If bordered: uses a native MS Word table with cell margins & 1.0pt gridlines.
+        """
+        if not tdata.rows:
+            return
+
+        num_rows = len(tdata.rows)
+        num_cols = max(len(r.cells) for r in tdata.rows)
+
+        if tdata.borderless:
+            # Borderless Table -> divided paragraph tab stop columns
+            sel.ParagraphFormat.SpaceBefore = 3
+            sel.ParagraphFormat.SpaceAfter = 3
+            self.setup_tab_stops(sel, num_cols, left_indent_cm=0.5, printable_width_cm=printable_width_cm)
+
+            for row in tdata.rows:
+                for idx_c, cell in enumerate(row.cells):
+                    self.write_inline_spans(sel, cell.spans, default_bold=cell.is_header)
+                    if idx_c < len(row.cells) - 1:
+                        sel.TypeText("\t")
+                sel.TypeParagraph()
+
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.TabStops.ClearAll()
+
+        else:
+            # Native Bordered Table
+            table = doc.Tables.Add(Range=sel.Range, NumRows=num_rows, NumColumns=num_cols)
+            try:
+                table.Rows.Alignment = 1  # Center table on page
+            except Exception:
+                pass
+
+            # Cell margins / padding adjustment (Top/Bottom 0.15cm ~4.2pt, Left/Right 0.25cm ~7pt)
+            try:
+                table.TopPadding = cm_to_pt(0.15)
+                table.BottomPadding = cm_to_pt(0.15)
+                table.LeftPadding = cm_to_pt(0.25)
+                table.RightPadding = cm_to_pt(0.25)
+            except Exception:
+                pass
+
+            # Apply 1.0pt single black border lines
+            for border_id in [-1, -2, -3, -4, -5, -6]:  # Top, Left, Bottom, Right, InsideH, InsideV
+                try:
+                    table.Borders(border_id).LineStyle = 1
+                    table.Borders(border_id).LineWidth = 8  # 1pt
+                    table.Borders(border_id).Color = 0  # Black
+                except Exception:
+                    pass
+
+            for r_idx, row in enumerate(tdata.rows):
+                for c_idx, cell in enumerate(row.cells):
+                    if c_idx < num_cols:
+                        cell_obj = table.Cell(r_idx + 1, c_idx + 1)
+                        cell_obj.VerticalAlignment = 1  # wdCellVerticalAlignmentCenter = 1
+                        
+                        p_range = cell_obj.Range
+                        p_range.ParagraphFormat.SpaceBefore = 2
+                        p_range.ParagraphFormat.SpaceAfter = 2
+                        p_range.ParagraphFormat.Alignment = 1 if cell.is_header else 0  # Center header text
+
+                        sel.Start = cell_obj.Range.Start
+                        self.write_inline_spans(sel, cell.spans, default_bold=cell.is_header)
+
+            sel.Start = table.Range.End
+            sel.TypeParagraph()
