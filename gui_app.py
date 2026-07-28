@@ -159,8 +159,13 @@ class ULNFormatterApp:
             messagebox.showwarning("Warning", "Please enter or import ULN text before compiling.")
             return
 
+        out_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "output"))
+        os.makedirs(out_dir, exist_ok=True)
+
         out_path = filedialog.asksaveasfilename(
             title="Save Formatted DOCX File",
+            initialdir=out_dir,
+            initialfile="uln_document.docx",
             defaultextension=".docx",
             filetypes=[("Word Document", "*.docx")]
         )
@@ -179,7 +184,7 @@ class ULNFormatterApp:
 
         try:
             compiler = ULNCompiler(settings)
-            compiled_file = compiler.compile(uln_text, out_path)
+            compiled_file = compiler.compile(uln_text, out_path, keep_open=False)
             
             msg = f"Successfully generated DOCX file:\n{compiled_file}"
             messagebox.showinfo("Success", msg)

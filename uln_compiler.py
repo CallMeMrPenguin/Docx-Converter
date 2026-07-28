@@ -18,17 +18,26 @@ class ULNCompiler:
     def __init__(self, settings: Optional[Dict[str, Any]] = None):
         self.settings = settings or {}
         self.renderer = ULNWordRenderer(self.settings)
+        self.output_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "output"))
+        os.makedirs(self.output_dir, exist_ok=True)
 
-    def compile(self, uln_text: str, output_filepath: str, visible: bool = False, keep_open: bool = False) -> str:
+    def compile(self, uln_text: str, output_filepath: Optional[str] = None, visible: bool = False, keep_open: bool = False) -> str:
         """
         Compiles raw ULN plain text into a formatted MS Word (.docx) file.
-        Returns absolute path to generated file.
-        If keep_open is True, MS Word remains open on screen after compilation.
+        Returns absolute path to generated file in output/ directory by default.
         """
         if not pywin32_available:
             raise RuntimeError("pywin32 package is not installed or available on this Python runtime.")
 
         blocks = ULNParser.parse(uln_text)
+
+        if not output_filepath:
+            output_filepath = os.path.join(self.output_dir, "uln_document.docx")
+        elif not os.path.isabs(output_filepath):
+            if not output_filepath.startswith("output"):
+                output_filepath = os.path.join(self.output_dir, output_filepath)
+            else:
+                output_filepath = os.path.abspath(output_filepath)
 
         abs_output_path = os.path.abspath(output_filepath)
         os.makedirs(os.path.dirname(abs_output_path), exist_ok=True)
@@ -43,7 +52,7 @@ class ULNCompiler:
                 pass
 
             word = win32com.client.Dispatch("Word.Application")
-            word.Visible = True if keep_open else visible
+            word.Visible = visible
             word.DisplayAlerts = 0  # wdAlertsNone
 
             doc = word.Documents.Add()
@@ -52,21 +61,7 @@ class ULNCompiler:
             self.renderer.render(blocks, doc, word)
 
             # Save as DOCX (FileFormat = 16)
-            try:
-                doc.SaveAs2(abs_output_path, FileFormat=16)
-            except Exception as save_err:
-                # If file is already open/locked, save with a unique timestamp fallback
-                import time
-                base, ext = os.path.splitext(abs_output_path)
-                fallback_path = f"{base}_{int(time.time())}{ext}"
-                try:
-                    doc.SaveAs2(fallback_path, FileFormat=16)
-                    abs_output_path = fallback_path
-                except Exception:
-                    print(f"[ULNCompiler] Could not save DOCX file: {save_err}")
-            
-            if keep_open:
-                word.Activate()
+            doc.SaveAs2(abs_output_path, FileFormat=16)
 
             return abs_output_path
 

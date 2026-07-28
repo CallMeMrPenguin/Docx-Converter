@@ -1,3 +1,4 @@
+import os
 from uln_compiler import ULNCompiler
 
 uln_input = """[H1] TEST FOR UNIT 1
@@ -94,7 +95,7 @@ compiler = ULNCompiler({
     "enable_page_numbers": True
 })
 
-output_file = "unit_1_test_formatted.docx"
+output_file = os.path.join(compiler.output_dir, "unit_1_test_formatted.docx")
 print("Compiling ULN input to Word document...")
-compiled_path = compiler.compile(uln_input, output_file, keep_open=True)
-print(f"Compilation finished! Word document is open on screen at: {compiled_path}")
+compiled_path = compiler.compile(uln_input, output_file, keep_open=False)
+print(f"Compilation finished! Output saved to: {compiled_path}")
