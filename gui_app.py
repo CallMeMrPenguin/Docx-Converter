@@ -212,8 +212,12 @@ class ULNFormatterApp:
             defaultextension=".docx",
             filetypes=[("Word Document", "*.docx")]
         )
-        if not out_path:
-            return
+        # Auto-minimize GUI window so it does not block the live Microsoft Word window
+        try:
+            self.root.iconify()
+            self.root.update()
+        except Exception:
+            pass
 
         settings = {
             "font_name": self.font_var.get(),
@@ -232,10 +236,19 @@ class ULNFormatterApp:
             bg_mode_val = self.bg_mode_var.get()
             compiled_file = compiler.compile(uln_text, out_path, keep_open=keep_open_val, background_mode=bg_mode_val)
             
+            try:
+                self.root.deiconify()
+            except Exception:
+                pass
+
             msg = f"Successfully generated DOCX file:\n{compiled_file}"
             messagebox.showinfo("Success", msg)
 
         except Exception as e:
+            try:
+                self.root.deiconify()
+            except Exception:
+                pass
             messagebox.showerror("Compilation Error", f"Failed to generate Word document:\n{e}")
 
 if __name__ == "__main__":
