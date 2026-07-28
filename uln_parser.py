@@ -48,16 +48,9 @@ def parse_pic_tag(text: str) -> Optional[PicInfo]:
     return None
 
 
-def parse_inline_spans(text: str) -> List[InlineSpan]:
+def parse_inline_spans(text: str, default_bold: bool = False, default_italic: bool = False) -> List[InlineSpan]:
     """
-    Parses inline formatting elements:
-    - **bold**
-    - *italic*
-    - [text]{u}
-    - [text]{upper}
-    - [text]{color:NAME}
-    - [text]{bg:NAME}
-    - Combined e.g. [text]{u,color:red}
+    Parses inline formatting elements recursively, handling nested tags like **bold with *italic***.
     """
     if not text:
         return []
@@ -65,8 +58,8 @@ def parse_inline_spans(text: str) -> List[InlineSpan]:
     pattern = re.compile(
         r'(?P<pic>\[PIC:[^\]]+\])|'
         r'(?P<annot>\[(?P<ann_txt>[^\]]+)\]\{(?P<ann_mod>[^\}]+)\})|'
-        r'(?P<bold>\*\*(?P<b_txt>[^*]+)\*\*)|'
-        r'(?P<italic>\*(?P<i_txt>[^*]+)\*)'
+        r'(?P<bold>\*\*(?P<b_txt>.*?)\*\*)|'
+        r'(?P<italic>\*(?P<i_txt>.*?)\*)'
     )
 
     spans = []
@@ -77,18 +70,19 @@ def parse_inline_spans(text: str) -> List[InlineSpan]:
         if start > last_idx:
             plain_txt = text[last_idx:start]
             if plain_txt:
-                spans.append(InlineSpan(text=plain_txt))
+                spans.append(InlineSpan(text=plain_txt, bold=default_bold, italic=default_italic))
 
         gd = match.groupdict()
 
         if gd['pic']:
-            spans.append(InlineSpan(text=gd['pic']))
+            spans.append(InlineSpan(text=gd['pic'], bold=default_bold, italic=default_italic))
+
         elif gd['annot']:
             ann_txt = gd['ann_txt']
             ann_mod = gd['ann_mod'].strip().lower()
             
-            bold = False
-            italic = False
+            b_flag = default_bold
+            i_flag = default_italic
             underline = False
             uppercase = False
             color = None
@@ -102,9 +96,9 @@ def parse_inline_spans(text: str) -> List[InlineSpan]:
                     uppercase = True
                     ann_txt = ann_txt.upper()
                 elif mod in ['b', 'bold']:
-                    bold = True
+                    b_flag = True
                 elif mod in ['i', 'italic']:
-                    italic = True
+                    i_flag = True
                 elif mod.startswith('color:'):
                     color = mod.split(':', 1)[1].strip()
                 elif mod.startswith('bg:'):
@@ -112,24 +106,32 @@ def parse_inline_spans(text: str) -> List[InlineSpan]:
 
             spans.append(InlineSpan(
                 text=ann_txt,
-                bold=bold,
-                italic=italic,
+                bold=b_flag,
+                italic=i_flag,
                 underline=underline,
                 uppercase=uppercase,
                 color=color,
                 bg_color=bg_color
             ))
+
         elif gd['bold']:
-            spans.append(InlineSpan(text=gd['b_txt'], bold=True))
+            b_inner = gd['b_txt']
+            # Recursively parse inner content inside bold block
+            inner_spans = parse_inline_spans(b_inner, default_bold=True, default_italic=default_italic)
+            spans.extend(inner_spans)
+
         elif gd['italic']:
-            spans.append(InlineSpan(text=gd['i_txt'], italic=True))
+            i_inner = gd['i_txt']
+            # Recursively parse inner content inside italic block
+            inner_spans = parse_inline_spans(i_inner, default_bold=default_bold, default_italic=True)
+            spans.extend(inner_spans)
 
         last_idx = end
 
     if last_idx < len(text):
         remaining = text[last_idx:]
         if remaining:
-            spans.append(InlineSpan(text=remaining))
+            spans.append(InlineSpan(text=remaining, bold=default_bold, italic=default_italic))
 
     return spans
 

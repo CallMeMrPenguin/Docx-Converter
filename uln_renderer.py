@@ -58,7 +58,7 @@ def split_line_into_option_items(line_text: str) -> List[str]:
     """
     Splits line text into multi-column items automatically by detecting:
     1. Explicit \t characters
-    2. Multiple option choices like A. text B. text C. text D. text or a. b. c. d.
+    2. Multiple option choices like A. text B. text C. text D. text or a. b. c. d. e. f.
     3. Multiple spaces / double spaces
     """
     if not line_text:
@@ -67,8 +67,8 @@ def split_line_into_option_items(line_text: str) -> List[str]:
     if '\t' in line_text:
         return [x.strip() for x in line_text.split('\t') if x.strip()]
 
-    # Search for option choices like A. B. C. D. or a. b. c. d.
-    matches = list(re.finditer(r'(?:\s+|^)([a-eA-E][\.\)])\s+', line_text))
+    # Search for option choices like A. B. C. D. E. F. or a. b. c. d. e. f.
+    matches = list(re.finditer(r'(?:\s+|^)([a-zA-Z][\.\)])\s+', line_text))
     if len(matches) >= 2:
         items = []
         first_start = matches[0].start()
@@ -155,8 +155,8 @@ class ULNWordRenderer:
             is_bold = span.bold or default_bold
             is_italic = span.italic or default_italic
 
-            # Auto-capitalize & bold option letters: "a. ", "b. ", "c. ", "d. ", "a) ", "b) "
-            opt_match = re.match(r'^(\s*(?:\d+\.\s*)?)([a-eA-E])([\.\)])(\s*.*)$', text)
+            # Auto-capitalize & bold option letters: "a. ", "b. ", "c. ", "d. ", "e. ", "f. ", "a) ", "b) "
+            opt_match = re.match(r'^(\s*(?:\d+\.\s*)?)([a-zA-Z])([\.\)])(\s*.*)$', text)
             if opt_match:
                 prefix_num = opt_match.group(1)
                 opt_let = opt_match.group(2).upper()
@@ -243,7 +243,6 @@ class ULNWordRenderer:
 
         printable_width_cm = 21.0 - self.margin_left - self.margin_right
 
-        # Group consecutive TAB2 blocks to calculate adaptive Column 1 width
         idx_block = 0
         while idx_block < len(blocks):
             block = blocks[idx_block]
@@ -251,6 +250,7 @@ class ULNWordRenderer:
 
             if tag == "H1":
                 sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 18
                 sel.ParagraphFormat.SpaceAfter = 12
                 sel.ParagraphFormat.KeepWithNext = True
@@ -260,6 +260,7 @@ class ULNWordRenderer:
 
             elif tag == "H2":
                 sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 14
                 sel.ParagraphFormat.SpaceAfter = 8
                 sel.ParagraphFormat.KeepWithNext = True
@@ -269,6 +270,7 @@ class ULNWordRenderer:
 
             elif tag == "H3":
                 sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 10
                 sel.ParagraphFormat.SpaceAfter = 6
                 sel.ParagraphFormat.KeepWithNext = True
@@ -284,53 +286,26 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
 
-                items = split_line_into_option_items(block.content)
-                if len(items) > 1:
-                    num_cols = len(items)
-                    self.setup_tab_stops(sel, num_cols, left_indent_cm=0.0, printable_width_cm=printable_width_cm)
-                    
-                    from uln_parser import parse_inline_spans
-                    for idx_item, item in enumerate(items):
-                        spans = parse_inline_spans(item.strip())
-                        self.write_inline_spans(sel, spans)
-                        if idx_item < len(items) - 1:
-                            sel.TypeText("\t")
-                    sel.TypeParagraph()
+                # Check if paragraph ends with a standalone answer line _____ or <blank> or [BLANK]
+                ends_with_blank = bool(re.search(r'^\s*_{3,}\s*$', block.content))
+
+                if ends_with_blank:
+                    # Flush right standalone blank line
                     sel.ParagraphFormat.TabStops.ClearAll()
-                else:
-                    self.write_inline_spans(sel, block.spans)
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 0
+                    sel.Font.Underline = 0
+                    sel.TypeText("_____________________________________________")
                     sel.TypeParagraph()
-
-            elif tag in ["P1", "P2"]:
-                left_indent_cm = 0.5 if tag == "P1" else 1.0
-
-                sel.ParagraphFormat.SpaceBefore = 4 if tag == "P1" else 3
-                sel.ParagraphFormat.SpaceAfter = 3
-                sel.ParagraphFormat.KeepWithNext = False
-                sel.ParagraphFormat.Alignment = 0
-
-                # Detect horizontal picture choice grids
-                pic_matches = list(re.finditer(r'(?:\d+\.\s*)?\[PIC:[^\]]+\]\s*_{2,}', block.content))
-                if len(pic_matches) >= 2:
-                    num_cols = min(4, len(pic_matches))
-                    self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
-                    
-                    from uln_parser import parse_inline_spans
-                    items = split_line_into_option_items(block.content)
-                    for idx_item, item in enumerate(items):
-                        spans = parse_inline_spans(item.strip())
-                        self.write_inline_spans(sel, spans)
-                        if (idx_item + 1) % num_cols == 0 or idx_item == len(items) - 1:
-                            sel.TypeParagraph()
-                        else:
-                            sel.TypeText("\t")
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
                     items = split_line_into_option_items(block.content)
                     if len(items) > 1:
                         num_cols = len(items)
-                        self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
-
+                        self.setup_tab_stops(sel, num_cols, left_indent_cm=0.0, printable_width_cm=printable_width_cm)
+                        
                         from uln_parser import parse_inline_spans
                         for idx_item, item in enumerate(items):
                             spans = parse_inline_spans(item.strip())
@@ -340,14 +315,71 @@ class ULNWordRenderer:
                         sel.TypeParagraph()
                         sel.ParagraphFormat.TabStops.ClearAll()
                     else:
-                        sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
-                        sel.ParagraphFormat.FirstLineIndent = 0
                         self.write_inline_spans(sel, block.spans)
                         sel.TypeParagraph()
 
+            elif tag in ["P1", "P2"]:
+                left_indent_cm = 0.5 if tag == "P1" else 1.0
+
+                sel.ParagraphFormat.SpaceBefore = 4 if tag == "P1" else 3
+                sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.Alignment = 0
+
+                # Check if paragraph ends with a standalone answer line _____
+                ends_with_blank = bool(re.search(r'^\s*_{3,}\s*$', block.content))
+
+                if ends_with_blank:
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 0
+                    sel.Font.Underline = 0
+                    sel.TypeText("_____________________________________________")
+                    sel.TypeParagraph()
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                else:
+                    # Detect horizontal picture choice grids
+                    pic_matches = list(re.finditer(r'(?:\d+\.\s*)?\[PIC:[^\]]+\]\s*_{2,}', block.content))
+                    if len(pic_matches) >= 2:
+                        num_cols = min(4, len(pic_matches))
+                        self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
+                        
+                        from uln_parser import parse_inline_spans
+                        items = split_line_into_option_items(block.content)
+                        for idx_item, item in enumerate(items):
+                            spans = parse_inline_spans(item.strip())
+                            self.write_inline_spans(sel, spans)
+                            if (idx_item + 1) % num_cols == 0 or idx_item == len(items) - 1:
+                                sel.TypeParagraph()
+                            else:
+                                sel.TypeText("\t")
+                        sel.ParagraphFormat.TabStops.ClearAll()
+                    else:
+                        items = split_line_into_option_items(block.content)
+                        if len(items) > 1:
+                            num_cols = len(items)
+                            self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
+
+                            from uln_parser import parse_inline_spans
+                            for idx_item, item in enumerate(items):
+                                spans = parse_inline_spans(item.strip())
+                                self.write_inline_spans(sel, spans)
+                                if idx_item < len(items) - 1:
+                                    sel.TypeText("\t")
+                            sel.TypeParagraph()
+                            sel.ParagraphFormat.TabStops.ClearAll()
+                        else:
+                            sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
+                            sel.ParagraphFormat.FirstLineIndent = 0
+                            self.write_inline_spans(sel, block.spans)
+                            sel.TypeParagraph()
+
             elif tag == "TAB2":
                 # Adaptive 2-Column Side-by-Side Paragraph Split Layout
-                # Look ahead to measure max Column 1 text length across consecutive TAB2 blocks
                 tab2_group = [block]
                 lookahead = idx_block + 1
                 while lookahead < len(blocks) and blocks[lookahead].tag == "TAB2":
@@ -357,22 +389,18 @@ class ULNWordRenderer:
                 max_c1_len = max(len(b.col1) for b in tab2_group) if tab2_group else 10
                 base_indent_cm = 0.5 if "P1" in block.col1 else (1.0 if "P2" in block.col1 else 0.0)
 
-                # Formula for adaptive column 1 width
                 col1_needed_cm = max(3.5, min(10.0, (max_c1_len * 0.18) + 1.2))
                 col2_tab_pos_cm = base_indent_cm + col1_needed_cm
 
-                # Configure Hanging Indent for Column 2 wrapped text alignment
                 sel.ParagraphFormat.SpaceBefore = 3
                 sel.ParagraphFormat.SpaceAfter = 3
                 sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_tab_pos_cm)
                 sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-col1_needed_cm)
                 sel.ParagraphFormat.TabStops.ClearAll()
 
-                # Check if Column 2 is an answer blank (e.g. ______ or Answer: _____)
                 col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?_{2,}\s*$', block.col2))
 
                 if col2_is_blank:
-                    # FLUSH RIGHT TAB STOP at right margin (Alignment = 2) for answer blanks
                     right_margin_pos_cm = printable_width_cm
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(right_margin_pos_cm), Alignment=2)
 
@@ -387,7 +415,6 @@ class ULNWordRenderer:
                     sel.TypeParagraph()
 
                 else:
-                    # Set Column 2 Tab Stop at col2_tab_pos_cm
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
 
                     self.write_inline_spans(sel, block.col1_spans)
@@ -400,7 +427,6 @@ class ULNWordRenderer:
 
                     sel.TypeParagraph()
 
-                # Reset indent
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.TabStops.ClearAll()
@@ -409,16 +435,18 @@ class ULNWordRenderer:
                 self.render_box_shape(sel, doc, word, block, printable_width_cm)
 
             elif tag == "QUOTE":
+                # Reading passage rendered with standard 0.75 cm first-line indent
                 sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
                 sel.ParagraphFormat.RightIndent = cm_to_pt(0.5)
-                sel.ParagraphFormat.FirstLineIndent = 0
-                sel.ParagraphFormat.SpaceBefore = 6
-                sel.ParagraphFormat.SpaceAfter = 6
+                sel.ParagraphFormat.FirstLineIndent = cm_to_pt(0.75)  # First line indent for passages
+                sel.ParagraphFormat.SpaceBefore = 4
+                sel.ParagraphFormat.SpaceAfter = 4
                 sel.ParagraphFormat.Alignment = 0
                 self.write_inline_spans(sel, block.spans, default_italic=False)
                 sel.TypeParagraph()
                 sel.ParagraphFormat.RightIndent = 0
                 sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
 
             elif tag == "PIC":
                 if block.pic:
