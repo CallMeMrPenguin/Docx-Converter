@@ -140,16 +140,15 @@ class ULNWordRenderer:
         for idx, span in enumerate(spans):
             text = span.text
 
-            # Check if span is an inline [PIC: ...] tag
-            if text.startswith("[PIC:"):
-                pic_info = parse_pic_tag(text)
-                if pic_info:
-                    self.render_pic(sel, None, pic_info)
-                    try: sel.Font.Underline = 0
-                    except Exception: pass
-                    try: sel.Font.HighlightColorIndex = 0
-                    except Exception: pass
-                    continue
+            # Check if span is an inline [PIC...] tag
+            if text.startswith("[PIC:") or text.strip().upper() == "[PIC]":
+                pic_info = parse_pic_tag(text) or PicInfo(description="Activity Picture", pos="center", size="medium")
+                self.render_pic(sel, None, pic_info)
+                try: sel.Font.Underline = 0
+                except Exception: pass
+                try: sel.Font.HighlightColorIndex = 0
+                except Exception: pass
+                continue
 
             sel.Font.Name = self.font_name
             sel.Font.Size = self.font_size

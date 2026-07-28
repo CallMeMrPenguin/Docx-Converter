@@ -51,8 +51,12 @@ class ULNBlock:
 
 def parse_pic_tag(text: str) -> Optional[PicInfo]:
     """
-    Parses [PIC: "description" | pos:center | size:medium]
+    Parses [PIC] or [PIC: "description" | pos:center | size:medium]
     """
+    text_strip = text.strip()
+    if text_strip.upper() == "[PIC]":
+        return PicInfo(description="Activity Picture", pos="center", size="medium")
+
     m = re.search(r'\[PIC:\s*"(.*?)"(?:\s*\|\s*pos:(\w+))?(?:\s*\|\s*size:(\w+))?\s*\]', text, re.IGNORECASE)
     if not m:
         m = re.search(r'\[PIC:\s*([^\|\]]+)(?:\s*\|\s*pos:(\w+))?(?:\s*\|\s*size:(\w+))?\s*\]', text, re.IGNORECASE)
@@ -61,6 +65,10 @@ def parse_pic_tag(text: str) -> Optional[PicInfo]:
         pos = m.group(2).lower() if m.group(2) else "center"
         size = m.group(3).lower() if m.group(3) else "medium"
         return PicInfo(description=desc, pos=pos, size=size)
+
+    if re.search(r'\[PIC\]', text, re.IGNORECASE):
+        return PicInfo(description="Activity Picture", pos="center", size="medium")
+
     return None
 
 
@@ -72,7 +80,7 @@ def parse_inline_spans(text: str, default_bold: bool = False, default_italic: bo
         return []
 
     pattern = re.compile(
-        r'(?P<pic>\[PIC:[^\]]+\])|'
+        r'(?P<pic>\[PIC(?::[^\]]+)?\])|'
         r'(?P<annot>\[(?P<ann_txt>[^\]]+)\]\{(?P<ann_mod>[^\}]+)\})|'
         r'(?P<bold>\*\*(?P<b_txt>.*?)\*\*)|'
         r'(?P<italic>\*(?P<i_txt>.*?)\*)'

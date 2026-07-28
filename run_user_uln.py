@@ -86,6 +86,14 @@ There are many different paper craft techniques. Origami is one of ancient techn
 [TAB2] [P1] 4. enthusiasm  D. a period of relaxing, sleeping or doing nothing
 [TAB2] [P1] 5. relaxation  E. the fact of people doing things for enjoyment
 [TAB2] [P1] 6. pleasure  F. a way of resting and enjoying yourself
+
+[TABLE: borderless]
+[TR] 11. What does the sign (A) say? | [PIC]
+[TR] **A.** Maximum 40 vehicles are allowed on this road. |
+[TR] **B.** You shouldn't exceed this maximum speed. |
+[TR] **C.** Minimum 40 vehicles are allowed on this road. |
+[TR] **D.** You shouldn't move below this speed. |
+[/TABLE]
 """
 
 compiler = ULNCompiler({

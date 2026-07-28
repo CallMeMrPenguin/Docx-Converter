@@ -94,14 +94,16 @@ D. HORIZONTAL PICTURE CHOICE GRIDS:
      5. [PIC] | 6. [PIC] | 7. [PIC] | 8. [PIC]
      [/PIC_GRID]
 
-E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES (UNIVERSAL IMAGE-LEFT MANDATE):
-   - CRITICAL PLACEMENT MANDATE: Regardless of whether a sign, diagram, or notice image is visually located at the TOP, RIGHT, or BOTTOM of a question or option section in the raw source, ALWAYS MOVE THE IMAGE TO THE LEFT of the question + options section!
-   - Use `[TAB2]` on the question line placing the simple picture tag `[PIC]` in Column 1 (Left) and the question text in Column 2 (Right):
-     [TAB2] [PIC] [P0] 11. What does the sign (A) say?
-     [P1] **A.** Maximum 40 vehicles are allowed on this road.
-     [P1] **B.** You shouldn't exceed this maximum speed.
-     [P1] **C.** Minimum 40 vehicles are allowed on this road.
-     [P1] **D.** You shouldn't move below this speed.
+E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES (TABLE: BORDERLESS MANDATE):
+   - MANDATE: For exercises featuring a sign or diagram image alongside a question + 4 choices (A, B, C, D), ALWAYS use `[TABLE: borderless]`!
+   - Put the question and options on separate `[TR]` rows in Column 1, and the picture tag `[PIC]` in Column 2 (or vice versa), separated by the pipe `|` symbol:
+     [TABLE: borderless]
+     [TR] 11. What does the sign (A) say? | [PIC]
+     [TR] **A.** Maximum 40 vehicles are allowed on this road. |
+     [TR] **B.** You shouldn't exceed this maximum speed. |
+     [TR] **C.** Minimum 40 vehicles are allowed on this road. |
+     [TR] **D.** You shouldn't move below this speed. |
+     [/TABLE]
 
 ---
 
