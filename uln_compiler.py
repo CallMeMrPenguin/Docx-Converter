@@ -54,11 +54,23 @@ class ULNCompiler:
             word = win32com.client.Dispatch("Word.Application")
             word.Visible = True if (visible or keep_open) else False
             word.DisplayAlerts = 0  # wdAlertsNone
+            
+            # Disable screen updating during document creation to prevent OS input freeze & focus locking
+            try:
+                word.ScreenUpdating = False
+            except Exception:
+                pass
 
             doc = word.Documents.Add()
             
-            # Execute pywin32 rendering in real-time
+            # Execute pywin32 rendering silently in memory
             self.renderer.render(blocks, doc, word)
+
+            # Re-enable screen updating so Word displays the finished document instantly
+            try:
+                word.ScreenUpdating = True
+            except Exception:
+                pass
 
             # Save as DOCX (FileFormat = 16)
             try:
