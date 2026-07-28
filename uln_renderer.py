@@ -720,8 +720,8 @@ class ULNWordRenderer:
 
                         sel.Start = cell_obj.Range.Start
 
-                        # MANDATE: If cell content is _____ or empty, IGNORE literal text so bottom border acts as answer line!
-                        is_blank_cell = bool(re.match(r'^\s*_{2,}\s*$', cell.content))
+                        # MANDATE: If cell content is _____, <blank>, [BLANK], or empty, IGNORE literal text so bottom border acts as answer line!
+                        is_blank_cell = bool(re.match(r'^\s*(?:_{2,}|<blank>|\[BLANK\])\s*$', cell.content, re.IGNORECASE))
                         if not is_blank_cell and cell.content.strip():
                             self.write_inline_spans(sel, cell.spans, default_bold=cell.is_header)
 
@@ -730,7 +730,7 @@ class ULNWordRenderer:
     def render_pic_grid(self, sel, doc, children: List[ULNBlock], printable_width_cm: float):
         """
         Renders [PIC_GRID] using divided paragraph tab stops (NO MS Word Table object!).
-        Row 1: 4 pictures placed across 4 tab stops.
+        Row 1: 4 pictures placed across 4 tab stops (Single line spacing).
         Row 2: 4 captions (<number>. _________) placed across 4 tab stops matching picture width.
         """
         if not children:
@@ -744,11 +744,12 @@ class ULNWordRenderer:
             chunk = children[i:i + cols]
 
             # -------------------------------------------------------------
-            # LINE 1: PICTURES LINE (4 tab-aligned pictures)
+            # LINE 1: PICTURES LINE (4 tab-aligned pictures, Single Line Spacing)
             # -------------------------------------------------------------
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.FirstLineIndent = 0
-            sel.ParagraphFormat.SpaceBefore = 6
+            sel.ParagraphFormat.LineSpacingRule = 0  # Single Line Spacing
+            sel.ParagraphFormat.SpaceBefore = 4
             sel.ParagraphFormat.SpaceAfter = 2
             sel.ParagraphFormat.TabStops.ClearAll()
 

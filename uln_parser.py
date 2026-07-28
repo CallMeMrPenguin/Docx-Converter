@@ -308,15 +308,22 @@ class ULNParser:
                 rest_content = tag_match.group(2)
 
                 if tag == "TAB2":
-                    if '\t' in rest_content:
+                    pic_start_match = re.match(r'^\s*(\[PIC:[^\]]+\])\s+(.*)$', rest_content, re.IGNORECASE)
+                    if pic_start_match:
+                        col1_raw = pic_start_match.group(1).strip()
+                        col2_raw = pic_start_match.group(2).strip()
+                    elif '\t' in rest_content:
                         parts = rest_content.split('\t', 1)
+                        col1_raw = parts[0].strip() if len(parts) > 0 else ""
+                        col2_raw = parts[1].strip() if len(parts) > 1 else ""
                     elif ' | ' in rest_content:
                         parts = rest_content.split(' | ', 1)
+                        col1_raw = parts[0].strip() if len(parts) > 0 else ""
+                        col2_raw = parts[1].strip() if len(parts) > 1 else ""
                     else:
                         parts = re.split(r'\s{2,}', rest_content, 1)
-
-                    col1_raw = parts[0].strip() if len(parts) > 0 else ""
-                    col2_raw = parts[1].strip() if len(parts) > 1 else ""
+                        col1_raw = parts[0].strip() if len(parts) > 0 else ""
+                        col2_raw = parts[1].strip() if len(parts) > 1 else ""
 
                     c1_tag_match = re.match(r'^\s*\[(P0|P1|P2)\]\s*(.*)$', col1_raw, re.IGNORECASE)
                     if c1_tag_match:
