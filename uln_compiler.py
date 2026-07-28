@@ -52,7 +52,18 @@ class ULNCompiler:
             self.renderer.render(blocks, doc, word)
 
             # Save as DOCX (FileFormat = 16)
-            doc.SaveAs2(abs_output_path, FileFormat=16)
+            try:
+                doc.SaveAs2(abs_output_path, FileFormat=16)
+            except Exception as save_err:
+                # If file is already open/locked, save with a unique timestamp fallback
+                import time
+                base, ext = os.path.splitext(abs_output_path)
+                fallback_path = f"{base}_{int(time.time())}{ext}"
+                try:
+                    doc.SaveAs2(fallback_path, FileFormat=16)
+                    abs_output_path = fallback_path
+                except Exception:
+                    print(f"[ULNCompiler] Could not save DOCX file: {save_err}")
             
             if keep_open:
                 word.Activate()
