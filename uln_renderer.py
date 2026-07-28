@@ -1,4 +1,5 @@
 import os
+import re
 import math
 from typing import List, Dict, Any, Optional
 from uln_parser import ULNBlock, InlineSpan, PicInfo
@@ -96,12 +97,40 @@ class ULNWordRenderer:
                 doc.Fields.Add(Range=end_range, Type=-1, Text="NUMPAGES")
 
     def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False):
-        """Writes formatted text runs to MS Word selection."""
-        for span in spans:
+        """Writes formatted text runs to MS Word selection, auto-capitalizing and bolding option prefixes."""
+        for idx, span in enumerate(spans):
             sel.Font.Name = self.font_name
             sel.Font.Size = self.font_size
-            sel.Font.Bold = 1 if (span.bold or default_bold) else 0
-            sel.Font.Italic = 1 if (span.italic or default_italic) else 0
+            
+            text = span.text
+            is_bold = span.bold or default_bold
+            is_italic = span.italic or default_italic
+
+            # Auto-capitalize & bold option letters: "a. ", "b. ", "c. ", "d. ", "a) ", "b) "
+            opt_match = re.match(r'^(\s*(?:\d+\.\s*)?)([a-eA-E])([\.\)])(\s*.*)$', text)
+            if opt_match:
+                prefix_num = opt_match.group(1)
+                opt_let = opt_match.group(2).upper()
+                opt_punct = opt_match.group(3)
+                rest_txt = opt_match.group(4)
+
+                # Write question number if present
+                if prefix_num:
+                    sel.Font.Bold = 1 if default_bold else 0
+                    sel.Font.Italic = 1 if default_italic else 0
+                    sel.TypeText(prefix_num)
+
+                # Write option letter in BOLD and CAPITALIZED
+                sel.Font.Bold = 1
+                sel.Font.Italic = 0
+                sel.TypeText(f"{opt_let}{opt_punct} ")
+
+                # Remaining text
+                text = rest_txt
+                is_bold = span.bold
+
+            sel.Font.Bold = 1 if is_bold else 0
+            sel.Font.Italic = 1 if is_italic else 0
             sel.Font.Underline = 1 if span.underline else 0
 
             # Text color
@@ -131,7 +160,7 @@ class ULNWordRenderer:
                 except Exception:
                     pass
 
-            text = span.text.upper() if span.uppercase else span.text
+            text = text.upper() if span.uppercase else text
             sel.TypeText(text)
 
             # Reset Highlight to prevent leak
@@ -140,13 +169,29 @@ class ULNWordRenderer:
             except Exception:
                 pass
 
+    def setup_tab_stops(self, sel, num_cols: int, left_indent_cm: float, printable_width_cm: float) -> float:
+        """
+        Calculates exact distance formulas for tab stops so text NEVER wraps unexpectedly
+        and tab stops are neither too close nor too far.
+        """
+        remaining_width_cm = printable_width_cm - left_indent_cm
+        col_width_cm = remaining_width_cm / max(1, num_cols)
+
+        sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
+        sel.ParagraphFormat.TabStops.ClearAll()
+
+        for c in range(1, num_cols):
+            tab_pos_cm = left_indent_cm + (col_width_cm * c)
+            sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(tab_pos_cm), Alignment=0)  # Left align tab stop
+
+        return col_width_cm
+
     def render(self, blocks: List[ULNBlock], doc, word):
         """Renders parsed ULNBlocks into the active document."""
         self.configure_document(doc)
         sel = word.Selection
 
         printable_width_cm = 21.0 - self.margin_left - self.margin_right
-        printable_width_pt = cm_to_pt(printable_width_cm)
 
         for block in blocks:
             tag = block.tag
@@ -179,50 +224,75 @@ class ULNWordRenderer:
                 sel.TypeParagraph()
 
             elif tag in ["P0", "P"]:
+                # Check if paragraph is an instruction heading (Roman numerals I., II., III., etc.)
+                is_instruction = bool(re.match(r'^\s*(?:[I|V|X]+\.|\d+\.)\s+[A-Z]', block.content))
+
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 6
                 sel.ParagraphFormat.SpaceAfter = 4
-                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.KeepWithNext = True if is_instruction else False
                 sel.ParagraphFormat.Alignment = 0
-                self.write_inline_spans(sel, block.spans)
-                sel.TypeParagraph()
 
-            elif tag == "P1":
-                sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
-                sel.ParagraphFormat.SpaceBefore = 4
+                # Check if paragraph contains tab characters \t
+                if '\t' in block.content:
+                    items = block.content.split('\t')
+                    num_cols = len(items)
+                    self.setup_tab_stops(sel, num_cols, left_indent_cm=0.0, printable_width_cm=printable_width_cm)
+                    
+                    from uln_parser import parse_inline_spans
+                    for idx_item, item in enumerate(items):
+                        spans = parse_inline_spans(item.strip())
+                        self.write_inline_spans(sel, spans, default_bold=is_instruction)
+                        if idx_item < len(items) - 1:
+                            sel.TypeText("\t")
+                    sel.TypeParagraph()
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                else:
+                    self.write_inline_spans(sel, block.spans, default_bold=is_instruction)
+                    sel.TypeParagraph()
+
+            elif tag in ["P1", "P2"]:
+                left_indent_cm = 0.5 if tag == "P1" else 1.0
+
+                sel.ParagraphFormat.SpaceBefore = 4 if tag == "P1" else 3
                 sel.ParagraphFormat.SpaceAfter = 3
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
-                self.write_inline_spans(sel, block.spans)
-                sel.TypeParagraph()
 
-            elif tag == "P2":
-                sel.ParagraphFormat.LeftIndent = cm_to_pt(1.0)
-                sel.ParagraphFormat.SpaceBefore = 3
-                sel.ParagraphFormat.SpaceAfter = 3
-                sel.ParagraphFormat.KeepWithNext = False
-                sel.ParagraphFormat.Alignment = 0
-                self.write_inline_spans(sel, block.spans)
-                sel.TypeParagraph()
+                # Check if line contains tab stops \t (e.g. A. cat \t B. city \t C. car \t D. cup)
+                if '\t' in block.content:
+                    items = block.content.split('\t')
+                    num_cols = len(items)
+                    self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
+
+                    from uln_parser import parse_inline_spans
+                    for idx_item, item in enumerate(items):
+                        spans = parse_inline_spans(item.strip())
+                        self.write_inline_spans(sel, spans)
+                        if idx_item < len(items) - 1:
+                            sel.TypeText("\t")
+                    sel.TypeParagraph()
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                else:
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
+                    self.write_inline_spans(sel, block.spans)
+                    sel.TypeParagraph()
 
             elif tag == "TAB2":
-                # 2-Column side-by-side using Tab Stops
-                col_width_cm = printable_width_cm / 2.0
-                tab_pos_cm = col_width_cm
+                # 2-Column Side-by-Side Paragraph Split Layout using Tab Stops
+                left_indent_cm = 0.5 if "P1" in block.col1 else (1.0 if "P2" in block.col1 else 0.0)
+                self.setup_tab_stops(sel, num_cols=2, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
 
-                sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
                 sel.ParagraphFormat.SpaceBefore = 3
                 sel.ParagraphFormat.SpaceAfter = 3
-                sel.ParagraphFormat.TabStops.ClearAll()
-                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(tab_pos_cm), Alignment=0)
 
-                # Write Column 1
+                # Column 1
                 self.write_inline_spans(sel, block.col1_spans)
 
                 # Tab over to Column 2
                 sel.TypeText("\t")
 
-                # Write Column 2 or handle Pic if embedded
+                # Column 2 (or Image)
                 if block.pic:
                     self.render_pic(sel, doc, block.pic)
                 else:
@@ -232,7 +302,7 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.TabStops.ClearAll()
 
             elif tag == "BOX":
-                self.render_box(sel, doc, block, printable_width_cm)
+                self.render_box_shape(sel, doc, word, block, printable_width_cm)
 
             elif tag == "QUOTE":
                 sel.ParagraphFormat.LeftIndent = cm_to_pt(1.0)
@@ -262,7 +332,6 @@ class ULNWordRenderer:
         if pic.filepath and os.path.exists(pic.filepath):
             try:
                 shape = sel.InlineShapes.AddPicture(FileName=os.path.abspath(pic.filepath))
-                # Adjust scale
                 if pic.size == "small":
                     shape.Width = cm_to_pt(4.0)
                 elif pic.size == "large":
@@ -285,37 +354,112 @@ class ULNWordRenderer:
             pass
         sel.TypeText(desc_text)
 
-    def render_box(self, sel, doc, block: ULNBlock, printable_width_cm: float):
-        """Renders framed Word Bank / Rule callout box with border styling."""
-        box_table = doc.Tables.Add(Range=sel.Range, NumRows=1, NumColumns=1)
+    def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
+        """
+        Renders Word Bank / Callout Box using MS Word Rounded Rectangle Shape (msoShapeRoundedRectangle = 5)
+        tightly anchored around paragraph text (Center Manager standard), replacing table borders.
+        """
+        printable_width_pt = cm_to_pt(printable_width_cm)
+        words = [w.strip() for w in block.content.split() if w.strip()]
+
+        # Parse text lines or word bank words
+        if not words:
+            return
+
+        # Determine optimal column layout inside word box
+        N = len(words)
+        if N <= 5:
+            cols = N
+        elif N <= 9:
+            cols = 4
+        else:
+            cols = 5
+
+        max_len_all = max(len(w) for w in words)
+        char_w_pt = 6.0  # Average 12pt character width
+        col_width_pt = (max_len_all * char_w_pt) + 12.0
+
+        last_col_words = [words[i] for i in range(cols - 1, N, cols)] if N >= cols else [words[-1]]
+        last_col_max_len = max(len(w) for w in last_col_words) if last_col_words else 8
+        last_col_text_w_pt = last_col_max_len * char_w_pt
+
+        text_group_width_pt = min(printable_width_pt, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
+        left_offset_pt = max(0.0, (printable_width_pt - text_group_width_pt) / 2.0)
+
+        # Configure paragraph settings for shape-anchored word box
+        sel.ParagraphFormat.SpaceBefore = 4
+        sel.ParagraphFormat.SpaceAfter = 0
+        sel.ParagraphFormat.LineSpacingRule = 0
+        sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
+        sel.ParagraphFormat.LeftIndent = left_offset_pt
+        sel.ParagraphFormat.TabStops.ClearAll()
+
+        for c in range(1, cols):
+            tab_pos = left_offset_pt + (col_width_pt * c)
+            sel.ParagraphFormat.TabStops.Add(Position=tab_pos, Alignment=0)
+
+        p_start = sel.Range.Start
+
+        lines = []
+        for i in range(0, N, cols):
+            lines.append(words[i:i + cols])
+
+        num_rows = len(lines)
+        for idx_line, chunk in enumerate(lines):
+            if idx_line == num_rows - 1:
+                sel.ParagraphFormat.LineSpacingRule = 2  # Double line spacing on last row
+                sel.ParagraphFormat.SpaceAfter = 0
+            else:
+                sel.ParagraphFormat.LineSpacingRule = 0
+                sel.ParagraphFormat.SpaceAfter = 0
+
+            for idx_w, word_txt in enumerate(chunk):
+                sel.Font.Name = self.font_name
+                sel.Font.Size = self.font_size
+                sel.Font.Bold = 1
+                sel.TypeText(word_txt)
+                if idx_w < len(chunk) - 1:
+                    sel.Font.Bold = 0
+                    sel.TypeText("\t")
+
+            sel.TypeParagraph()
+
+        p_end = sel.Range.Start
+        box_range = doc.Range(p_start, p_end)
+
+        # Draw Rounded Rectangle Shape (msoShapeRoundedRectangle = 5) around word box
         try:
-            box_table.Rows.Alignment = 1  # Center
-        except Exception:
-            pass
-        box_table.Columns(1).Width = cm_to_pt(printable_width_cm)
+            padding_pt = 6.0
+            box_width_pt = text_group_width_pt + (padding_pt * 2)
+            text_height_pt = ((num_rows - 1) * 16.0) + 28.0
+            box_height_pt = text_height_pt
 
-        cell = box_table.Cell(1, 1)
-        cell.VerticalAlignment = 1
+            shape = doc.Shapes.AddShape(
+                5,  # msoShapeRoundedRectangle = 5
+                0,
+                0,
+                box_width_pt,
+                box_height_pt,
+                Anchor=box_range
+            )
+            shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
+            shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
+            shape.Left = left_offset_pt - padding_pt
+            shape.Top = -padding_pt
 
-        # Border styling: Single line 1pt black border
-        for border_id in [-1, -2, -3, -4]:  # Top, Left, Bottom, Right
+            shape.Fill.Visible = False  # Transparent fill so words display cleanly
+            shape.Line.Weight = 1.0     # 1pt rounded border
+            shape.Line.ForeColor.RGB = 0  # Black border line
             try:
-                cell.Borders(border_id).LineStyle = 1
-                cell.Borders(border_id).LineWidth = 8  # 1pt
-                cell.Borders(border_id).Color = 0  # Black
+                shape.ZOrder(1)  # Send behind text
             except Exception:
                 pass
+        except Exception as e:
+            print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
 
-        p = cell.Range
-        p.ParagraphFormat.SpaceBefore = 4
-        p.ParagraphFormat.SpaceAfter = 4
-        p.ParagraphFormat.LeftIndent = cm_to_pt(0.3)
-        p.ParagraphFormat.Alignment = 0
-
-        # Select inside cell and write spans
-        sel.Start = cell.Range.Start
-        self.write_inline_spans(sel, block.spans)
-
-        # Move selection past table
-        sel.Start = box_table.Range.End
-        sel.TypeParagraph()
+        # Reset selection formatting after word box
+        sel.ParagraphFormat.SpaceBefore = 6
+        sel.ParagraphFormat.SpaceAfter = 4
+        sel.ParagraphFormat.LineSpacingRule = 0
+        sel.ParagraphFormat.LeftIndent = 0
+        sel.ParagraphFormat.TabStops.ClearAll()
