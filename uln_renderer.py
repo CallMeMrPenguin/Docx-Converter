@@ -324,13 +324,31 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
 
-                # Check if paragraph ends with a standalone answer line _____ or <blank> or [BLANK]
+                # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK]
                 ends_with_blank = bool(re.search(r'^\s*(?:_{3,}|<blank>|\[BLANK\])\s*$', block.content, re.IGNORECASE))
+                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank)
+                trailing_blank_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*$', block.content, re.DOTALL) if not ends_with_blank else None
 
                 if ends_with_blank:
                     # Flush right standalone blank line
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 0
+                    sel.Font.Underline = 0
+                    sel.TypeText("_____________________________________________")
+                    sel.TypeParagraph()
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                elif trailing_blank_match:
+                    # Option B: text before <blank> rendered inline, blank flushed to right margin via tab stop
+                    text_part = trailing_blank_match.group(1)
+                    from uln_parser import parse_inline_spans as _pis
+                    text_spans = _pis(text_part)
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
+                    self.write_inline_spans(sel, text_spans)
+                    sel.TypeText("\t")
                     sel.Font.Name = self.font_name
                     sel.Font.Size = self.font_size
                     sel.Font.Bold = 0
@@ -368,14 +386,34 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
 
-                # Check if paragraph ends with a standalone answer line _____
+                # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK]
                 ends_with_blank = bool(re.search(r'^\s*(?:_{3,}|<blank>|\[BLANK\])\s*$', block.content, re.IGNORECASE))
+                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank)
+                trailing_blank_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*$', block.content, re.DOTALL) if not ends_with_blank else None
 
                 if ends_with_blank:
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
                     sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 0
+                    sel.Font.Underline = 0
+                    sel.TypeText("_____________________________________________")
+                    sel.TypeParagraph()
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                elif trailing_blank_match:
+                    # Option B: text before <blank> rendered inline, blank flushed to right margin via tab stop
+                    text_part = trailing_blank_match.group(1)
+                    from uln_parser import parse_inline_spans as _pis
+                    text_spans = _pis(text_part)
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
+                    self.write_inline_spans(sel, text_spans)
+                    sel.TypeText("\t")
                     sel.Font.Name = self.font_name
                     sel.Font.Size = self.font_size
                     sel.Font.Bold = 0
@@ -787,6 +825,11 @@ class ULNWordRenderer:
 
         else:
             table = doc.Tables.Add(Range=sel.Range, NumRows=num_rows, NumColumns=num_cols)
+            try:
+                # wdAutoFitContent = 1: columns auto-fit to content width, prevents text wrapping
+                table.AutoFitBehavior(1)
+            except Exception:
+                pass
             try:
                 table.Rows.Alignment = 1  # Center table on page
             except Exception:
