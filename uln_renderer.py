@@ -465,7 +465,7 @@ class ULNWordRenderer:
                 group_first_c1 = tab2_group[0].col1 if tab2_group else block.col1
                 base_indent_cm = 0.5 if "P1" in group_first_c1 else (1.0 if "P2" in group_first_c1 else 0.0)
 
-                col1_needed_cm = max(3.5, min(10.0, (max_c1_len * 0.18) + 1.2))
+                col1_needed_cm = max(2.5, (max_c1_len * 0.15) + 0.5)
                 col2_tab_pos_cm = base_indent_cm + col1_needed_cm
 
                 sel.ParagraphFormat.SpaceBefore = 3
