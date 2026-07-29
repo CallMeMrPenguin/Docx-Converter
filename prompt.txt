@@ -75,14 +75,18 @@ Option letters (A., B., C., D.) MUST ALWAYS be CAPITALIZED and BOLD (e.g., **A.*
 
 ### 3. EXERCISE-SPECIFIC SYNTAX & EDGE CASES
 
-A. FILL-IN-THE-BLANK & ANSWERS:
-   - ALWAYS use '<blank>' for empty student blanks so compiler logic can determine optimal blank length and flush right.
-   - If an answer key or filled text is provided, wrap it as underlined text: [answer]{u}
+A. FILL-IN-THE-BLANK, SENTENCE TRANSFORMATION & COMPLETION:
+   - ALWAYS use '<blank>' for empty student answer blanks.
+   - Sentence transformation lines (e.g. "Complete the second sentence so that it has the same meaning") MUST use standard [P0] or [P1] tags with <blank>:
+     [P0] 1. What is your hobby?
+     [P1] → What hobby <blank>
+   - Fill-in-the-blank sentences MUST use standard [P0] or [P1] tags with <blank>:
+     [P0] 1. My father can make beautiful pieces of art <blank> empty eggshells.
+   - CRITICAL MANDATE: NEVER use [TAB2] for sentence transformation or fill-in-the-blank lines!
 
-B. ERROR CORRECTION & FLUSH RIGHT ANSWERS:
-   - Use [TAB2] for error correction lines so the answer blank is aligned flush right at the right margin:
-     [TAB2] [P0] 1. Nam is my classmates. He watches TV every night.  <blank>
-   - See also Section F for numbered definition/question lists with right-margin answer blanks.
+B. ERROR CORRECTION & FLUSH RIGHT ANSWER COLUMNS:
+   - Use [TAB2] ONLY for error correction exercises where an explicit separate answer column exists at the far right of the line:
+     [TAB2] [P0] 1. Nam is my classmates. He watches TV every night. | <blank>
 
 C. CONTINUOUS CHOICE & PRONUNCIATION / STRESS GRIDS:
    - Keep continuous option sets on a single line:
@@ -106,31 +110,11 @@ E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES (TABLE: BORDERLESS MANDATE):
      [TR] **D.** You shouldn't move below this speed. |
      [/TABLE]
 
-F. NUMBERED QUESTION OR DEFINITION WITH RIGHT-MARGIN ANSWER BLANK ([TAB2] MANDATE):
-   - MANDATE: When an exercise has numbered items where students write the answer on a blank line
-     at the far RIGHT of each row (e.g. "Write the word next to its definition", "Complete the second
-     sentence", "Match the adjective to its meaning"), ALWAYS use [TAB2] for each numbered row.
-   - Column 1 (before |) = the question text or definition
-   - Column 2 (after |)  = <blank>  (compiler flushes it to the right margin automatically)
-   - Example source visual layout:
-       1. not bright or not having much light         ________
-       2. needing to rest or sleep                    ________
-       3. marked with dirt, mud, etc.                 ________
-   - Correct ULN output:
-       [TAB2] [P0] 1. not bright or not having much light | <blank>
-       [TAB2] [P0] 2. needing to rest or sleep | <blank>
-       [TAB2] [P0] 3. marked with dirt, mud, etc. | <blank>
-   - The same applies to "Complete the second sentence" exercises:
-       Example source:
-           → What hobby _______________
-           → We all think _______________
-       Correct ULN output:
-           [TAB2] [P1] → What hobby | <blank>
-           [TAB2] [P1] → We all think | <blank>
-   - NEVER use plain [P0] or [P1] with an inline <blank> for these patterns — the blank will render
-     too short and will NOT be aligned to the right margin.
-   - CRITICAL VISUAL CUE: If you see two visual columns (question/text on left, short answer line on right)
-     across MULTIPLE rows — even without visible table borders — that is ALWAYS a [TAB2] pattern.
+F. STRICT RULE: WHEN TO USE [TAB2] VS STANDARD [P0]/[P1]:
+   - DO NOT use [TAB2] for regular sentences, sentence transformations, or inline fill-in-the-blanks.
+   - Use [TAB2] ONLY when there are two distinct side-by-side columns:
+     1. Error Correction lines with a right-hand answer blank column: `[TAB2] [P0] 1. Question... | <blank>`
+     2. 2-Column Matching / Definition tables: `[TAB2] [P1] 1. rest | A. an activity...`
 
 ---
 
