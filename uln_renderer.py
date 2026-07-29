@@ -67,8 +67,9 @@ def split_line_into_option_items(line_text: str) -> List[str]:
     if '\t' in line_text:
         return [x.strip() for x in line_text.split('\t') if x.strip()]
 
-    # Search for option choices like A. B. C. D. E. F. or a. b. c. d. e. f.
-    matches = list(re.finditer(r'(?:\s+|^)([a-zA-Z][\.\)])\s+', line_text))
+    # Search for option choices like A. B. C. D. E. F. or a. b. c. d. e. f. or **a.** **b.**
+    pattern = r'(?:^|\s+)(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)(?=\s+|$)'
+    matches = list(re.finditer(pattern, line_text))
     if len(matches) >= 2:
         items = []
         first_start = matches[0].start()
@@ -491,7 +492,7 @@ class ULNWordRenderer:
                     sel.Font.Size = self.font_size
                     sel.Font.Bold = 0
                     sel.Font.Underline = 0
-                    sel.TypeText("___________")
+                    sel.TypeText("_____________________________________________")
                     sel.TypeParagraph()
 
                 else:
