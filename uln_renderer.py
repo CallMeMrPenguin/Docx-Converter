@@ -457,7 +457,8 @@ class ULNWordRenderer:
                     lookahead += 1
 
                 max_c1_len = max(len(b.col1) for b in tab2_group) if tab2_group else 10
-                base_indent_cm = 0.5 if "P1" in block.col1 else (1.0 if "P2" in block.col1 else 0.0)
+                group_first_c1 = tab2_group[0].col1 if tab2_group else block.col1
+                base_indent_cm = 0.5 if "P1" in group_first_c1 else (1.0 if "P2" in group_first_c1 else 0.0)
 
                 col1_needed_cm = max(3.5, min(10.0, (max_c1_len * 0.18) + 1.2))
                 col2_tab_pos_cm = base_indent_cm + col1_needed_cm
