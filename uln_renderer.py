@@ -331,30 +331,25 @@ class ULNWordRenderer:
                 trailing_blank_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*$', block.content, re.DOTALL) if not ends_with_blank else None
 
                 if ends_with_blank:
-                    # Flush right standalone blank line
+                    # Flush right standalone blank line with dynamic Tab Leader 4 (wdTabLeaderUnderscore = 4)
                     sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                     sel.Font.Name = self.font_name
                     sel.Font.Size = self.font_size
                     sel.Font.Bold = 0
                     sel.Font.Underline = 0
-                    sel.TypeText("_____________________________________________")
+                    sel.TypeText("\t")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 elif trailing_blank_match:
-                    # Option B: text before <blank> rendered inline, blank flushed to right margin via tab stop
+                    # Option B: text before <blank> rendered inline, blank filled dynamically to right margin via Leader=4
                     text_part = trailing_blank_match.group(1)
                     from uln_parser import parse_inline_spans as _pis
                     text_spans = _pis(text_part)
                     sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                     self.write_inline_spans(sel, text_spans)
                     sel.TypeText("\t")
-                    sel.Font.Name = self.font_name
-                    sel.Font.Size = self.font_size
-                    sel.Font.Bold = 0
-                    sel.Font.Underline = 0
-                    sel.TypeText("_____________________________________________")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
@@ -396,30 +391,25 @@ class ULNWordRenderer:
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
                     sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                     sel.Font.Name = self.font_name
                     sel.Font.Size = self.font_size
                     sel.Font.Bold = 0
                     sel.Font.Underline = 0
-                    sel.TypeText("_____________________________________________")
+                    sel.TypeText("\t")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 elif trailing_blank_match:
-                    # Option B: text before <blank> rendered inline, blank flushed to right margin via tab stop
+                    # Option B: text before <blank> rendered inline, blank filled dynamically to right margin via Leader=4
                     text_part = trailing_blank_match.group(1)
                     from uln_parser import parse_inline_spans as _pis
                     text_spans = _pis(text_part)
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
                     sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                     self.write_inline_spans(sel, text_spans)
                     sel.TypeText("\t")
-                    sel.Font.Name = self.font_name
-                    sel.Font.Size = self.font_size
-                    sel.Font.Bold = 0
-                    sel.Font.Underline = 0
-                    sel.TypeText("_____________________________________________")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
@@ -479,20 +469,14 @@ class ULNWordRenderer:
                 col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?(?:_{2,}|<blank>|\[BLANK\])\s*$', block.col2, re.IGNORECASE))
 
                 if col2_is_blank:
-                    # FLUSH RIGHT TAB STOP at right margin (Alignment = 2) for answer blanks
+                    # FLUSH RIGHT TAB STOP at right margin (Alignment = 2, Leader = 4) for answer blanks
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
                     sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)  # wdAlignTabRight = 2
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)  # wdAlignTabRight = 2, wdTabLeaderUnderscore = 4
 
                     self.write_inline_spans(sel, block.col1_spans)
                     sel.TypeText("\t")
-
-                    sel.Font.Name = self.font_name
-                    sel.Font.Size = self.font_size
-                    sel.Font.Bold = 0
-                    sel.Font.Underline = 0
-                    sel.TypeText("_____________________________________________")
                     sel.TypeParagraph()
 
                 else:
