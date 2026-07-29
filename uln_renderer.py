@@ -462,11 +462,22 @@ class ULNWordRenderer:
                     lookahead += 1
 
                 max_c1_len = max(len(b.col1) for b in tab2_group) if tab2_group else 10
+                max_c2_len = max(len(b.col2) for b in tab2_group) if tab2_group else 10
+
                 group_first_c1 = tab2_group[0].col1 if tab2_group else block.col1
                 base_indent_cm = 0.5 if "P1" in group_first_c1 else (1.0 if "P2" in group_first_c1 else 0.0)
 
-                col1_needed_cm = max(2.5, (max_c1_len * 0.15) + 0.5)
-                col2_tab_pos_cm = base_indent_cm + col1_needed_cm
+                # Algorithm: Calculate TAB2 start so longest Col 2 line touches printable_width_cm (right border)
+                min_col2_start_cm = base_indent_cm + max(2.5, (max_c1_len * 0.16) + 0.6)
+                c2_width_cm = max_c2_len * 0.165
+                ideal_col2_start_cm = printable_width_cm - c2_width_cm
+
+                if ideal_col2_start_cm >= min_col2_start_cm:
+                    col2_tab_pos_cm = ideal_col2_start_cm
+                else:
+                    col2_tab_pos_cm = min_col2_start_cm
+
+                col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
                 sel.ParagraphFormat.SpaceBefore = 3
                 sel.ParagraphFormat.SpaceAfter = 3
