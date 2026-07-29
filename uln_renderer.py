@@ -469,7 +469,26 @@ class ULNWordRenderer:
                 # Check if Column 2 is an answer blank (e.g. ______ or <blank> or [BLANK])
                 col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?(?:_{2,}|<blank>|\[BLANK\])\s*$', block.col2, re.IGNORECASE))
 
-                if col2_is_blank:
+                # Detect header row in TAB2 (e.g. A | B)
+                is_header_row = (block == tab2_group[0] and len(block.col1.strip()) <= 10 and len(block.col2.strip()) <= 10 and not re.search(r'\d', block.col1))
+
+                if is_header_row:
+                    col1_center_cm = base_indent_cm + (col1_needed_cm / 2.0)
+                    col2_center_cm = col2_tab_pos_cm + ((printable_width_cm - col2_tab_pos_cm) / 2.0)
+
+                    sel.ParagraphFormat.LeftIndent = 0
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col1_center_cm), Alignment=1)  # wdAlignTabCenter = 1
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_center_cm), Alignment=1)  # wdAlignTabCenter = 1
+
+                    sel.TypeText("\t")
+                    self.write_inline_spans(sel, block.col1_spans, default_bold=True)
+                    sel.TypeText("\t")
+                    self.write_inline_spans(sel, block.col2_spans, default_bold=True)
+                    sel.TypeParagraph()
+
+                elif col2_is_blank:
                     # FLUSH RIGHT TAB STOP at right margin (Alignment = 2, Leader = 4) for answer blanks
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
                     sel.ParagraphFormat.FirstLineIndent = 0
@@ -484,46 +503,25 @@ class ULNWordRenderer:
                     col2_trim = block.col2.strip()
                     m_opt = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z])[\.\)](?:\*\*|\*|\]|\}|\{u\}|\))*)\s+(.*)$', col2_trim)
 
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_tab_pos_cm)
+                    sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-col1_needed_cm)
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
+
+                    self.write_inline_spans(sel, block.col1_spans)
+                    sel.TypeText("\t")
+
                     if m_opt and not block.pic:
-                        opt_letter_str = f"**{m_opt.group(1).upper()}.**"
-                        rest_txt_str = m_opt.group(2).strip()
-
-                        sub_tab_offset_cm = 0.75
-                        sub_tab_pos_cm = col2_tab_pos_cm + sub_tab_offset_cm
-
-                        sel.ParagraphFormat.LeftIndent = cm_to_pt(sub_tab_pos_cm)
-                        sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-(col1_needed_cm + sub_tab_offset_cm))
-                        sel.ParagraphFormat.TabStops.ClearAll()
-                        sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
-                        sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(sub_tab_pos_cm), Alignment=0)
-
-                        self.write_inline_spans(sel, block.col1_spans)
-                        sel.TypeText("\t")
-
+                        opt_letter_str = f"**{m_opt.group(1).upper()}.** {m_opt.group(2).strip()}"
                         from uln_parser import parse_inline_spans as _pis
-                        opt_spans = _pis(opt_letter_str)
-                        self.write_inline_spans(sel, opt_spans)
-                        sel.TypeText("\t")
-
-                        rest_spans = _pis(rest_txt_str)
-                        self.write_inline_spans(sel, rest_spans)
-                        sel.TypeParagraph()
-
+                        c2_spans = _pis(opt_letter_str)
+                        self.write_inline_spans(sel, c2_spans)
+                    elif block.pic:
+                        self.render_pic(sel, doc, block.pic)
                     else:
-                        sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_tab_pos_cm)
-                        sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-col1_needed_cm)
-                        sel.ParagraphFormat.TabStops.ClearAll()
-                        sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
+                        self.write_inline_spans(sel, block.col2_spans)
 
-                        self.write_inline_spans(sel, block.col1_spans)
-                        sel.TypeText("\t")
-
-                        if block.pic:
-                            self.render_pic(sel, doc, block.pic)
-                        else:
-                            self.write_inline_spans(sel, block.col2_spans)
-
-                        sel.TypeParagraph()
+                    sel.TypeParagraph()
 
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
