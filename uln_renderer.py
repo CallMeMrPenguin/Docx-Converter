@@ -469,7 +469,7 @@ class ULNWordRenderer:
 
                 # Algorithm: Calculate TAB2 start so longest Col 2 line touches printable_width_cm (right border)
                 min_col2_start_cm = base_indent_cm + max(2.5, (max_c1_len * 0.16) + 0.6)
-                c2_width_cm = max_c2_len * 0.165
+                c2_width_cm = (max_c2_len * 0.175) + 0.6
                 ideal_col2_start_cm = printable_width_cm - c2_width_cm
 
                 if ideal_col2_start_cm >= min_col2_start_cm:
