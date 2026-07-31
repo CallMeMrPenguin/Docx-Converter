@@ -370,12 +370,7 @@ class ULNWordRenderer:
                     else:
                         q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', block.content, re.IGNORECASE)
                         if q_match and q_match.group(4).strip():
-                            try:
-                                sel.Range.ListFormat.ApplyNumberDefault()
-                                sel.ParagraphFormat.LeftIndent = 0
-                                sel.ParagraphFormat.FirstLineIndent = 0
-                            except Exception:
-                                pass
+                            self.apply_native_numbered_list(word, sel)
                             from uln_parser import parse_inline_spans
                             body_spans = parse_inline_spans(q_match.group(4).strip())
                             self.write_inline_spans(sel, body_spans)
@@ -389,10 +384,18 @@ class ULNWordRenderer:
 
             elif tag in ["P1", "P2"]:
                 items = split_line_into_option_items(block.content)
-                starts_with_num = bool(re.match(r'^\s*\d+[\.\)]', block.content))
+                starts_with_num = bool(re.match(r'^\s*#?\d+[\.\)]', block.content))
 
                 # Question lines starting with a number (1. A. ... B. ...) MUST start flush at 0cm left margin!
                 left_indent_cm = 0.0 if starts_with_num else (0.5 if tag == "P1" else 1.0)
+
+                if starts_with_num:
+                    self.apply_native_numbered_list(word, sel)
+                else:
+                    try:
+                        sel.Range.ListFormat.RemoveNumbers()
+                    except Exception:
+                        pass
 
                 sel.ParagraphFormat.SpaceBefore = 4 if tag == "P1" else 3
                 sel.ParagraphFormat.SpaceAfter = 3
@@ -664,6 +667,32 @@ class ULNWordRenderer:
         except Exception:
             pass
 
+    def apply_native_numbered_list(self, word, sel):
+        """
+        Applies native MS Word Numbered List:
+        - List number is ALWAYS BOLD by default
+        - Text and numbering are separated by a SINGLE SPACE (TrailingCharacter = wdTrailingSpace = 2), NOT a tab!
+        - LeftIndent and FirstLineIndent are flush at 0.0 cm (left page border)
+        - Starts a new independent list instance (ContinuePreviousList=False)
+        """
+        try:
+            list_tpl = word.ListGalleries(1).ListTemplates(1)
+            lvl = list_tpl.ListLevels(1)
+            lvl.TrailingCharacter = 2  # wdTrailingSpace = 2 (SPACE separator, NO TAB!)
+            lvl.Font.Bold = 1          # ALWAYS BOLD number
+            lvl.NumberPosition = 0
+            lvl.TextPosition = 0
+            sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=False)
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+        except Exception:
+            try:
+                sel.Range.ListFormat.ApplyNumberDefault()
+                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
+            except Exception:
+                pass
+
     def clean_num_placeholders(self, b: ULNBlock):
         r"""Recursively cleans #(\d+) placeholders from content, columns, spans, tables, and child blocks."""
         def process_text_num(text: str) -> str:
@@ -713,18 +742,7 @@ class ULNWordRenderer:
             self.clean_num_placeholders(child)
 
         # Start a brand-new independent native MS Word List instance for this NUM section
-        try:
-            list_tpl = word.ListGalleries(1).ListTemplates(1)
-            sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=False)
-            sel.ParagraphFormat.LeftIndent = 0
-            sel.ParagraphFormat.FirstLineIndent = 0
-        except Exception:
-            try:
-                sel.Range.ListFormat.ApplyNumberDefault()
-                sel.ParagraphFormat.LeftIndent = 0
-                sel.ParagraphFormat.FirstLineIndent = 0
-            except Exception:
-                pass
+        self.apply_native_numbered_list(word, sel)
 
         # Render child blocks using main renderer routine
         self.render(block.children, doc, word)
