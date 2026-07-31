@@ -25,6 +25,18 @@ Place these tags at the very beginning of the line:
 
 - [P2] : Sub-sub-question / Sub-option Level 2 (Left Indent: 1.0 cm, e.g., "i)", "ii)", "1)")
 
+- [NUM] ... [/NUM] : Auto-Numbering Container for sequential exercise questions.
+  - Wrap any set of numbered exercise questions inside `[NUM] ... [/NUM]`.
+  - Inside `[NUM]`, write question numbers using `#N` placeholders (e.g. `#1.`, `#2.`, `Question #1`, `Câu #1:`).
+  - The compiler handles sequence compilation cleanly while allowing any text prefix (like `Question #1` or `#1.`).
+  - Example:
+    [NUM]
+    [P0] #1. She is looking forward to <blank> her old friends.
+    [OPT] see | seeing | saw | seen [/OPT]
+    [P0] #2. Nam is the <blank> student in our class.
+    [OPT] tall | taller | tallest | most tall [/OPT]
+    [/NUM]
+
 - [OPT] ... [/OPT] : MANDATORY container for ALL A./B./C./D. multiple-choice choice options.
   - ALWAYS use [OPT] whenever A./B./C./D. (or a./b./c./d.) option choices appear. NEVER use [P1] for A./B./C./D. options.
   - List each option's body text only, separated by pipes `|`. Do NOT manually add bold `**...**` — the compiler auto-generates bold option letters.

@@ -555,6 +555,9 @@ class ULNWordRenderer:
             elif tag == "BOX":
                 self.render_box_shape(sel, doc, word, block, printable_width_cm)
 
+            elif tag == "NUM":
+                self.render_num_container(sel, doc, word, block, printable_width_cm)
+
             elif tag == "OPT":
                 self.render_opt(sel, block, printable_width_cm)
 
@@ -631,6 +634,41 @@ class ULNWordRenderer:
             sel.Font.ColorIndex = 0
         except Exception:
             pass
+
+    def render_num_container(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
+        """
+        Renders auto-numbered container [NUM] ... [/NUM].
+        Strips/formats '#N' placeholders in child blocks (e.g. #1. -> 1., Question #1 -> Question 1)
+        and recursively renders child blocks using standard compiler routines.
+        """
+        if not block.children:
+            return
+
+        def process_text_num(text: str) -> str:
+            if not text:
+                return text
+            # Replace #1, #2, #3 with 1, 2, 3
+            return re.sub(r'#(\d+)', r'\1', text)
+
+        for child in block.children:
+            if child.content:
+                child.content = process_text_num(child.content)
+            if child.col1:
+                child.col1 = process_text_num(child.col1)
+            if child.col2:
+                child.col2 = process_text_num(child.col2)
+            if child.spans:
+                for span in child.spans:
+                    span.text = process_text_num(span.text)
+            if child.col1_spans:
+                for span in child.col1_spans:
+                    span.text = process_text_num(span.text)
+            if child.col2_spans:
+                for span in child.col2_spans:
+                    span.text = process_text_num(span.text)
+
+        # Render child blocks using main renderer routine
+        self.render(block.children, doc, word)
 
     def calculate_optimal_option_cols(self, items: List[str], left_indent_cm: float, printable_width_cm: float) -> int:
         """

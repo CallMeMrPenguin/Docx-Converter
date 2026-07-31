@@ -166,6 +166,9 @@ class ULNParser:
         lines = uln_text.splitlines()
         blocks: List[ULNBlock] = []
         
+        in_num = False
+        num_lines: List[str] = []
+
         in_box = False
         box_lines: List[str] = []
 
@@ -253,6 +256,34 @@ class ULNParser:
                     table_lines = []
                 else:
                     table_lines.append(line)
+                continue
+
+            # Handle multi-line [NUM] ... [/NUM]
+            if trimmed == "[NUM]" or trimmed.startswith("[NUM] ") or trimmed.startswith("[NUM:"):
+                if trimmed == "[NUM]":
+                    in_num = True
+                    num_lines = []
+                    continue
+                else:
+                    rest = trimmed[5:].lstrip(": ").strip()
+                    if rest.endswith("[/NUM]"):
+                        num_content = rest[:-6].strip()
+                        child_blocks = ULNParser.parse(num_content)
+                        blocks.append(ULNBlock(tag="NUM", children=child_blocks))
+                        continue
+                    else:
+                        in_num = True
+                        num_lines = [rest]
+                        continue
+
+            if in_num:
+                if trimmed == "[/NUM]":
+                    in_num = False
+                    child_blocks = ULNParser.parse("\n".join(num_lines))
+                    blocks.append(ULNBlock(tag="NUM", children=child_blocks))
+                    num_lines = []
+                else:
+                    num_lines.append(line)
                 continue
 
             # Handle multi-line [OPT] ... [/OPT]
