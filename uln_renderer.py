@@ -676,7 +676,7 @@ class ULNWordRenderer:
         - Starts a new independent list instance (ContinuePreviousList=False)
         """
         try:
-            list_tpl = word.ListGalleries(1).ListTemplates(1)
+            list_tpl = word.ListGalleries(2).ListTemplates(1)  # wdNumberGallery = 2 (Numbered List 1., 2., 3.)
             lvl = list_tpl.ListLevels(1)
             lvl.TrailingCharacter = 2  # wdTrailingSpace = 2 (SPACE separator, NO TAB!)
             lvl.Font.Bold = 1          # ALWAYS BOLD number
