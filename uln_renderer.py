@@ -368,7 +368,21 @@ class ULNWordRenderer:
                                 sel.TypeText("\t")
                         sel.ParagraphFormat.TabStops.ClearAll()
                     else:
-                        self.write_inline_spans(sel, block.spans)
+                        q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', block.content, re.IGNORECASE)
+                        if q_match and q_match.group(4).strip():
+                            try:
+                                sel.Range.ListFormat.ApplyNumberDefault()
+                            except Exception:
+                                pass
+                            from uln_parser import parse_inline_spans
+                            body_spans = parse_inline_spans(q_match.group(4).strip())
+                            self.write_inline_spans(sel, body_spans)
+                        else:
+                            try:
+                                sel.Range.ListFormat.RemoveNumbers()
+                            except Exception:
+                                pass
+                            self.write_inline_spans(sel, block.spans)
                         sel.TypeParagraph()
 
             elif tag in ["P1", "P2"]:
@@ -747,6 +761,11 @@ class ULNWordRenderer:
         items_for_calc = [f"{let} {b}" for let, b in formatted_items]
         cols = self.calculate_optimal_option_cols(items_for_calc, left_indent_cm, printable_width_cm)
 
+        try:
+            sel.Range.ListFormat.RemoveNumbers()
+        except Exception:
+            pass
+
         sel.ParagraphFormat.SpaceBefore = 4
         sel.ParagraphFormat.SpaceAfter = 3
         sel.ParagraphFormat.KeepWithNext = False
@@ -921,10 +940,21 @@ class ULNWordRenderer:
 
             # Render text rows as standard paragraphs (NO MS Word Table object!)
             for idx_r, txt_line in enumerate(text_rows):
+                # Auto-prefix and format option letters for rows after row 0 in borderless table (e.g. A., B., C., D.)
+                if idx_r >= 1 and len(text_rows) >= 3:
+                    m_opt = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', txt_line)
+                    if m_opt:
+                        let_str = m_opt.group(1).upper().rstrip('.')
+                        body_str = m_opt.group(2).strip()
+                        txt_line = f"**{let_str}.** {body_str}"
+                    else:
+                        let_str = chr(65 + idx_r - 1)
+                        txt_line = f"**{let_str}.** {txt_line.strip()}"
+
                 from uln_parser import parse_inline_spans
                 spans = parse_inline_spans(txt_line)
                 
-                is_opt_line = bool(re.match(r'^\s*\*?\*?[A-Da-d][\.\)]', txt_line))
+                is_opt_line = bool(re.match(r'^\s*\*?\*?[A-Da-d][\.\)]', txt_line)) or (idx_r >= 1 and len(text_rows) >= 3)
                 left_ind_cm = 0.5 if is_opt_line else 0.0
 
                 sel.ParagraphFormat.LeftIndent = cm_to_pt(left_ind_cm)

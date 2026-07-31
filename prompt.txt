@@ -132,13 +132,14 @@ D. HORIZONTAL PICTURE CHOICE GRIDS:
 
 E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES (TABLE: BORDERLESS MANDATE):
    - MANDATE: For exercises featuring a sign or diagram image alongside a question + 4 choices (A, B, C, D), ALWAYS use `[TABLE: borderless]`!
-   - Put the question and options on separate `[TR]` rows in Column 1, and the picture tag `[PIC]` in Column 2 (or vice versa), separated by the pipe `|` symbol:
+   - Put the question on row 1 in Column 1, and the picture tag `[PIC]` in Column 2, separated by the pipe `|` symbol.
+   - Put choice options on separate `[TR]` rows below. Option letters (A., B., C., D.) are AUTOMATICALLY added and formatted in bold by the compiler:
      [TABLE: borderless]
      [TR] 11. What does the sign (A) say? | [PIC]
-     [TR] A. Maximum 40 vehicles are allowed on this road. |
-     [TR] B. You shouldn't exceed this maximum speed. |
-     [TR] C. Minimum 40 vehicles are allowed on this road. |
-     [TR] D. You shouldn't move below this speed. |
+     [TR] Maximum 40 vehicles are allowed on this road. |
+     [TR] You shouldn't exceed this maximum speed. |
+     [TR] Minimum 40 vehicles are allowed on this road. |
+     [TR] You shouldn't move below this speed. |
      [/TABLE]
 
 F. STRICT RULE: WHEN TO USE [TAB2] VS STANDARD [P0]/[P1]:
