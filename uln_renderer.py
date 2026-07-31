@@ -372,6 +372,8 @@ class ULNWordRenderer:
                         if q_match and q_match.group(4).strip():
                             try:
                                 sel.Range.ListFormat.ApplyNumberDefault()
+                                sel.ParagraphFormat.LeftIndent = 0
+                                sel.ParagraphFormat.FirstLineIndent = 0
                             except Exception:
                                 pass
                             from uln_parser import parse_inline_spans
@@ -527,7 +529,20 @@ class ULNWordRenderer:
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)  # wdAlignTabRight = 2, wdTabLeaderUnderscore = 4
 
-                    self.write_inline_spans(sel, block.col1_spans)
+                    q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', block.col1, re.IGNORECASE)
+                    if q_match and q_match.group(4).strip():
+                        try:
+                            sel.Range.ListFormat.ApplyNumberDefault()
+                            sel.ParagraphFormat.LeftIndent = 0
+                            sel.ParagraphFormat.FirstLineIndent = 0
+                        except Exception:
+                            pass
+                        from uln_parser import parse_inline_spans
+                        c1_spans = parse_inline_spans(q_match.group(4).strip())
+                        self.write_inline_spans(sel, c1_spans)
+                    else:
+                        self.write_inline_spans(sel, block.col1_spans)
+
                     sel.TypeText("\t")
                     sel.TypeParagraph()
 
@@ -649,37 +664,67 @@ class ULNWordRenderer:
         except Exception:
             pass
 
+    def clean_num_placeholders(self, b: ULNBlock):
+        r"""Recursively cleans #(\d+) placeholders from content, columns, spans, tables, and child blocks."""
+        def process_text_num(text: str) -> str:
+            if not text:
+                return text
+            return re.sub(r'#(\d+)', r'\1', text)
+
+        if b.content:
+            b.content = process_text_num(b.content)
+        if b.col1:
+            b.col1 = process_text_num(b.col1)
+        if b.col2:
+            b.col2 = process_text_num(b.col2)
+        if b.spans:
+            for span in b.spans:
+                span.text = process_text_num(span.text)
+        if b.col1_spans:
+            for span in b.col1_spans:
+                span.text = process_text_num(span.text)
+        if b.col2_spans:
+            for span in b.col2_spans:
+                span.text = process_text_num(span.text)
+
+        if b.table_data and b.table_data.rows:
+            for row in b.table_data.rows:
+                for cell in row.cells:
+                    if cell.content:
+                        cell.content = process_text_num(cell.content)
+                    if cell.spans:
+                        for span in cell.spans:
+                            span.text = process_text_num(span.text)
+
+        if b.children:
+            for child in b.children:
+                self.clean_num_placeholders(child)
+
     def render_num_container(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
         Renders auto-numbered container [NUM] ... [/NUM].
-        Strips/formats '#N' placeholders in child blocks (e.g. #1. -> 1., Question #1 -> Question 1)
-        and recursively renders child blocks using standard compiler routines.
+        Strips/formats '#N' placeholders across child blocks (including tables and TAB2)
+        and starts a brand new independent native MS Word List instance (ContinuePreviousList=False).
         """
         if not block.children:
             return
 
-        def process_text_num(text: str) -> str:
-            if not text:
-                return text
-            # Replace #1, #2, #3 with 1, 2, 3
-            return re.sub(r'#(\d+)', r'\1', text)
-
         for child in block.children:
-            if child.content:
-                child.content = process_text_num(child.content)
-            if child.col1:
-                child.col1 = process_text_num(child.col1)
-            if child.col2:
-                child.col2 = process_text_num(child.col2)
-            if child.spans:
-                for span in child.spans:
-                    span.text = process_text_num(span.text)
-            if child.col1_spans:
-                for span in child.col1_spans:
-                    span.text = process_text_num(span.text)
-            if child.col2_spans:
-                for span in child.col2_spans:
-                    span.text = process_text_num(span.text)
+            self.clean_num_placeholders(child)
+
+        # Start a brand-new independent native MS Word List instance for this NUM section
+        try:
+            list_tpl = word.ListGalleries(1).ListTemplates(1)
+            sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=False)
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+        except Exception:
+            try:
+                sel.Range.ListFormat.ApplyNumberDefault()
+                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
+            except Exception:
+                pass
 
         # Render child blocks using main renderer routine
         self.render(block.children, doc, word)
@@ -940,6 +985,8 @@ class ULNWordRenderer:
 
             # Render text rows as standard paragraphs (NO MS Word Table object!)
             for idx_r, txt_line in enumerate(text_rows):
+                txt_line = re.sub(r'#(\d+)', r'\1', txt_line)
+
                 # Auto-prefix and format option letters for rows after row 0 in borderless table (e.g. A., B., C., D.)
                 if idx_r >= 1 and len(text_rows) >= 3:
                     m_opt = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', txt_line)
@@ -951,14 +998,30 @@ class ULNWordRenderer:
                         let_str = chr(65 + idx_r - 1)
                         txt_line = f"**{let_str}.** {txt_line.strip()}"
 
-                from uln_parser import parse_inline_spans
-                spans = parse_inline_spans(txt_line)
-                
                 is_opt_line = bool(re.match(r'^\s*\*?\*?[A-Da-d][\.\)]', txt_line)) or (idx_r >= 1 and len(text_rows) >= 3)
                 left_ind_cm = 0.5 if is_opt_line else 0.0
 
-                sel.ParagraphFormat.LeftIndent = cm_to_pt(left_ind_cm)
-                sel.ParagraphFormat.FirstLineIndent = 0
+                q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', txt_line, re.IGNORECASE) if idx_r == 0 else None
+
+                if q_match and q_match.group(4).strip():
+                    try:
+                        sel.Range.ListFormat.ApplyNumberDefault()
+                        sel.ParagraphFormat.LeftIndent = 0
+                        sel.ParagraphFormat.FirstLineIndent = 0
+                    except Exception:
+                        pass
+                    txt_line = q_match.group(4).strip()
+                else:
+                    try:
+                        sel.Range.ListFormat.RemoveNumbers()
+                    except Exception:
+                        pass
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(left_ind_cm)
+                    sel.ParagraphFormat.FirstLineIndent = 0
+
+                from uln_parser import parse_inline_spans
+                spans = parse_inline_spans(txt_line)
+
                 sel.ParagraphFormat.SpaceBefore = 3
                 sel.ParagraphFormat.SpaceAfter = 3
                 sel.ParagraphFormat.LineSpacingRule = 0  # Single Line Spacing
