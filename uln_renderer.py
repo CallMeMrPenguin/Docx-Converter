@@ -355,16 +355,17 @@ class ULNWordRenderer:
                 else:
                     items = split_line_into_option_items(block.content)
                     if len(items) > 1:
-                        num_cols = len(items)
+                        num_cols = self.calculate_optimal_option_cols(items, 0.0, printable_width_cm)
                         self.setup_tab_stops(sel, num_cols, left_indent_cm=0.0, printable_width_cm=printable_width_cm)
                         
                         from uln_parser import parse_inline_spans
                         for idx_item, item in enumerate(items):
                             spans = parse_inline_spans(item.strip())
                             self.write_inline_spans(sel, spans)
-                            if idx_item < len(items) - 1:
+                            if (idx_item + 1) % num_cols == 0 or idx_item == len(items) - 1:
+                                sel.TypeParagraph()
+                            else:
                                 sel.TypeText("\t")
-                        sel.TypeParagraph()
                         sel.ParagraphFormat.TabStops.ClearAll()
                     else:
                         self.write_inline_spans(sel, block.spans)
@@ -431,16 +432,17 @@ class ULNWordRenderer:
                         sel.ParagraphFormat.TabStops.ClearAll()
                     else:
                         if len(items) > 1:
-                            num_cols = len(items)
+                            num_cols = self.calculate_optimal_option_cols(items, left_indent_cm, printable_width_cm)
                             self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
 
                             from uln_parser import parse_inline_spans
                             for idx_item, item in enumerate(items):
                                 spans = parse_inline_spans(item.strip())
                                 self.write_inline_spans(sel, spans)
-                                if idx_item < len(items) - 1:
+                                if (idx_item + 1) % num_cols == 0 or idx_item == len(items) - 1:
+                                    sel.TypeParagraph()
+                                else:
                                     sel.TypeText("\t")
-                            sel.TypeParagraph()
                             sel.ParagraphFormat.TabStops.ClearAll()
                         else:
                             sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
@@ -553,6 +555,9 @@ class ULNWordRenderer:
             elif tag == "BOX":
                 self.render_box_shape(sel, doc, word, block, printable_width_cm)
 
+            elif tag == "OPT":
+                self.render_opt(sel, block, printable_width_cm)
+
             elif tag == "QUOTE":
                 # Reading passage: standard body text (Left/Right Indent = 0), only first line indented (0.75 cm), justified
                 sel.ParagraphFormat.LeftIndent = 0
@@ -627,10 +632,117 @@ class ULNWordRenderer:
         except Exception:
             pass
 
+    def calculate_optimal_option_cols(self, items: List[str], left_indent_cm: float, printable_width_cm: float) -> int:
+        """
+        Calculates optimal column count (1, 2, 3, or 4 columns) for multiple-choice options
+        so text wrapping NEVER occurs across available printable width.
+        """
+        N = len(items)
+        if N <= 1:
+            return 1
+
+        remaining_width_cm = max(5.0, printable_width_cm - left_indent_cm)
+        max_len = max(len(item) for item in items)
+        
+        # Estimated option width in cm (0.21cm per char for 12pt Times New Roman + 0.6cm safety buffer)
+        est_item_w_cm = (max_len * 0.21) + 0.6
+
+        if N >= 4:
+            if (est_item_w_cm * 4) <= remaining_width_cm:
+                return 4
+            elif (est_item_w_cm * 2) <= remaining_width_cm:
+                return 2
+            else:
+                return 1
+        elif N == 3:
+            if (est_item_w_cm * 3) <= remaining_width_cm:
+                return 3
+            else:
+                return 1
+        elif N == 2:
+            if (est_item_w_cm * 2) <= remaining_width_cm:
+                return 2
+            else:
+                return 1
+
+        return 1
+
+    def render_opt(self, sel, block: ULNBlock, printable_width_cm: float):
+        """
+        Renders dedicated multiple-choice option container [OPT] ... [/OPT].
+        Automatically formats option letters (A., B., C., D.) as bold, and calculates optimal column count
+        (1, 2, 3, or 4 columns) based on max item length so text wrapping NEVER occurs.
+        """
+        raw_text = block.content.strip()
+        if not raw_text:
+            return
+
+        # Split items by pipe '|' or line breaks if present
+        if '|' in raw_text:
+            raw_items = [x.strip() for x in raw_text.split('|') if x.strip()]
+        elif '\n' in raw_text:
+            raw_items = [x.strip() for x in raw_text.split('\n') if x.strip()]
+        else:
+            raw_items = split_line_into_option_items(raw_text)
+
+        if not raw_items:
+            return
+
+        formatted_items = []
+        for idx, item in enumerate(raw_items):
+            m = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', item)
+            if m:
+                opt_let = m.group(1).upper().rstrip('.')
+                opt_letter = f"{opt_let}."
+                body = m.group(2).strip()
+            else:
+                letter_char = chr(65 + idx)
+                opt_letter = f"{letter_char}."
+                body = item.strip()
+
+            formatted_items.append((opt_letter, body))
+
+        N = len(formatted_items)
+        left_indent_cm = 0.5
+        
+        # Calculate optimal columns for options to prevent text wrapping
+        items_for_calc = [f"{let} {b}" for let, b in formatted_items]
+        cols = self.calculate_optimal_option_cols(items_for_calc, left_indent_cm, printable_width_cm)
+
+        sel.ParagraphFormat.SpaceBefore = 4
+        sel.ParagraphFormat.SpaceAfter = 3
+        sel.ParagraphFormat.KeepWithNext = False
+        sel.ParagraphFormat.Alignment = 0
+
+        self.setup_tab_stops(sel, cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
+
+        from uln_parser import parse_inline_spans
+        for idx_item, (let_str, body_str) in enumerate(formatted_items):
+            # Render Option Letter in BOLD
+            sel.Font.Name = self.font_name
+            sel.Font.Size = self.font_size
+            sel.Font.Bold = 1
+            sel.Font.Italic = 0
+            sel.Font.Underline = 0
+            sel.TypeText(f"{let_str} ")
+
+            # Render Option Body Text
+            body_spans = parse_inline_spans(body_str)
+            self.write_inline_spans(sel, body_spans)
+
+            # Insert tab or paragraph break based on calculated column layout
+            if (idx_item + 1) % cols == 0 or idx_item == N - 1:
+                sel.TypeParagraph()
+            else:
+                sel.TypeText("\t")
+
+        sel.ParagraphFormat.LeftIndent = 0
+        sel.ParagraphFormat.TabStops.ClearAll()
+
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
         Renders Word Bank / Callout Box using MS Word Rounded Rectangle Shape (msoShapeRoundedRectangle = 5)
-        with text inserted directly inside shape.TextFrame with 0mm margins (0.0pt) on all sides.
+        tightly anchored around paragraph text (Center Manager standard), replacing table borders.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
@@ -652,7 +764,7 @@ class ULNWordRenderer:
 
         max_len_all = max(len(w) for w in words)
         char_w_pt = 6.0  # Average 12pt character width
-        col_width_pt = (max_len_all * char_w_pt) + 16.0
+        col_width_pt = (max_len_all * char_w_pt) + 12.0
 
         last_col_words = [words[i] for i in range(cols - 1, N, cols)] if N >= cols else [words[-1]]
         last_col_max_len = max(len(w) for w in last_col_words) if last_col_words else 8
@@ -661,70 +773,75 @@ class ULNWordRenderer:
         text_group_width_pt = min(printable_width_pt, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
         left_offset_pt = max(0.0, (printable_width_pt - text_group_width_pt) / 2.0)
 
-        num_rows = (N + cols - 1) // cols
-        box_width_pt = text_group_width_pt + 16.0
-        box_height_pt = (num_rows * 18.0) + 8.0
+        sel.ParagraphFormat.SpaceBefore = 4
+        sel.ParagraphFormat.SpaceAfter = 0
+        sel.ParagraphFormat.LineSpacingRule = 0
+        sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
+        sel.ParagraphFormat.LeftIndent = left_offset_pt
+        sel.ParagraphFormat.KeepWithNext = True  # Group word bank text & box shape on same page
+        sel.ParagraphFormat.TabStops.ClearAll()
 
-        anchor_range = sel.Range.Duplicate
+        for c in range(1, cols):
+            tab_pos = left_offset_pt + (col_width_pt * c)
+            sel.ParagraphFormat.TabStops.Add(Position=tab_pos, Alignment=0)
+
+        p_start = sel.Range.Start
+
+        lines = []
+        for i in range(0, N, cols):
+            lines.append(words[i:i + cols])
+
+        num_rows = len(lines)
+        for idx_line, chunk in enumerate(lines):
+            if idx_line == num_rows - 1:
+                sel.ParagraphFormat.LineSpacingRule = 2  # Double line spacing on last row
+                sel.ParagraphFormat.SpaceAfter = 0
+            else:
+                sel.ParagraphFormat.LineSpacingRule = 0
+                sel.ParagraphFormat.SpaceAfter = 0
+
+            for idx_w, word_txt in enumerate(chunk):
+                sel.Font.Name = self.font_name
+                sel.Font.Size = self.font_size
+                sel.Font.Bold = 1
+                sel.TypeText(word_txt)
+                if idx_w < len(chunk) - 1:
+                    sel.Font.Bold = 0
+                    sel.TypeText("\t")
+
+            sel.TypeParagraph()
+
+        p_end = sel.Range.Start
+        box_range = doc.Range(p_start, p_end)
 
         try:
+            padding_pt = 6.0
+            box_width_pt = text_group_width_pt + (padding_pt * 2)
+            text_height_pt = ((num_rows - 1) * 16.0) + 28.0
+            box_height_pt = text_height_pt
+
             shape = doc.Shapes.AddShape(
                 5,  # msoShapeRoundedRectangle = 5
                 0,
                 0,
                 box_width_pt,
                 box_height_pt,
-                Anchor=anchor_range
+                Anchor=box_range
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
-            shape.Left = left_offset_pt - 8.0
-            shape.Top = 0.0
+            shape.Left = left_offset_pt - padding_pt
+            shape.Top = -padding_pt
 
-            # Set text box margins of shape to all 0mm (0.0pt) left, right, top, bottom
-            tf = shape.TextFrame
-            tf.MarginLeft = 0.0
-            tf.MarginRight = 0.0
-            tf.MarginTop = 0.0
-            tf.MarginBottom = 0.0
-
-            shape.Fill.Visible = False  # Transparent fill
-            shape.Line.Weight = 1.0     # 1pt rounded border line
+            shape.Fill.Visible = False  # Transparent fill so words display cleanly
+            shape.Line.Weight = 1.0     # 1pt rounded border
             shape.Line.ForeColor.RGB = 0  # Black border line
-
-            # Select inside shape text frame to write text directly into shape
-            tf.TextRange.Select()
-            shape_sel = word.Selection
-
-            shape_sel.ParagraphFormat.SpaceBefore = 4
-            shape_sel.ParagraphFormat.SpaceAfter = 4
-            shape_sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
-            shape_sel.ParagraphFormat.LeftIndent = 8.0
-
-            shape_sel.ParagraphFormat.TabStops.ClearAll()
-            for c in range(1, cols):
-                shape_sel.ParagraphFormat.TabStops.Add(Position=8.0 + (col_width_pt * c), Alignment=0)
-
-            lines = [words[i:i + cols] for i in range(0, N, cols)]
-            for idx_line, chunk in enumerate(lines):
-                for idx_w, word_txt in enumerate(chunk):
-                    shape_sel.Font.Name = self.font_name
-                    shape_sel.Font.Size = self.font_size
-                    shape_sel.Font.Bold = 1
-                    shape_sel.TypeText(word_txt)
-                    if idx_w < len(chunk) - 1:
-                        shape_sel.Font.Bold = 0
-                        shape_sel.TypeText("\t")
-                if idx_line < len(lines) - 1:
-                    shape_sel.TypeParagraph()
-
-            # Return selection back to main document body after shape
-            doc.Range(anchor_range.End, anchor_range.End).Select()
-            sel = word.Selection
-            sel.TypeParagraph()
-
+            try:
+                shape.ZOrder(1)  # Send behind text
+            except Exception:
+                pass
         except Exception as e:
-            print(f"[ULNRenderer] Warning creating shape with text frame: {e}")
+            print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
 
     def render_table(self, sel, doc, tdata, printable_width_cm: float):
         """

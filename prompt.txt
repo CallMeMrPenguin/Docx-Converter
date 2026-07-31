@@ -22,6 +22,11 @@ Place these tags at the very beginning of the line:
 - [P1] : Sub-question / Choice Option Line placed on a separate line below a question (Left Indent: 0.5 cm, e.g., "**A.** of  **B.** from  **C.** in  **D.** into")
 - [P2] : Sub-sub-question / Sub-option Level 2 (Left Indent: 1.0 cm, e.g., "i)", "ii)", "1)")
 
+- [OPT] ... [/OPT] : Dedicated Choice Option Container for multiple-choice questions (e.g. `[OPT] the most beautifully | more beautifully | beautifully | as beautiful [/OPT]` or `[OPT] A. the most beautifully | B. more beautifully | C. beautifully | D. as beautiful [/OPT]`).
+  - Delimit choice options using pipes `|` or line breaks.
+  - Option letters (A., B., C., D.) and bold formatting are AUTOMATICALLY generated & formatted by the compiler.
+  - Column count (1, 2, 3, or 4 columns) is dynamically calculated by compiler code so that text wrapping NEVER occurs.
+
 - [TAB2] : 2-Column Side-by-Side Paragraph Split Layout (Column 1  Column 2)
   - Used for 2-column matching, error correction with answer blanks on the right, or 2-column header tables.
 

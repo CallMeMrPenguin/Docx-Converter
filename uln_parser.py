@@ -169,6 +169,9 @@ class ULNParser:
         in_box = False
         box_lines: List[str] = []
 
+        in_opt = False
+        opt_lines: List[str] = []
+
         in_quote = False
         quote_lines: List[str] = []
 
@@ -250,6 +253,33 @@ class ULNParser:
                     table_lines = []
                 else:
                     table_lines.append(line)
+                continue
+
+            # Handle multi-line [OPT] ... [/OPT]
+            if trimmed == "[OPT]" or trimmed.startswith("[OPT] ") or trimmed.startswith("[OPT:"):
+                if trimmed == "[OPT]":
+                    in_opt = True
+                    opt_lines = []
+                    continue
+                else:
+                    rest = trimmed[5:].lstrip(": ").strip()
+                    if rest.endswith("[/OPT]"):
+                        opt_content = rest[:-6].strip()
+                        blocks.append(ULNBlock(tag="OPT", content=opt_content, spans=parse_inline_spans(opt_content)))
+                        continue
+                    else:
+                        in_opt = True
+                        opt_lines = [rest]
+                        continue
+            
+            if in_opt:
+                if trimmed == "[/OPT]":
+                    in_opt = False
+                    opt_content = "\n".join(opt_lines)
+                    blocks.append(ULNBlock(tag="OPT", content=opt_content, spans=parse_inline_spans(opt_content)))
+                    opt_lines = []
+                else:
+                    opt_lines.append(line)
                 continue
 
             # Handle multi-line [BOX] ... [/BOX]
