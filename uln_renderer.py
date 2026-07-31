@@ -630,7 +630,7 @@ class ULNWordRenderer:
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
         Renders Word Bank / Callout Box using MS Word Rounded Rectangle Shape (msoShapeRoundedRectangle = 5)
-        tightly anchored around paragraph text (Center Manager standard), replacing table borders.
+        with text inserted directly inside shape.TextFrame with 0mm margins (0.0pt) on all sides.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
@@ -652,7 +652,7 @@ class ULNWordRenderer:
 
         max_len_all = max(len(w) for w in words)
         char_w_pt = 6.0  # Average 12pt character width
-        col_width_pt = (max_len_all * char_w_pt) + 12.0
+        col_width_pt = (max_len_all * char_w_pt) + 16.0
 
         last_col_words = [words[i] for i in range(cols - 1, N, cols)] if N >= cols else [words[-1]]
         last_col_max_len = max(len(w) for w in last_col_words) if last_col_words else 8
@@ -661,75 +661,70 @@ class ULNWordRenderer:
         text_group_width_pt = min(printable_width_pt, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
         left_offset_pt = max(0.0, (printable_width_pt - text_group_width_pt) / 2.0)
 
-        sel.ParagraphFormat.SpaceBefore = 4
-        sel.ParagraphFormat.SpaceAfter = 0
-        sel.ParagraphFormat.LineSpacingRule = 0
-        sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
-        sel.ParagraphFormat.LeftIndent = left_offset_pt
-        sel.ParagraphFormat.KeepWithNext = True  # Group word bank text & box shape on same page
-        sel.ParagraphFormat.TabStops.ClearAll()
+        num_rows = (N + cols - 1) // cols
+        box_width_pt = text_group_width_pt + 16.0
+        box_height_pt = (num_rows * 18.0) + 8.0
 
-        for c in range(1, cols):
-            tab_pos = left_offset_pt + (col_width_pt * c)
-            sel.ParagraphFormat.TabStops.Add(Position=tab_pos, Alignment=0)
-
-        p_start = sel.Range.Start
-
-        lines = []
-        for i in range(0, N, cols):
-            lines.append(words[i:i + cols])
-
-        num_rows = len(lines)
-        for idx_line, chunk in enumerate(lines):
-            if idx_line == num_rows - 1:
-                sel.ParagraphFormat.LineSpacingRule = 2  # Double line spacing on last row
-                sel.ParagraphFormat.SpaceAfter = 0
-            else:
-                sel.ParagraphFormat.LineSpacingRule = 0
-                sel.ParagraphFormat.SpaceAfter = 0
-
-            for idx_w, word_txt in enumerate(chunk):
-                sel.Font.Name = self.font_name
-                sel.Font.Size = self.font_size
-                sel.Font.Bold = 1
-                sel.TypeText(word_txt)
-                if idx_w < len(chunk) - 1:
-                    sel.Font.Bold = 0
-                    sel.TypeText("\t")
-
-            sel.TypeParagraph()
-
-        p_end = sel.Range.Start
-        box_range = doc.Range(p_start, p_end)
+        anchor_range = sel.Range.Duplicate
 
         try:
-            padding_pt = 6.0
-            box_width_pt = text_group_width_pt + (padding_pt * 2)
-            text_height_pt = ((num_rows - 1) * 16.0) + 28.0
-            box_height_pt = text_height_pt
-
             shape = doc.Shapes.AddShape(
                 5,  # msoShapeRoundedRectangle = 5
                 0,
                 0,
                 box_width_pt,
                 box_height_pt,
-                Anchor=box_range
+                Anchor=anchor_range
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
-            shape.Left = left_offset_pt - padding_pt
-            shape.Top = -padding_pt
+            shape.Left = left_offset_pt - 8.0
+            shape.Top = 0.0
 
-            shape.Fill.Visible = False  # Transparent fill so words display cleanly
-            shape.Line.Weight = 1.0     # 1pt rounded border
+            # Set text box margins of shape to all 0mm (0.0pt) left, right, top, bottom
+            tf = shape.TextFrame
+            tf.MarginLeft = 0.0
+            tf.MarginRight = 0.0
+            tf.MarginTop = 0.0
+            tf.MarginBottom = 0.0
+
+            shape.Fill.Visible = False  # Transparent fill
+            shape.Line.Weight = 1.0     # 1pt rounded border line
             shape.Line.ForeColor.RGB = 0  # Black border line
-            try:
-                shape.ZOrder(1)  # Send behind text
-            except Exception:
-                pass
+
+            # Select inside shape text frame to write text directly into shape
+            tf.TextRange.Select()
+            shape_sel = word.Selection
+
+            shape_sel.ParagraphFormat.SpaceBefore = 4
+            shape_sel.ParagraphFormat.SpaceAfter = 4
+            shape_sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
+            shape_sel.ParagraphFormat.LeftIndent = 8.0
+
+            shape_sel.ParagraphFormat.TabStops.ClearAll()
+            for c in range(1, cols):
+                shape_sel.ParagraphFormat.TabStops.Add(Position=8.0 + (col_width_pt * c), Alignment=0)
+
+            lines = [words[i:i + cols] for i in range(0, N, cols)]
+            for idx_line, chunk in enumerate(lines):
+                for idx_w, word_txt in enumerate(chunk):
+                    shape_sel.Font.Name = self.font_name
+                    shape_sel.Font.Size = self.font_size
+                    shape_sel.Font.Bold = 1
+                    shape_sel.TypeText(word_txt)
+                    if idx_w < len(chunk) - 1:
+                        shape_sel.Font.Bold = 0
+                        shape_sel.TypeText("\t")
+                if idx_line < len(lines) - 1:
+                    shape_sel.TypeParagraph()
+
+            # Return selection back to main document body after shape
+            doc.Range(anchor_range.End, anchor_range.End).Select()
+            sel = word.Selection
+            sel.TypeParagraph()
+
         except Exception as e:
-            print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
+            print(f"[ULNRenderer] Warning creating shape with text frame: {e}")
 
     def render_table(self, sel, doc, tdata, printable_width_cm: float):
         """
