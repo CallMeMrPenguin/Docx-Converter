@@ -1107,13 +1107,24 @@ class ULNWordRenderer:
             except Exception:
                 pass
 
+            # Set default 2mm cell margins (padding) on all 4 sides (top, bottom, left, right)
+            margin_2mm_pt = cm_to_pt(0.2)  # 2mm = 0.2cm = ~5.67pt
             try:
-                table.TopPadding = cm_to_pt(0.15)
-                table.BottomPadding = cm_to_pt(0.15)
-                table.LeftPadding = cm_to_pt(0.25)
-                table.RightPadding = cm_to_pt(0.25)
+                table.TopPadding = margin_2mm_pt
+                table.BottomPadding = margin_2mm_pt
+                table.LeftPadding = margin_2mm_pt
+                table.RightPadding = margin_2mm_pt
             except Exception:
                 pass
+
+            # Identify columns with headers containing STT, NO, or NO. for center alignment
+            center_col_indices = set()
+            if tdata.rows:
+                header_row = tdata.rows[0]
+                for c_idx, h_cell in enumerate(header_row.cells):
+                    clean_h = re.sub(r'[\*\_\`\[\]]', '', h_cell.content).strip().lower()
+                    if clean_h in ["stt", "no", "no."]:
+                        center_col_indices.add(c_idx + 1)
 
             # Apply 1.0pt single black border lines
             for border_id in [-1, -2, -3, -4, -5, -6]:  # Top, Left, Bottom, Right, InsideH, InsideV
@@ -1133,7 +1144,9 @@ class ULNWordRenderer:
                         p_range = cell_obj.Range
                         p_range.ParagraphFormat.SpaceBefore = 2
                         p_range.ParagraphFormat.SpaceAfter = 2
-                        p_range.ParagraphFormat.Alignment = 1 if cell.is_header else 0
+                        
+                        is_center_col = (c_idx + 1) in center_col_indices
+                        p_range.ParagraphFormat.Alignment = 1 if (cell.is_header or is_center_col) else 0
 
                         sel.Start = cell_obj.Range.Start
 
