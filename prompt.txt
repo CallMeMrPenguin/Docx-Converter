@@ -14,18 +14,25 @@ Place these tags at the very beginning of the line:
 - [H2] : Sub-heading / Sub-section Title (Formatted as ALL BOLD, ALL CAPITALIZED)
 - [H3] : Minor Heading or Category Title (Formatted as ALL BOLD, ALL CAPITALIZED)
 
-- [P0] : Base Paragraph / Main Instruction / Level 0 Question (Left Indent: 0 cm, e.g., "**I. Choose the correct answer.**", "1. Question text...", "1. **A.** cat **B.** city **C.** car **D.** cup")
+- [P0] : Base Paragraph / Main Instruction / Level 0 Question (Left Indent: 0 cm, e.g., "**I. Choose the correct answer.**", "1. Question text...")
   - NOTE: All lines starting with a question number (1., 2., 3.) MUST use [P0] so they start flush at 0 cm left margin.
   - CRITICAL BOLD MANDATE FOR INSTRUCTIONS: All Roman numerals (I., II., III., IV.), section letters (A., B., C.), and main exercise instruction headings MUST be wrapped in bold `**...**`.
   - Plain numbered questions (1., 2., 3.) MUST NOT be bolded unless explicitly bold in the original source image/text.
 
-- [P1] : Sub-question / Choice Option Line placed on a separate line below a question (Left Indent: 0.5 cm, e.g., "**A.** of  **B.** from  **C.** in  **D.** into")
+- [P1] : Sub-question or secondary line placed below a question (Left Indent: 0.5 cm).
+  - Use [P1] for sentence transformation second lines, dialog turns, sub-items like "i)", "ii)", "a)", "b)", or any non-choice secondary content.
+  - NEVER use [P1] for A./B./C./D. multiple-choice options — use [OPT] instead.
+
 - [P2] : Sub-sub-question / Sub-option Level 2 (Left Indent: 1.0 cm, e.g., "i)", "ii)", "1)")
 
-- [OPT] ... [/OPT] : Dedicated Choice Option Container for multiple-choice questions (e.g. `[OPT] the most beautifully | more beautifully | beautifully | as beautiful [/OPT]` or `[OPT] A. the most beautifully | B. more beautifully | C. beautifully | D. as beautiful [/OPT]`).
-  - Delimit choice options using pipes `|` or line breaks.
-  - Option letters (A., B., C., D.) and bold formatting are AUTOMATICALLY generated & formatted by the compiler.
-  - Column count (1, 2, 3, or 4 columns) is dynamically calculated by compiler code so that text wrapping NEVER occurs.
+- [OPT] ... [/OPT] : MANDATORY container for ALL A./B./C./D. multiple-choice choice options.
+  - ALWAYS use [OPT] whenever A./B./C./D. (or a./b./c./d.) option choices appear. NEVER use [P1] for A./B./C./D. options.
+  - List each option's body text only, separated by pipes `|`. Do NOT manually add bold `**...**` — the compiler auto-generates bold option letters.
+  - Column count (1, 2, 3, or 4 columns) is dynamically computed so text wrapping NEVER occurs.
+  - Examples:
+    [OPT] see | seeing | saw | seen [/OPT]
+    [OPT] the most beautifully | more beautifully | beautifully | as beautiful [/OPT]
+    [OPT] for | since | in | at [/OPT]
 
 - [TAB2] : 2-Column Side-by-Side Paragraph Split Layout (Column 1  Column 2)
   - Used for 2-column matching, error correction with answer blanks on the right, or 2-column header tables.
@@ -66,15 +73,14 @@ Place these tags at the very beginning of the line:
 ### 2. INLINE TEXT FORMATTING & STYLING RULES
 Apply these syntax rules directly inside strings:
 
-- **text**          -> Bold text (MUST be applied to all section headers, Roman numerals I./II., and instructions A./B.)
+- **text**          -> Bold text (MUST be applied to all section headers, Roman numerals I./II., and instruction headings)
 - *text*            -> Italic text (applied ONLY to explicitly italicized text)
 - [text]{u}         -> Underlined text (ONLY wrap the exact underlined target letters/words, e.g. `[e]{u}xciting`, `[ch]{u}ildren`)
 - [text]{upper}     -> Uppercase / Small Caps formatting
 - [text]{color:NAME}-> Text color (e.g., [red]{color:red}, [#FF0000]{color:#FF0000})
 - [text]{bg:NAME}   -> Background highlight / Fill color (e.g., [key word]{bg:yellow})
 
-CRITICAL OPTION STYLING RULE:
-Option letters (A., B., C., D.) MUST ALWAYS be CAPITALIZED and BOLD (e.g., **A.**, **B.**, **C.**, **D.**).
+IMPORTANT: Do NOT manually wrap option letters (A., B., C., D.) in bold `**...**` inside [OPT] blocks. The compiler handles that automatically.
 
 ---
 
@@ -93,9 +99,14 @@ B. ERROR CORRECTION & FLUSH RIGHT ANSWER COLUMNS:
    - Use [TAB2] ONLY for error correction exercises where an explicit separate answer column exists at the far right of the line:
      [TAB2] [P0] 1. Nam is my classmates. He watches TV every night. | <blank>
 
-C. CONTINUOUS CHOICE & PRONUNCIATION / STRESS GRIDS:
-   - Keep continuous option sets on a single line:
-     [P1] 1. **A.** [c]{u}at  **B.** [c]{u}ity  **C.** [c]{u}ar  **D.** [c]{u}up
+C. CHOICE OPTION LINES — THE GOLDEN RULE:
+   - ALL A./B./C./D. multiple-choice options MUST use [OPT] ... [/OPT]. NEVER use [P1] for choice options.
+   - List only the option body text (without option letters) separated by pipes `|`:
+     [P0] 1. She is looking forward to <blank> her old friends at the party.
+     [OPT] see | seeing | saw | seen [/OPT]
+   - For pronunciation / stress underline questions, include underline markup inside the option body:
+     [P0] 3. Choose the word whose underlined part is pronounced differently:
+     [OPT] [c]{u}at | [c]{u}ity | [c]{u}ar | [c]{u}up [/OPT]
 
 D. HORIZONTAL PICTURE CHOICE GRIDS:
    - For picture activities with multiple items, output picture choices in 4-column horizontal rows:
@@ -109,10 +120,10 @@ E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES (TABLE: BORDERLESS MANDATE):
    - Put the question and options on separate `[TR]` rows in Column 1, and the picture tag `[PIC]` in Column 2 (or vice versa), separated by the pipe `|` symbol:
      [TABLE: borderless]
      [TR] 11. What does the sign (A) say? | [PIC]
-     [TR] **A.** Maximum 40 vehicles are allowed on this road. |
-     [TR] **B.** You shouldn't exceed this maximum speed. |
-     [TR] **C.** Minimum 40 vehicles are allowed on this road. |
-     [TR] **D.** You shouldn't move below this speed. |
+     [TR] A. Maximum 40 vehicles are allowed on this road. |
+     [TR] B. You shouldn't exceed this maximum speed. |
+     [TR] C. Minimum 40 vehicles are allowed on this road. |
+     [TR] D. You shouldn't move below this speed. |
      [/TABLE]
 
 F. STRICT RULE: WHEN TO USE [TAB2] VS STANDARD [P0]/[P1]:
@@ -127,26 +138,28 @@ F. STRICT RULE: WHEN TO USE [TAB2] VS STANDARD [P0]/[P1]:
 
 Input Visual Layout:
 --------------------------------------------------
-SECTION A: PHONETICS
-Choose the word whose underlined part is pronounced differently:
-1. A. cat    B. city    C. car    D. cup
+SECTION A: MULTIPLE CHOICE
+I. Choose the best answer A, B, C, or D.
+
+1. She is looking forward to ___ her old friends.
+   A. see   B. seeing   C. saw   D. seen
+
+2. Choose the word pronounced differently:
+   A. cat   B. city   C. car   D. cup
 
 Word Bank: [ photosynthesis | chlorophyll | sunlight ]
-
-2. Look at the diagram and answer:
-   a) Identify the labeled organ [Diagram of leaf]
-      i) What gas is released? ____
 --------------------------------------------------
 
 Target ULN Output:
 ```uln
-[H1] **SECTION A: PHONETICS**
-[P0] **Choose the word whose underlined part is pronounced differently:**
-[P1] 1. **A.** [c]{u}at  **B.** [c]{u}ity  **C.** [c]{u}ar  **D.** [c]{u}up
+[H1] **SECTION A: MULTIPLE CHOICE**
+[P0] **I. Choose the best answer A, B, C, or D.**
+
+[P0] 1. She is looking forward to <blank> her old friends.
+[OPT] see | seeing | saw | seen [/OPT]
+
+[P0] 2. Choose the word whose underlined part is pronounced differently:
+[OPT] [c]{u}at | [c]{u}ity | [c]{u}ar | [c]{u}up [/OPT]
 
 [BOX] **Word Bank:** photosynthesis | chlorophyll | sunlight [/BOX]
-
-[P0] **2. Look at the diagram and answer:**
-[TAB2] [PIC] [P1] a) Identify the labeled organ: <blank>
-[P2] i) What gas is released? <blank>
 ```
