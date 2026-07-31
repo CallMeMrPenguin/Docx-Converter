@@ -111,6 +111,7 @@ class ULNWordRenderer:
         self.enable_page_numbers = self.settings.get("enable_page_numbers", True)
         self.user_images = list(self.settings.get("user_images", []))
         self.user_img_idx = 0
+        self.is_first_question_in_num_block = False
 
     def get_next_image_path(self, pic: Optional[PicInfo] = None) -> Optional[str]:
         """Returns next user-queued image in order, or falls back to test pic directory."""
@@ -526,27 +527,27 @@ class ULNWordRenderer:
                     sel.TypeParagraph()
 
                 elif col2_is_blank:
-                    # FLUSH RIGHT TAB STOP at right margin (Alignment = 2, Leader = 4) for answer blanks
+                    # 2-Column Error Correction Layout: Col 1 question text, Col 2 answer blank starting at col2_tab_pos_cm
+                    col2_tab_pos_cm = max(11.0, printable_width_cm - 4.0)
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
                     sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)  # wdAlignTabRight = 2, wdTabLeaderUnderscore = 4
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
 
                     q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', block.col1, re.IGNORECASE)
                     if q_match and q_match.group(4).strip():
-                        try:
-                            sel.Range.ListFormat.ApplyNumberDefault()
-                            sel.ParagraphFormat.LeftIndent = 0
-                            sel.ParagraphFormat.FirstLineIndent = 0
-                        except Exception:
-                            pass
+                        self.apply_native_numbered_list(word, sel)
                         from uln_parser import parse_inline_spans
                         c1_spans = parse_inline_spans(q_match.group(4).strip())
                         self.write_inline_spans(sel, c1_spans)
                     else:
+                        try:
+                            sel.Range.ListFormat.RemoveNumbers()
+                        except Exception:
+                            pass
                         self.write_inline_spans(sel, block.col1_spans)
 
-                    sel.TypeText("\t")
+                    sel.TypeText("\t___________")
                     sel.TypeParagraph()
 
                 else:
@@ -673,8 +674,11 @@ class ULNWordRenderer:
         - List number is ALWAYS BOLD by default
         - Text and numbering are separated by a SINGLE SPACE (TrailingCharacter = wdTrailingSpace = 2), NOT a tab!
         - LeftIndent and FirstLineIndent are flush at 0.0 cm (left page border)
-        - Starts a new independent list instance (ContinuePreviousList=False)
+        - Starts a new independent list instance (ContinuePreviousList=False) on first question of [NUM],
+          and continues sequential list incrementing (ContinuePreviousList=True) on subsequent questions.
         """
+        restart = self.is_first_question_in_num_block
+        self.is_first_question_in_num_block = False
         try:
             list_tpl = word.ListGalleries(2).ListTemplates(1)  # wdNumberGallery = 2 (Numbered List 1., 2., 3.)
             lvl = list_tpl.ListLevels(1)
@@ -682,7 +686,7 @@ class ULNWordRenderer:
             lvl.Font.Bold = 1          # ALWAYS BOLD number
             lvl.NumberPosition = 0
             lvl.TextPosition = 0
-            sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=False)
+            sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=not restart)
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.FirstLineIndent = 0
         except Exception:
@@ -733,7 +737,7 @@ class ULNWordRenderer:
         """
         Renders auto-numbered container [NUM] ... [/NUM].
         Strips/formats '#N' placeholders across child blocks (including tables and TAB2)
-        and starts a brand new independent native MS Word List instance (ContinuePreviousList=False).
+        and flags the first question in this section to start a new independent list.
         """
         if not block.children:
             return
@@ -741,8 +745,8 @@ class ULNWordRenderer:
         for child in block.children:
             self.clean_num_placeholders(child)
 
-        # Start a brand-new independent native MS Word List instance for this NUM section
-        self.apply_native_numbered_list(word, sel)
+        # Flag that the first question in this NUM section starts a new list sequence at 1.
+        self.is_first_question_in_num_block = True
 
         # Render child blocks using main renderer routine
         self.render(block.children, doc, word)
