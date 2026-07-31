@@ -527,8 +527,14 @@ class ULNWordRenderer:
                     sel.TypeParagraph()
 
                 elif col2_is_blank:
-                    # 2-Column Error Correction Layout: Col 1 question text, Col 2 answer blank starting at col2_tab_pos_cm
-                    col2_tab_pos_cm = max(11.0, printable_width_cm - 4.0)
+                    # Dynamic 2-Column Error Correction Layout:
+                    # Column 2 starts right after longest Column 1 sentence (max_c1_len) with max 3.5cm answer blank
+                    col2_tab_pos_cm = base_indent_cm + (max_c1_len * 0.18) + 0.8
+                    col2_tab_pos_cm = min(col2_tab_pos_cm, printable_width_cm - 1.5)
+                    avail_w_cm = max(1.5, printable_width_cm - col2_tab_pos_cm)
+                    blank_w_cm = min(3.5, avail_w_cm)
+                    num_underscores = int(blank_w_cm * 5.5)
+
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
                     sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.TabStops.ClearAll()
@@ -547,7 +553,7 @@ class ULNWordRenderer:
                             pass
                         self.write_inline_spans(sel, block.col1_spans)
 
-                    sel.TypeText("\t___________")
+                    sel.TypeText(f"\t{'_' * num_underscores}")
                     sel.TypeParagraph()
 
                 else:
@@ -682,7 +688,7 @@ class ULNWordRenderer:
         try:
             list_tpl = word.ListGalleries(2).ListTemplates(1)  # wdNumberGallery = 2 (Numbered List 1., 2., 3.)
             lvl = list_tpl.ListLevels(1)
-            lvl.TrailingCharacter = 2  # wdTrailingSpace = 2 (SPACE separator, NO TAB!)
+            lvl.TrailingCharacter = 1  # wdTrailingSpace = 1 (SPACE separator, "Follow number with: Space")
             lvl.Font.Bold = 1          # ALWAYS BOLD number
             lvl.NumberPosition = 0
             lvl.TextPosition = 0
