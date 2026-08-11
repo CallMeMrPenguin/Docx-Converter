@@ -112,6 +112,8 @@ class ULNWordRenderer:
         self.user_images = list(self.settings.get("user_images", []))
         self.user_img_idx = 0
         self.is_first_question_in_num_block = False
+        self.current_group_opt_cols = None
+        self.current_group_max_item_len = None
 
     def get_next_image_path(self, pic: Optional[PicInfo] = None) -> Optional[str]:
         """Returns next user-queued image in order, or falls back to test pic directory."""
@@ -624,14 +626,31 @@ class ULNWordRenderer:
                 self.render_num_container(sel, doc, word, block, printable_width_cm)
 
             elif tag == "OPT":
+                if self.current_group_opt_cols is None:
+                    consecutive_opts = []
+                    k = idx_block
+                    while k < len(blocks) and blocks[k].tag == "OPT":
+                        consecutive_opts.append(blocks[k])
+                        k += 1
+                    if consecutive_opts:
+                        g_cols, g_len = self.compute_group_option_params(consecutive_opts, printable_width_cm)
+                        self.current_group_opt_cols = g_cols
+                        self.current_group_max_item_len = g_len
+
                 self.render_opt(sel, doc, word, block, printable_width_cm)
+
+                # Reset group state after last consecutive OPT block
+                if (idx_block + 1 >= len(blocks) or blocks[idx_block + 1].tag != "OPT") and not self.is_first_question_in_num_block:
+                    self.current_group_opt_cols = None
+                    self.current_group_max_item_len = None
 
             elif tag == "QUOTE":
                 # Reading passage: standard body text (Left/Right Indent = 0), only first line indented (0.75 cm), justified
+                space_before_quote = 24 if (idx_block > 0 and blocks[idx_block - 1].tag == "BOX") else 0
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.RightIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = cm_to_pt(0.75)
-                sel.ParagraphFormat.SpaceBefore = 0
+                sel.ParagraphFormat.SpaceBefore = space_before_quote
                 sel.ParagraphFormat.SpaceAfter = 4
                 sel.ParagraphFormat.Alignment = 3  # wdAlignParagraphJustify = 3
                 self.write_inline_spans(sel, block.spans, default_italic=False)
@@ -765,11 +784,38 @@ class ULNWordRenderer:
             for child in b.children:
                 self.clean_num_placeholders(child)
 
+    def compute_group_option_params(self, opt_blocks: List[ULNBlock], printable_width_cm: float):
+        """Pre-scans all OPT blocks in an exercise group to compute uniform column count and tab stops."""
+        all_items = []
+        for b in opt_blocks:
+            raw_text = b.content.strip()
+            if '|' in raw_text:
+                items = [x.strip() for x in raw_text.split('|') if x.strip()]
+            elif '\n' in raw_text:
+                items = [x.strip() for x in raw_text.split('\n') if x.strip()]
+            else:
+                items = split_line_into_option_items(raw_text)
+
+            for idx_i, item in enumerate(items):
+                m = re.match(r'^\s*(#?\d+[\.\)]|Question\s+#?\d+[\.\)]?|Câu\s+#?\d+[\.\)]?)\s*(.*)$', item, re.IGNORECASE)
+                clean_item = m.group(2).strip() if (m and idx_i == 0) else item
+                m_let = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', clean_item)
+                item_str = f"{m_let.group(1)} {m_let.group(2)}" if m_let else f"A. {clean_item}"
+                all_items.append(item_str)
+
+        if all_items:
+            left_indent_cm = 0.5
+            cols = self.calculate_optimal_option_cols(all_items, left_indent_cm, printable_width_cm)
+            max_len = max(len(i) for i in all_items)
+            return cols, max_len
+        return None, None
+
     def render_num_container(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
         Renders auto-numbered container [NUM] ... [/NUM].
         Strips/formats '#N' placeholders across child blocks (including tables and TAB2)
         and flags the first question in this section to start a new independent list.
+        Pre-computes uniform option alignment across all questions in the exercise.
         """
         if not block.children:
             return
@@ -780,8 +826,17 @@ class ULNWordRenderer:
         # Flag that the first question in this NUM section starts a new list sequence at 1.
         self.is_first_question_in_num_block = True
 
-        # Render child blocks using main renderer routine
-        self.render(block.children, doc, word)
+        opt_blocks = [c for c in block.children if c.tag == "OPT"]
+        old_cols, old_len = self.current_group_opt_cols, self.current_group_max_item_len
+        if opt_blocks:
+            g_cols, g_len = self.compute_group_option_params(opt_blocks, printable_width_cm)
+            self.current_group_opt_cols = g_cols
+            self.current_group_max_item_len = g_len
+
+        try:
+            self.render(block.children, doc, word)
+        finally:
+            self.current_group_opt_cols, self.current_group_max_item_len = old_cols, old_len
 
     def calculate_optimal_option_cols(self, items: List[str], left_indent_cm: float, printable_width_cm: float) -> int:
         """
@@ -865,10 +920,14 @@ class ULNWordRenderer:
         N = len(formatted_items)
         left_indent_cm = 0.0 if q_num_prefix else 0.5
         
-        # Calculate optimal columns for options to prevent text wrapping
-        items_for_calc = [f"{let} {b}" for let, b in formatted_items]
-        cols = self.calculate_optimal_option_cols(items_for_calc, left_indent_cm, printable_width_cm)
-        max_item_len = max(len(i) for i in items_for_calc) if items_for_calc else 0
+        # Use uniform group option parameters if set across this exercise
+        if self.current_group_opt_cols is not None:
+            cols = self.current_group_opt_cols
+            max_item_len = self.current_group_max_item_len
+        else:
+            items_for_calc = [f"{let} {b}" for let, b in formatted_items]
+            cols = self.calculate_optimal_option_cols(items_for_calc, left_indent_cm, printable_width_cm)
+            max_item_len = max(len(i) for i in items_for_calc) if items_for_calc else 0
 
         sel.ParagraphFormat.SpaceBefore = 4
         sel.ParagraphFormat.SpaceAfter = 3
@@ -927,7 +986,7 @@ class ULNWordRenderer:
         """
         Renders Word Bank / Callout Box using MS Word Rounded Rectangle Shape (msoShapeRoundedRectangle = 5)
         tightly anchored around paragraph text (Center Manager standard), replacing table borders.
-        Applies 8pt SpaceBefore on the first line paragraph and dynamically manages columns and height.
+        Applies 14pt SpaceBefore on line 0 and 14pt SpaceAfter on post-box paragraph for 0 text overlap.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
@@ -941,8 +1000,8 @@ class ULNWordRenderer:
 
         N = len(words)
         max_len_all = max(len(w) for w in words)
-        char_w_pt = 6.0  # Average 12pt character width
-        col_width_pt = (max_len_all * char_w_pt) + 16.0
+        char_w_pt = 5.6  # Average 12pt character width
+        col_width_pt = (max_len_all * char_w_pt) + 12.0
 
         # Calculate max columns that fit printable width safely
         if col_width_pt >= (printable_width_pt - 20.0):
@@ -967,7 +1026,7 @@ class ULNWordRenderer:
             text_group_width_pt = printable_width_pt - 10.0
             left_offset_pt = 0.0
 
-        sel.ParagraphFormat.SpaceBefore = 8  # 8pt space before first line in box (user mandate)
+        sel.ParagraphFormat.SpaceBefore = 24  # 24pt space before line 0 gives top clearance above shape.Top
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
@@ -993,12 +1052,8 @@ class ULNWordRenderer:
             if idx_line > 0:
                 sel.ParagraphFormat.SpaceBefore = 2
 
-            if idx_line == num_rows - 1:
-                sel.ParagraphFormat.LineSpacingRule = 0
-                sel.ParagraphFormat.SpaceAfter = 0
-            else:
-                sel.ParagraphFormat.LineSpacingRule = 0
-                sel.ParagraphFormat.SpaceAfter = 0
+            sel.ParagraphFormat.LineSpacingRule = 0
+            sel.ParagraphFormat.SpaceAfter = 0
 
             for idx_w, word_txt in enumerate(chunk):
                 sel.Font.Name = self.font_name
@@ -1020,13 +1075,12 @@ class ULNWordRenderer:
         if cols > 1:
             total_visual_lines = num_rows
 
-        p_end = sel.Range.Start
-        box_range = doc.Range(p_start, p_end)
+        box_anchor_range = doc.Range(p_start, p_start)
 
         try:
             padding_pt = 6.0
             box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + (padding_pt * 2))
-            text_height_pt = (total_visual_lines * 16.2) + 18.0
+            text_height_pt = ((total_visual_lines - 1) * 14.5) + 42.0
             box_height_pt = text_height_pt
 
             shape = doc.Shapes.AddShape(
@@ -1035,12 +1089,12 @@ class ULNWordRenderer:
                 0,
                 box_width_pt,
                 box_height_pt,
-                Anchor=box_range
+                Anchor=box_anchor_range
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
             shape.Left = (0.0 if cols == 1 else (left_offset_pt - padding_pt))
-            shape.Top = -padding_pt
+            shape.Top = 6.0  # 6pt offset puts shape top 6pt below instruction text above and 18pt above line 0 text
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
@@ -1054,7 +1108,7 @@ class ULNWordRenderer:
 
         # Set clean paragraph spacing after box shape
         sel.ParagraphFormat.LeftIndent = 0
-        sel.ParagraphFormat.SpaceBefore = 14
+        sel.ParagraphFormat.SpaceBefore = 24
         sel.ParagraphFormat.SpaceAfter = 4
 
     def render_table(self, sel, doc, tdata, printable_width_cm: float):
