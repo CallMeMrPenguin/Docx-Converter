@@ -39,10 +39,12 @@ Place these tags at the very beginning of the line:
 
 - [OPT] ... [/OPT] : MANDATORY container for ALL A./B./C./D. multiple-choice choice options.
   - ALWAYS use [OPT] whenever A./B./C./D. (or a./b./c./d.) option choices appear. NEVER use [P1] for A./B./C./D. options.
-  - List each option's body text only, separated by pipes `|`. Do NOT manually add bold `**...**` — the compiler auto-generates bold option letters.
+  - List each option's body text separated by pipes `|`. Do NOT manually add bold `**...**` — the compiler auto-generates bold option letters.
+  - OPTIONS-ONLY QUESTIONS (Pronunciation, Stress, Odd-One-Out): For questions with no question body text, put the question number directly inside `[OPT]` as `[OPT] #N. opt1 | opt2 | opt3 | opt4 [/OPT]` (or `[OPT] N. opt1 | opt2 | opt3 | opt4 [/OPT]`). Do NOT write a separate empty `[P0] #N.` line.
   - Column count (1, 2, 3, or 4 columns) is dynamically computed so text wrapping NEVER occurs.
   - Examples:
     [OPT] see | seeing | saw | seen [/OPT]
+    [OPT] #1. listen[ed]{u} | tutor[ed]{u} | enjoy[ed]{u} | decid[ed]{u} [/OPT]
     [OPT] the most beautifully | more beautifully | beautifully | as beautiful [/OPT]
     [OPT] for | since | in | at [/OPT]
 

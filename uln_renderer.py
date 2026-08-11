@@ -250,10 +250,19 @@ class ULNWordRenderer:
             except Exception:
                 pass
 
-    def setup_tab_stops(self, sel, num_cols: int, left_indent_cm: float, printable_width_cm: float) -> float:
+    def setup_tab_stops(self, sel, num_cols: int, left_indent_cm: float, printable_width_cm: float, max_item_len: int = 0) -> float:
         """Calculates exact distance formulas for tab stops so text NEVER wraps unexpectedly."""
         remaining_width_cm = printable_width_cm - left_indent_cm
-        col_width_cm = remaining_width_cm / max(1, num_cols)
+
+        # If short options in 4 columns, use tighter tab stops so A, B, C, D sit closer together on 1 line
+        if num_cols == 4 and max_item_len > 0 and max_item_len <= 15:
+            compact_col_w = max(2.8, (max_item_len * 0.175) + 0.6)
+            if (left_indent_cm + (compact_col_w * 4)) <= printable_width_cm:
+                col_width_cm = compact_col_w
+            else:
+                col_width_cm = remaining_width_cm / 4.0
+        else:
+            col_width_cm = remaining_width_cm / max(1, num_cols)
 
         sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
         sel.ParagraphFormat.TabStops.ClearAll()
@@ -326,12 +335,13 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
 
-                # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK]
-                ends_with_blank = bool(re.search(r'^\s*(?:_{3,}|<blank>|\[BLANK\])\s*$', block.content, re.IGNORECASE))
-                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank)
-                trailing_blank_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*$', block.content, re.DOTALL) if not ends_with_blank else None
+                # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct
+                blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', block.content, re.IGNORECASE)
+                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank), optionally followed by symbol/punct
+                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL) if not blank_symbol_match else None
 
-                if ends_with_blank:
+                if blank_symbol_match:
+                    trailing_sym = blank_symbol_match.group(1).strip()
                     # Flush right standalone blank line with dynamic Tab Leader 4 (wdTabLeaderUnderscore = 4)
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
@@ -339,25 +349,33 @@ class ULNWordRenderer:
                     sel.Font.Size = self.font_size
                     sel.Font.Bold = 0
                     sel.Font.Underline = 0
-                    sel.TypeText("\t")
+                    if trailing_sym:
+                        sel.TypeText(f"\t{trailing_sym}")
+                    else:
+                        sel.TypeText("\t")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
-                elif trailing_blank_match:
+                elif trailing_blank_symbol_match:
                     # Option B: text before <blank> rendered inline, blank filled dynamically to right margin via Leader=4
-                    text_part = trailing_blank_match.group(1)
+                    text_part = trailing_blank_symbol_match.group(1)
+                    trailing_sym = trailing_blank_symbol_match.group(2).strip()
                     from uln_parser import parse_inline_spans as _pis
                     text_spans = _pis(text_part)
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                     self.write_inline_spans(sel, text_spans)
-                    sel.TypeText("\t")
+                    if trailing_sym:
+                        sel.TypeText(f"\t{trailing_sym}")
+                    else:
+                        sel.TypeText("\t")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
                     items = split_line_into_option_items(block.content)
                     if len(items) > 1:
                         num_cols = self.calculate_optimal_option_cols(items, 0.0, printable_width_cm)
-                        self.setup_tab_stops(sel, num_cols, left_indent_cm=0.0, printable_width_cm=printable_width_cm)
+                        max_item_len = max(len(i) for i in items)
+                        self.setup_tab_stops(sel, num_cols, left_indent_cm=0.0, printable_width_cm=printable_width_cm, max_item_len=max_item_len)
                         
                         from uln_parser import parse_inline_spans
                         for idx_item, item in enumerate(items):
@@ -403,12 +421,13 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
 
-                # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK]
-                ends_with_blank = bool(re.search(r'^\s*(?:_{3,}|<blank>|\[BLANK\])\s*$', block.content, re.IGNORECASE))
-                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank)
-                trailing_blank_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*$', block.content, re.DOTALL) if not ends_with_blank else None
+                # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct
+                blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', block.content, re.IGNORECASE)
+                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank), optionally followed by symbol/punct
+                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL) if not blank_symbol_match else None
 
-                if ends_with_blank:
+                if blank_symbol_match:
+                    trailing_sym = blank_symbol_match.group(1).strip()
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
                     sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.TabStops.ClearAll()
@@ -417,12 +436,16 @@ class ULNWordRenderer:
                     sel.Font.Size = self.font_size
                     sel.Font.Bold = 0
                     sel.Font.Underline = 0
-                    sel.TypeText("\t")
+                    if trailing_sym:
+                        sel.TypeText(f"\t{trailing_sym}")
+                    else:
+                        sel.TypeText("\t")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
-                elif trailing_blank_match:
+                elif trailing_blank_symbol_match:
                     # Option B: text before <blank> rendered inline, blank filled dynamically to right margin via Leader=4
-                    text_part = trailing_blank_match.group(1)
+                    text_part = trailing_blank_symbol_match.group(1)
+                    trailing_sym = trailing_blank_symbol_match.group(2).strip()
                     from uln_parser import parse_inline_spans as _pis
                     text_spans = _pis(text_part)
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
@@ -430,7 +453,10 @@ class ULNWordRenderer:
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                     self.write_inline_spans(sel, text_spans)
-                    sel.TypeText("\t")
+                    if trailing_sym:
+                        sel.TypeText(f"\t{trailing_sym}")
+                    else:
+                        sel.TypeText("\t")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
@@ -598,7 +624,7 @@ class ULNWordRenderer:
                 self.render_num_container(sel, doc, word, block, printable_width_cm)
 
             elif tag == "OPT":
-                self.render_opt(sel, block, printable_width_cm)
+                self.render_opt(sel, doc, word, block, printable_width_cm)
 
             elif tag == "QUOTE":
                 # Reading passage: standard body text (Left/Right Indent = 0), only first line indented (0.75 cm), justified
@@ -769,8 +795,8 @@ class ULNWordRenderer:
         remaining_width_cm = max(5.0, printable_width_cm - left_indent_cm)
         max_len = max(len(item) for item in items)
         
-        # Estimated option width in cm (0.21cm per char for 12pt Times New Roman + 0.6cm safety buffer)
-        est_item_w_cm = (max_len * 0.21) + 0.6
+        # Estimated option width in cm (0.165cm per char for 12pt Times New Roman + 0.35cm safety buffer)
+        est_item_w_cm = (max_len * 0.165) + 0.35
 
         if N >= 4:
             if (est_item_w_cm * 4) <= remaining_width_cm:
@@ -792,11 +818,12 @@ class ULNWordRenderer:
 
         return 1
 
-    def render_opt(self, sel, block: ULNBlock, printable_width_cm: float):
+    def render_opt(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
         Renders dedicated multiple-choice option container [OPT] ... [/OPT].
         Automatically formats option letters (A., B., C., D.) as bold, and calculates optimal column count
         (1, 2, 3, or 4 columns) based on max item length so text wrapping NEVER occurs.
+        Handles questions with only options (Pronunciation/Stress/Odd-One-Out) keeping question number and options on 1 line.
         """
         raw_text = block.content.strip()
         if not raw_text:
@@ -813,6 +840,14 @@ class ULNWordRenderer:
         if not raw_items:
             return
 
+        # Extract question number prefix if present in first item (e.g. #1., #1, 1., Question #1)
+        q_num_prefix = ""
+        if raw_items:
+            q_num_match = re.match(r'^\s*(#?\d+[\.\)]|Question\s+#?\d+[\.\)]?|Câu\s+#?\d+[\.\)]?)\s*(.*)$', raw_items[0], re.IGNORECASE)
+            if q_num_match:
+                q_num_prefix = q_num_match.group(1).strip()
+                raw_items[0] = q_num_match.group(2).strip()
+
         formatted_items = []
         for idx, item in enumerate(raw_items):
             m = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', item)
@@ -828,23 +863,42 @@ class ULNWordRenderer:
             formatted_items.append((opt_letter, body))
 
         N = len(formatted_items)
-        left_indent_cm = 0.5
+        left_indent_cm = 0.0 if q_num_prefix else 0.5
         
         # Calculate optimal columns for options to prevent text wrapping
         items_for_calc = [f"{let} {b}" for let, b in formatted_items]
         cols = self.calculate_optimal_option_cols(items_for_calc, left_indent_cm, printable_width_cm)
-
-        try:
-            sel.Range.ListFormat.RemoveNumbers()
-        except Exception:
-            pass
+        max_item_len = max(len(i) for i in items_for_calc) if items_for_calc else 0
 
         sel.ParagraphFormat.SpaceBefore = 4
         sel.ParagraphFormat.SpaceAfter = 3
         sel.ParagraphFormat.KeepWithNext = False
         sel.ParagraphFormat.Alignment = 0
 
-        self.setup_tab_stops(sel, cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
+        # Render Question Number Prefix on the SAME line if present
+        if q_num_prefix:
+            if self.is_first_question_in_num_block or '#' in q_num_prefix:
+                self.apply_native_numbered_list(word, sel)
+            else:
+                try:
+                    sel.Range.ListFormat.RemoveNumbers()
+                except Exception:
+                    pass
+                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
+                sel.Font.Name = self.font_name
+                sel.Font.Size = self.font_size
+                sel.Font.Bold = 1
+                sel.Font.Italic = 0
+                sel.Font.Underline = 0
+                sel.TypeText(f"{q_num_prefix} ")
+        else:
+            try:
+                sel.Range.ListFormat.RemoveNumbers()
+            except Exception:
+                pass
+
+        self.setup_tab_stops(sel, cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm, max_item_len=max_item_len)
 
         from uln_parser import parse_inline_spans
         for idx_item, (let_str, body_str) in enumerate(formatted_items):
@@ -873,6 +927,7 @@ class ULNWordRenderer:
         """
         Renders Word Bank / Callout Box using MS Word Rounded Rectangle Shape (msoShapeRoundedRectangle = 5)
         tightly anchored around paragraph text (Center Manager standard), replacing table borders.
+        Applies 8pt SpaceBefore on the first line paragraph and dynamically manages columns and height.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
@@ -885,25 +940,34 @@ class ULNWordRenderer:
             return
 
         N = len(words)
-        if N <= 5:
-            cols = N
-        elif N <= 9:
-            cols = 4
-        else:
-            cols = 5
-
         max_len_all = max(len(w) for w in words)
         char_w_pt = 6.0  # Average 12pt character width
-        col_width_pt = (max_len_all * char_w_pt) + 12.0
+        col_width_pt = (max_len_all * char_w_pt) + 16.0
 
-        last_col_words = [words[i] for i in range(cols - 1, N, cols)] if N >= cols else [words[-1]]
-        last_col_max_len = max(len(w) for w in last_col_words) if last_col_words else 8
-        last_col_text_w_pt = last_col_max_len * char_w_pt
+        # Calculate max columns that fit printable width safely
+        if col_width_pt >= (printable_width_pt - 20.0):
+            cols = 1
+        else:
+            max_fit_cols = max(1, int(printable_width_pt / col_width_pt))
+            if N <= 5:
+                cols = min(N, max_fit_cols)
+            elif N <= 9:
+                cols = min(4, max_fit_cols)
+            else:
+                cols = min(5, max_fit_cols)
 
-        text_group_width_pt = min(printable_width_pt, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
-        left_offset_pt = max(0.0, (printable_width_pt - text_group_width_pt) / 2.0)
+        if cols > 1:
+            last_col_words = [words[i] for i in range(cols - 1, N, cols)] if N >= cols else [words[-1]]
+            last_col_max_len = max(len(w) for w in last_col_words) if last_col_words else 8
+            last_col_text_w_pt = last_col_max_len * char_w_pt
 
-        sel.ParagraphFormat.SpaceBefore = 4
+            text_group_width_pt = min(printable_width_pt, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
+            left_offset_pt = max(0.0, (printable_width_pt - text_group_width_pt) / 2.0)
+        else:
+            text_group_width_pt = printable_width_pt - 10.0
+            left_offset_pt = 0.0
+
+        sel.ParagraphFormat.SpaceBefore = 8  # 8pt space before first line in box (user mandate)
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
@@ -911,9 +975,10 @@ class ULNWordRenderer:
         sel.ParagraphFormat.KeepWithNext = True  # Group word bank text & box shape on same page
         sel.ParagraphFormat.TabStops.ClearAll()
 
-        for c in range(1, cols):
-            tab_pos = left_offset_pt + (col_width_pt * c)
-            sel.ParagraphFormat.TabStops.Add(Position=tab_pos, Alignment=0)
+        if cols > 1:
+            for c in range(1, cols):
+                tab_pos = left_offset_pt + (col_width_pt * c)
+                sel.ParagraphFormat.TabStops.Add(Position=tab_pos, Alignment=0)
 
         p_start = sel.Range.Start
 
@@ -922,9 +987,14 @@ class ULNWordRenderer:
             lines.append(words[i:i + cols])
 
         num_rows = len(lines)
+        total_visual_lines = 0
+
         for idx_line, chunk in enumerate(lines):
+            if idx_line > 0:
+                sel.ParagraphFormat.SpaceBefore = 2
+
             if idx_line == num_rows - 1:
-                sel.ParagraphFormat.LineSpacingRule = 2  # Double line spacing on last row
+                sel.ParagraphFormat.LineSpacingRule = 0
                 sel.ParagraphFormat.SpaceAfter = 0
             else:
                 sel.ParagraphFormat.LineSpacingRule = 0
@@ -935,19 +1005,28 @@ class ULNWordRenderer:
                 sel.Font.Size = self.font_size
                 sel.Font.Bold = 1
                 sel.TypeText(word_txt)
+                
+                # Estimate visual lines if cols == 1 and sentence wraps
+                if cols == 1:
+                    lines_est = math.ceil((len(word_txt) * char_w_pt) / (printable_width_pt - 15.0))
+                    total_visual_lines += max(1, lines_est)
+                
                 if idx_w < len(chunk) - 1:
                     sel.Font.Bold = 0
                     sel.TypeText("\t")
 
             sel.TypeParagraph()
 
+        if cols > 1:
+            total_visual_lines = num_rows
+
         p_end = sel.Range.Start
         box_range = doc.Range(p_start, p_end)
 
         try:
             padding_pt = 6.0
-            box_width_pt = text_group_width_pt + (padding_pt * 2)
-            text_height_pt = ((num_rows - 1) * 16.0) + 28.0
+            box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + (padding_pt * 2))
+            text_height_pt = (total_visual_lines * 16.2) + 18.0
             box_height_pt = text_height_pt
 
             shape = doc.Shapes.AddShape(
@@ -960,7 +1039,7 @@ class ULNWordRenderer:
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
-            shape.Left = left_offset_pt - padding_pt
+            shape.Left = (0.0 if cols == 1 else (left_offset_pt - padding_pt))
             shape.Top = -padding_pt
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
@@ -972,6 +1051,11 @@ class ULNWordRenderer:
                 pass
         except Exception as e:
             print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
+
+        # Set clean paragraph spacing after box shape
+        sel.ParagraphFormat.LeftIndent = 0
+        sel.ParagraphFormat.SpaceBefore = 14
+        sel.ParagraphFormat.SpaceAfter = 4
 
     def render_table(self, sel, doc, tdata, printable_width_cm: float):
         """

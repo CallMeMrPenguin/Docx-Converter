@@ -202,13 +202,13 @@ class ULNFormatterApp:
             messagebox.showwarning("Warning", "Please enter or import ULN text before compiling.")
             return
 
-        out_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "output"))
-        os.makedirs(out_dir, exist_ok=True)
+        from datetime import datetime
+        ts_filename = f"uln_document_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
 
         out_path = filedialog.asksaveasfilename(
             title="Save Formatted DOCX File",
             initialdir=out_dir,
-            initialfile="uln_document.docx",
+            initialfile=ts_filename,
             defaultextension=".docx",
             filetypes=[("Word Document", "*.docx")]
         )

@@ -189,13 +189,13 @@ class ULNParser:
             trimmed = line.strip()
 
             # Handle multi-line [PIC_GRID] ... [/PIC_GRID]
-            if trimmed.startswith("[PIC_GRID"):
+            if trimmed.upper().startswith("[PIC_GRID"):
                 in_pic_grid = True
                 pic_grid_lines = []
                 continue
 
             if in_pic_grid:
-                if trimmed == "[/PIC_GRID]":
+                if trimmed.upper() == "[/PIC_GRID]":
                     in_pic_grid = False
                     grid_children: List[ULNBlock] = []
                     for gline in pic_grid_lines:
@@ -217,14 +217,14 @@ class ULNParser:
                 continue
 
             # Handle multi-line [TABLE] ... [/TABLE]
-            if trimmed.startswith("[TABLE") and (trimmed.endswith("]") or "TABLE" in trimmed):
+            if trimmed.upper().startswith("[TABLE") and (trimmed.endswith("]") or "TABLE" in trimmed.upper()):
                 in_table = True
                 table_lines = []
                 table_borderless = "borderless" in trimmed.lower()
                 continue
 
             if in_table:
-                if trimmed == "[/TABLE]":
+                if trimmed.upper() == "[/TABLE]":
                     in_table = False
                     # Parse table rows
                     rows: List[ULNTableRow] = []
@@ -236,10 +236,10 @@ class ULNParser:
                         is_hdr = False
                         row_content = tline_trim
 
-                        if tline_trim.startswith("[TH]"):
+                        if tline_trim.upper().startswith("[TH]"):
                             is_hdr = True
                             row_content = tline_trim[4:].strip()
-                        elif tline_trim.startswith("[TR]"):
+                        elif tline_trim.upper().startswith("[TR]"):
                             row_content = tline_trim[4:].strip()
 
                         cell_texts = row_content.split('|')
@@ -259,14 +259,14 @@ class ULNParser:
                 continue
 
             # Handle multi-line [NUM] ... [/NUM]
-            if trimmed == "[NUM]" or trimmed.startswith("[NUM] ") or trimmed.startswith("[NUM:"):
-                if trimmed == "[NUM]":
+            if trimmed.upper() == "[NUM]" or trimmed.upper().startswith("[NUM] ") or trimmed.upper().startswith("[NUM:"):
+                if trimmed.upper() == "[NUM]":
                     in_num = True
                     num_lines = []
                     continue
                 else:
                     rest = trimmed[5:].lstrip(": ").strip()
-                    if rest.endswith("[/NUM]"):
+                    if rest.upper().endswith("[/NUM]"):
                         num_content = rest[:-6].strip()
                         child_blocks = ULNParser.parse(num_content)
                         blocks.append(ULNBlock(tag="NUM", children=child_blocks))
@@ -277,7 +277,7 @@ class ULNParser:
                         continue
 
             if in_num:
-                if trimmed == "[/NUM]":
+                if trimmed.upper() == "[/NUM]":
                     in_num = False
                     child_blocks = ULNParser.parse("\n".join(num_lines))
                     blocks.append(ULNBlock(tag="NUM", children=child_blocks))
@@ -287,14 +287,14 @@ class ULNParser:
                 continue
 
             # Handle multi-line [OPT] ... [/OPT]
-            if trimmed == "[OPT]" or trimmed.startswith("[OPT] ") or trimmed.startswith("[OPT:"):
-                if trimmed == "[OPT]":
+            if trimmed.upper() == "[OPT]" or trimmed.upper().startswith("[OPT] ") or trimmed.upper().startswith("[OPT:"):
+                if trimmed.upper() == "[OPT]":
                     in_opt = True
                     opt_lines = []
                     continue
                 else:
                     rest = trimmed[5:].lstrip(": ").strip()
-                    if rest.endswith("[/OPT]"):
+                    if rest.upper().endswith("[/OPT]"):
                         opt_content = rest[:-6].strip()
                         blocks.append(ULNBlock(tag="OPT", content=opt_content, spans=parse_inline_spans(opt_content)))
                         continue
@@ -304,7 +304,7 @@ class ULNParser:
                         continue
             
             if in_opt:
-                if trimmed == "[/OPT]":
+                if trimmed.upper() == "[/OPT]":
                     in_opt = False
                     opt_content = "\n".join(opt_lines)
                     blocks.append(ULNBlock(tag="OPT", content=opt_content, spans=parse_inline_spans(opt_content)))
@@ -314,14 +314,14 @@ class ULNParser:
                 continue
 
             # Handle multi-line [BOX] ... [/BOX]
-            if trimmed == "[BOX]" or trimmed.startswith("[BOX] "):
-                if trimmed == "[BOX]":
+            if trimmed.upper() == "[BOX]" or trimmed.upper().startswith("[BOX] "):
+                if trimmed.upper() == "[BOX]":
                     in_box = True
                     box_lines = []
                     continue
                 else:
                     rest = trimmed[5:].strip()
-                    if rest.endswith("[/BOX]"):
+                    if rest.upper().endswith("[/BOX]"):
                         box_content = rest[:-7].strip()
                         blocks.append(ULNBlock(tag="BOX", content=box_content, spans=parse_inline_spans(box_content)))
                         continue
@@ -331,7 +331,7 @@ class ULNParser:
                         continue
             
             if in_box:
-                if trimmed == "[/BOX]":
+                if trimmed.upper() == "[/BOX]":
                     in_box = False
                     box_content = "\n".join(box_lines)
                     blocks.append(ULNBlock(tag="BOX", content=box_content, spans=parse_inline_spans(box_content)))
@@ -341,14 +341,14 @@ class ULNParser:
                 continue
 
             # Handle multi-line [QUOTE] ... [/QUOTE]
-            if trimmed == "[QUOTE]" or trimmed.startswith("[QUOTE] "):
-                if trimmed == "[QUOTE]":
+            if trimmed.upper() == "[QUOTE]" or trimmed.upper().startswith("[QUOTE] "):
+                if trimmed.upper() == "[QUOTE]":
                     in_quote = True
                     quote_lines = []
                     continue
                 else:
                     rest = trimmed[7:].strip()
-                    if rest.endswith("[/QUOTE]"):
+                    if rest.upper().endswith("[/QUOTE]"):
                         q_content = rest[:-8].strip()
                         blocks.append(ULNBlock(tag="QUOTE", content=q_content, spans=parse_inline_spans(q_content)))
                         continue
@@ -358,7 +358,7 @@ class ULNParser:
                         continue
 
             if in_quote:
-                if trimmed == "[/QUOTE]":
+                if trimmed.upper() == "[/QUOTE]":
                     in_quote = False
                     q_content = "\n".join(quote_lines)
                     blocks.append(ULNBlock(tag="QUOTE", content=q_content, spans=parse_inline_spans(q_content)))
@@ -427,10 +427,28 @@ class ULNParser:
 
             else:
                 pic_info = parse_pic_tag(trimmed)
-                if pic_info and trimmed.startswith("[PIC:"):
+                if pic_info and trimmed.upper().startswith("[PIC:"):
                     blocks.append(ULNBlock(tag="PIC", pic=pic_info))
                 else:
                     spans = parse_inline_spans(trimmed)
                     blocks.append(ULNBlock(tag="P0", content=trimmed, spans=spans, pic=pic_info))
 
-        return blocks
+        # Merge empty P0/P1 question-number-only blocks preceding OPT blocks
+        merged_blocks: List[ULNBlock] = []
+        i = 0
+        while i < len(blocks):
+            curr = blocks[i]
+            if i + 1 < len(blocks) and curr.tag in ["P0", "P1"]:
+                num_only_match = re.match(r'^\s*(#?\d+[\.\)]|Question\s+#?\d+[\.\)]?|Câu\s+#?\d+[\.\)]?)\s*$', curr.content, re.IGNORECASE)
+                if num_only_match and blocks[i + 1].tag == "OPT":
+                    q_num = num_only_match.group(1)
+                    opt_blk = blocks[i + 1]
+                    opt_blk.content = f"{q_num} {opt_blk.content}"
+                    opt_blk.spans = parse_inline_spans(opt_blk.content)
+                    merged_blocks.append(opt_blk)
+                    i += 2
+                    continue
+            merged_blocks.append(curr)
+            i += 1
+
+        return merged_blocks
