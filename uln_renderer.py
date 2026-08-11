@@ -392,6 +392,8 @@ class ULNWordRenderer:
                         q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', block.content, re.IGNORECASE)
                         if q_match and q_match.group(4).strip():
                             self.apply_native_numbered_list(word, sel)
+                            if idx_block > 0 and blocks[idx_block - 1].tag == "BOX":
+                                sel.ParagraphFormat.SpaceBefore = 24
                             from uln_parser import parse_inline_spans
                             body_spans = parse_inline_spans(q_match.group(4).strip())
                             self.write_inline_spans(sel, body_spans)
@@ -400,6 +402,8 @@ class ULNWordRenderer:
                                 sel.Range.ListFormat.RemoveNumbers()
                             except Exception:
                                 pass
+                            if idx_block > 0 and blocks[idx_block - 1].tag == "BOX":
+                                sel.ParagraphFormat.SpaceBefore = 24
                             self.write_inline_spans(sel, block.spans)
                         sel.TypeParagraph()
 
@@ -418,7 +422,8 @@ class ULNWordRenderer:
                     except Exception:
                         pass
 
-                sel.ParagraphFormat.SpaceBefore = 4 if tag == "P1" else 3
+                space_before_p1 = 24 if (idx_block > 0 and blocks[idx_block - 1].tag == "BOX") else (4 if tag == "P1" else 3)
+                sel.ParagraphFormat.SpaceBefore = space_before_p1
                 sel.ParagraphFormat.SpaceAfter = 3
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
@@ -753,6 +758,7 @@ class ULNWordRenderer:
         def process_text_num(text: str) -> str:
             if not text:
                 return text
+            # Format #N to N so q_num_match can extract question number prefix
             return re.sub(r'#(\d+)', r'\1', text)
 
         if b.content:
@@ -848,13 +854,14 @@ class ULNWordRenderer:
             return 1
 
         remaining_width_cm = max(5.0, printable_width_cm - left_indent_cm)
-        max_len = max(len(item) for item in items)
+        max_len = max(len(item) for item in items) if items else 0
         
-        # Estimated option width in cm (0.165cm per char for 12pt Times New Roman + 0.35cm safety buffer)
-        est_item_w_cm = (max_len * 0.165) + 0.35
+        # Estimated option width in cm (0.165cm per char for 12pt Times New Roman + 0.4cm safety buffer for option letter)
+        est_item_w_cm = (max_len * 0.165) + 0.4
 
         if N >= 4:
-            if (est_item_w_cm * 4) <= remaining_width_cm:
+            # Standard 4-choice options <= 18 chars easily fit in 4 columns across 16cm printable width
+            if max_len <= 18 or (est_item_w_cm * 4) <= remaining_width_cm:
                 return 4
             elif (est_item_w_cm * 2) <= remaining_width_cm:
                 return 2
@@ -1023,10 +1030,12 @@ class ULNWordRenderer:
             text_group_width_pt = min(printable_width_pt, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
             left_offset_pt = max(0.0, (printable_width_pt - text_group_width_pt) / 2.0)
         else:
-            text_group_width_pt = printable_width_pt - 10.0
-            left_offset_pt = 0.0
+            text_group_width_pt = printable_width_pt - 28.0
+            left_offset_pt = 14.0  # 14pt left indent so text clears rounded top-left corner arc
 
-        sel.ParagraphFormat.SpaceBefore = 24  # 24pt space before line 0 gives top clearance above shape.Top
+        pad_2mm_pt = 5.7  # Exact 2.0mm padding (2mm * 2.83465 = 5.67pt)
+
+        sel.ParagraphFormat.SpaceBefore = 14  # 14pt space before line 0
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
@@ -1063,7 +1072,7 @@ class ULNWordRenderer:
                 
                 # Estimate visual lines if cols == 1 and sentence wraps
                 if cols == 1:
-                    lines_est = math.ceil((len(word_txt) * char_w_pt) / (printable_width_pt - 15.0))
+                    lines_est = math.ceil((len(word_txt) * char_w_pt) / (printable_width_pt - 30.0))
                     total_visual_lines += max(1, lines_est)
                 
                 if idx_w < len(chunk) - 1:
@@ -1078,9 +1087,8 @@ class ULNWordRenderer:
         box_anchor_range = doc.Range(p_start, p_start)
 
         try:
-            padding_pt = 6.0
-            box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + (padding_pt * 2))
-            text_height_pt = ((total_visual_lines - 1) * 14.5) + 42.0
+            box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + (pad_2mm_pt * 2))
+            text_height_pt = (total_visual_lines * 15.0) + (20.0 if cols == 1 else (pad_2mm_pt * 2))
             box_height_pt = text_height_pt
 
             shape = doc.Shapes.AddShape(
@@ -1093,8 +1101,8 @@ class ULNWordRenderer:
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
-            shape.Left = (0.0 if cols == 1 else (left_offset_pt - padding_pt))
-            shape.Top = 6.0  # 6pt offset puts shape top 6pt below instruction text above and 18pt above line 0 text
+            shape.Left = (0.0 if cols == 1 else (left_offset_pt - pad_2mm_pt))
+            shape.Top = 2.0  # 2pt below paragraph top
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
@@ -1120,6 +1128,9 @@ class ULNWordRenderer:
         """
         if not tdata.rows:
             return
+
+        sel.ParagraphFormat.SpaceBefore = 24
+        sel.ParagraphFormat.SpaceAfter = 4
 
         num_rows = len(tdata.rows)
         num_cols = max(len(r.cells) for r in tdata.rows)
