@@ -1064,10 +1064,11 @@ class ULNWordRenderer:
 
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
         try:
-            p_anchor.ParagraphFormat.SpaceBefore = 12.0
-            p_anchor.ParagraphFormat.SpaceAfter = 18.0
+            p_anchor.ParagraphFormat.SpaceBefore = 14.0
+            p_anchor.ParagraphFormat.SpaceAfter = 14.0
         except Exception:
             pass
+
 
 
         try:
@@ -1158,11 +1159,12 @@ class ULNWordRenderer:
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.RightIndent = 0
             sel.ParagraphFormat.Alignment = 0  # Left
-            sel.ParagraphFormat.SpaceBefore = 0
-            sel.ParagraphFormat.SpaceAfter = 18.0
+            sel.ParagraphFormat.SpaceBefore = 14.0
+            sel.ParagraphFormat.SpaceAfter = 14.0
             sel.TypeParagraph()
             sel.ParagraphFormat.SpaceBefore = 0
             sel.ParagraphFormat.SpaceAfter = 4
+
 
 
         except Exception:
