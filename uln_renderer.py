@@ -404,7 +404,7 @@ class ULNWordRenderer:
                         if q_match and q_match.group(4).strip():
                             self.apply_native_numbered_list(word, sel)
                             if self.last_rendered_tag == "BOX":
-                                sel.ParagraphFormat.SpaceBefore = 14
+                                sel.ParagraphFormat.SpaceBefore = 0
                             from uln_parser import parse_inline_spans
                             body_spans = parse_inline_spans(q_match.group(4).strip())
                             self.write_inline_spans(sel, body_spans)
@@ -414,9 +414,10 @@ class ULNWordRenderer:
                             except Exception:
                                 pass
                             if self.last_rendered_tag == "BOX":
-                                sel.ParagraphFormat.SpaceBefore = 14
+                                sel.ParagraphFormat.SpaceBefore = 0
                             self.write_inline_spans(sel, block.spans)
                         sel.TypeParagraph()
+
 
             elif tag in ["P1", "P2"]:
                 items = split_line_into_option_items(block.content)
@@ -1158,7 +1159,12 @@ class ULNWordRenderer:
             sel.ParagraphFormat.RightIndent = 0
             sel.ParagraphFormat.Alignment = 0  # Left
             sel.ParagraphFormat.SpaceBefore = 0
+            sel.ParagraphFormat.SpaceAfter = 18.0
+            sel.TypeParagraph()
+            sel.ParagraphFormat.SpaceBefore = 0
             sel.ParagraphFormat.SpaceAfter = 4
+
+
         except Exception:
             pass
 
