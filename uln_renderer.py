@@ -1006,9 +1006,9 @@ class ULNWordRenderer:
 
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
-        Renders Word Bank / Callout Box using MS Word Rounded Rectangle Shape (msoShapeRoundedRectangle = 5)
-        tightly anchored around paragraph text with rounded corners.
-        Calculates compact, per-column box width centered on page with symmetric 5pt top/bottom and 14pt left/right padding.
+        Renders Word Bank / Callout Box with words typed directly INSIDE a MS Word Rounded Rectangle Shape TextFrame (msoShapeRoundedRectangle = 5).
+        Anchors the box to paragraph line flow with wdWrapTopBottom so adding/deleting lines above moves the box AND its text together seamlessly.
+        Configures symmetric 6.0pt top/bottom and 12.0pt left/right TextFrame inner margins with AutoSize enabled.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
@@ -1021,16 +1021,16 @@ class ULNWordRenderer:
             return
 
         N = len(words)
-        char_w_pt = 6.8  # 12pt bold Times New Roman character width
+        char_w_pt = 6.0  # 12pt bold Times New Roman character width
 
         # Determine column count (1 to 5 cols)
         max_len_all = max(len(w) for w in words)
-        est_single_col_w = (max_len_all * char_w_pt) + 14.0
+        est_single_col_w = (max_len_all * char_w_pt) + 12.0
 
-        if est_single_col_w >= (printable_width_pt - 28.0):
+        if est_single_col_w >= (printable_width_pt - 24.0):
             cols = 1
         else:
-            max_fit_cols = max(1, int((printable_width_pt - 28.0) / est_single_col_w))
+            max_fit_cols = max(1, int((printable_width_pt - 24.0) / est_single_col_w))
             if N <= 5:
                 cols = min(N, max_fit_cols)
             elif N <= 9:
@@ -1046,86 +1046,15 @@ class ULNWordRenderer:
             col_widths.append(max_len_c * char_w_pt)
 
         # Calculate compact text group width and centered box width
-        inter_col_gap_pt = 20.0
+        inter_col_gap_pt = 16.0
         text_group_width_pt = sum(col_widths) + max(0, (cols - 1) * inter_col_gap_pt)
-        needed_box_width_pt = text_group_width_pt + 28.0
+        needed_box_width_pt = text_group_width_pt + 24.0
 
-        box_width_pt = min(printable_width_pt, max(160.0, needed_box_width_pt))
+        box_width_pt = min(printable_width_pt, max(120.0, needed_box_width_pt))
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
-        text_left_indent_pt = left_offset_pt + 14.0
 
-        top_padding_pt = 6.0     # Exact symmetric 6.0pt top padding inside box
-        bottom_padding_pt = 6.0  # Exact symmetric 6.0pt bottom padding inside box
-        space_before_pt = 12.0   # 12.0pt space before line 0 paragraph
-
-        sel.ParagraphFormat.SpaceBefore = space_before_pt
-        sel.ParagraphFormat.SpaceAfter = 0
-        sel.ParagraphFormat.LineSpacingRule = 0
-        sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
-        sel.ParagraphFormat.LeftIndent = text_left_indent_pt
-        sel.ParagraphFormat.RightIndent = max(0.0, printable_width_pt - (left_offset_pt + box_width_pt - 14.0))
-        sel.ParagraphFormat.KeepWithNext = True  # Group word bank text & box shape on same page
-        sel.ParagraphFormat.TabStops.ClearAll()
-
-        if cols > 1:
-            curr_tab = text_left_indent_pt
-            for c in range(1, cols):
-                curr_tab += col_widths[c - 1] + inter_col_gap_pt
-                sel.ParagraphFormat.TabStops.Add(Position=curr_tab, Alignment=0)
-
-        p_start = sel.Range.Start
-        box_anchor_range = doc.Range(p_start, p_start)
-
-        lines = []
-        for i in range(0, N, cols):
-            lines.append(words[i:i + cols])
-
-        num_rows = len(lines)
-
-        for idx_line, chunk in enumerate(lines):
-            if idx_line > 0:
-                sel.ParagraphFormat.SpaceBefore = 1.5
-
-            sel.ParagraphFormat.LineSpacingRule = 0
-            if idx_line == num_rows - 1:
-                # Set SpaceAfter = 18.0pt on last line of box text to push next paragraph 12pt below bottom border
-                sel.ParagraphFormat.SpaceAfter = 18.0
-            else:
-                sel.ParagraphFormat.SpaceAfter = 0
-
-            for idx_w, word_txt in enumerate(chunk):
-                sel.Font.Name = self.font_name
-                sel.Font.Size = self.font_size
-                sel.Font.Bold = 1
-                sel.TypeText(word_txt)
-                
-                if idx_w < len(chunk) - 1:
-                    sel.Font.Bold = 0
-                    sel.TypeText("\t")
-
-            sel.TypeParagraph()
-
-        p_end = sel.Range.Start
-
-        r_start = doc.Range(p_start, p_start)
-        r_end = doc.Range(max(p_start, p_end - 2), max(p_start, p_end - 2))
-
-        try:
-            top_y = r_start.Information(6)   # wdVerticalPositionRelativeToPage = 6: absolute Y of first text line
-            bottom_y = r_end.Information(6)  # wdVerticalPositionRelativeToPage = 6: absolute Y of last text line top
-            line_h = self.font_size * 1.15   # estimated single line height in pt
-            measured_text_h = max(line_h, (bottom_y - top_y) + line_h)
-
-            # Page-absolute positioning: shape.Top = first line Y - padding
-            shape_top_page = top_y - top_padding_pt
-            box_height_pt = measured_text_h + top_padding_pt + bottom_padding_pt
-            use_page_relative = True
-        except Exception:
-            font_line_h = (self.font_size * 1.15) if self.font_size else 13.8
-            measured_text_h = (num_rows * font_line_h) + max(0, (num_rows - 1) * 1.5)
-            box_height_pt = measured_text_h + top_padding_pt + bottom_padding_pt
-            shape_top_page = None
-            use_page_relative = False
+        # Record anchor range in document body
+        p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
 
         try:
             shape = doc.Shapes.AddShape(
@@ -1133,35 +1062,84 @@ class ULNWordRenderer:
                 0,
                 0,
                 box_width_pt,
-                box_height_pt,
-                Anchor=box_anchor_range
+                50,  # AutoSize will expand height dynamically
+                Anchor=p_anchor
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
-
-            if use_page_relative and shape_top_page is not None:
-                # Pin shape to page-absolute Y so top/bottom padding are always exactly equal
-                shape.RelativeVerticalPosition = 1  # wdRelativeVerticalPositionPage = 1
-                shape.Top = shape_top_page
-            else:
-                shape.RelativeVerticalPosition = 2  # wdRelativeVerticalPositionParagraph = 2
-                shape.Top = space_before_pt - top_padding_pt
-
+            shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
             shape.Left = left_offset_pt
-            shape.Fill.Visible = False  # Transparent fill so words display cleanly
-            shape.Line.Weight = 1.0     # 1pt rounded border
-            shape.Line.ForeColor.RGB = 0  # Black border line
+            shape.Top = 0
+            shape.WrapFormat.Type = 3             # wdWrapTopBottom = 3
+            shape.WrapFormat.DistanceTop = 12.0
+            shape.WrapFormat.DistanceBottom = 12.0
+
+            tf = shape.TextFrame
+            tf.MarginTop = 6.0
+            tf.MarginBottom = 6.0
+            tf.MarginLeft = 12.0
+            tf.MarginRight = 12.0
             try:
-                shape.ZOrder(1)  # Send behind text
+                tf.AutoSize = True
             except Exception:
                 pass
-        except Exception as e:
-            print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
 
-        # Reset selection indents
-        sel.ParagraphFormat.LeftIndent = 0
-        sel.ParagraphFormat.RightIndent = 0
-        sel.ParagraphFormat.SpaceBefore = 0
-        sel.ParagraphFormat.SpaceAfter = 4
+            shape.Fill.Visible = False  # Transparent fill
+            shape.Line.Weight = 1.0     # 1pt rounded border
+            shape.Line.ForeColor.RGB = 0  # Black border line
+
+            # Select inside shape TextFrame to typeset text runs
+            tf.TextRange.Select()
+            box_sel = word.Selection
+            box_sel.Font.Name = self.font_name
+            box_sel.Font.Size = self.font_size
+            box_sel.Font.Bold = 1
+
+            box_sel.ParagraphFormat.SpaceBefore = 0
+            box_sel.ParagraphFormat.SpaceAfter = 0
+            box_sel.ParagraphFormat.LineSpacingRule = 0
+            box_sel.ParagraphFormat.Alignment = 0  # Left align
+            box_sel.ParagraphFormat.TabStops.ClearAll()
+
+            if cols > 1:
+                avail_w = box_width_pt - 24.0
+                col_stride = avail_w / max(1, cols)
+                for c in range(1, cols):
+                    box_sel.ParagraphFormat.TabStops.Add(Position=(c * col_stride), Alignment=0)
+
+            lines = []
+            for i in range(0, N, cols):
+                lines.append(words[i:i + cols])
+
+            from uln_parser import parse_inline_spans
+            for idx_line, chunk in enumerate(lines):
+                if idx_line > 0:
+                    box_sel.ParagraphFormat.SpaceBefore = 1.5
+
+                box_sel.ParagraphFormat.SpaceAfter = 0
+
+                for idx_w, word_txt in enumerate(chunk):
+                    w_spans = parse_inline_spans(word_txt, default_bold=True)
+                    self.write_inline_spans(box_sel, w_spans)
+                    if idx_w < len(chunk) - 1:
+                        box_sel.TypeText("\t")
+
+                if idx_line < len(lines) - 1:
+                    box_sel.TypeParagraph()
+
+        except Exception as e:
+            print(f"[ULNRenderer] Warning creating TextFrame box shape: {e}")
+
+        # Move selection back to document main story below the shape
+        try:
+            end_range = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
+            end_range.Select()
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.RightIndent = 0
+            sel.ParagraphFormat.SpaceBefore = 12.0
+            sel.ParagraphFormat.SpaceAfter = 4
+        except Exception:
+            pass
+
         self.last_rendered_tag = "BOX"
 
     def render_table(self, sel, doc, tdata, printable_width_cm: float, idx_block: int = 0, blocks: List[ULNBlock] = None):
