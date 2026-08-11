@@ -1056,7 +1056,11 @@ class ULNWordRenderer:
         box_width_pt = min(printable_width_pt, max(80.0, needed_box_width_pt))
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
-        # Record anchor range in document body
+        num_rows = math.ceil(N / cols)
+        font_line_h = (self.font_size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
+        text_block_h = (num_rows * font_line_h) + max(0, (num_rows - 1) * 1.5)
+        box_height_pt = text_block_h + (2 * margin_2mm_pt) + 6.0
+
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
 
         try:
@@ -1065,7 +1069,7 @@ class ULNWordRenderer:
                 0,
                 0,
                 box_width_pt,
-                50,  # AutoSize will expand height dynamically
+                box_height_pt,
                 Anchor=p_anchor
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
@@ -1078,13 +1082,14 @@ class ULNWordRenderer:
 
             tf = shape.TextFrame
             tf.MarginTop = margin_2mm_pt
-            tf.MarginBottom = cm_to_pt(0.35)  # 3.5mm bottom margin for rounded corner clearance
+            tf.MarginBottom = margin_2mm_pt
             tf.MarginLeft = margin_2mm_pt
             tf.MarginRight = margin_2mm_pt
             try:
-                tf.AutoSize = True
+                tf.AutoSize = False
             except Exception:
                 pass
+
 
 
             shape.Fill.Visible = False  # Transparent fill
