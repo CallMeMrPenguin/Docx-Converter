@@ -218,9 +218,10 @@ class ULNWordRenderer:
                         pass
             else:
                 try:
-                    sel.Font.ColorIndex = 0
+                    sel.Font.Color = 0  # Pure Black RGB(0,0,0)
                 except Exception:
                     pass
+
 
             if span.bg_color:
                 hl_idx = HIGHLIGHT_NAME_TO_INDEX.get(span.bg_color.lower(), 7)
@@ -1069,9 +1070,10 @@ class ULNWordRenderer:
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
             shape.Left = left_offset_pt
             shape.Top = 0
-            shape.WrapFormat.Type = 3             # wdWrapTopBottom = 3
+            shape.WrapFormat.Type = 7             # wdWrapInline = 7 ("In Line with Text")
             shape.WrapFormat.DistanceTop = 12.0
             shape.WrapFormat.DistanceBottom = 12.0
+
 
             tf = shape.TextFrame
             tf.MarginTop = 6.0
@@ -1093,6 +1095,7 @@ class ULNWordRenderer:
             box_sel.Font.Name = self.font_name
             box_sel.Font.Size = self.font_size
             box_sel.Font.Bold = 1
+            box_sel.Font.Color = 0  # Pure Black RGB(0,0,0)
 
             box_sel.ParagraphFormat.SpaceBefore = 0
             box_sel.ParagraphFormat.SpaceAfter = 0
@@ -1120,27 +1123,36 @@ class ULNWordRenderer:
                 for idx_w, word_txt in enumerate(chunk):
                     w_spans = parse_inline_spans(word_txt, default_bold=True)
                     self.write_inline_spans(box_sel, w_spans)
+                    box_sel.Font.Color = 0  # Enforce black text
                     if idx_w < len(chunk) - 1:
                         box_sel.TypeText("\t")
 
                 if idx_line < len(lines) - 1:
                     box_sel.TypeParagraph()
 
+            # Convert shape to native InlineShape ("In Line with Text")
+            try:
+                shape.ConvertToInlineShape()
+            except Exception:
+                pass
+
         except Exception as e:
             print(f"[ULNRenderer] Warning creating TextFrame box shape: {e}")
 
-        # Move selection back to document main story below the shape
+        # Move selection back to document main story below the inline shape
         try:
             end_range = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
             end_range.Select()
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.RightIndent = 0
+            sel.ParagraphFormat.Alignment = 0  # Left
             sel.ParagraphFormat.SpaceBefore = 12.0
             sel.ParagraphFormat.SpaceAfter = 4
         except Exception:
             pass
 
         self.last_rendered_tag = "BOX"
+
 
     def render_table(self, sel, doc, tdata, printable_width_cm: float, idx_block: int = 0, blocks: List[ULNBlock] = None):
         """
