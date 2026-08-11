@@ -1048,11 +1048,11 @@ class ULNWordRenderer:
         # Calculate compact text group width and centered box width
         inter_col_gap_pt = 20.0
         text_group_width_pt = sum(col_widths) + max(0, (cols - 1) * inter_col_gap_pt)
-        needed_box_width_pt = text_group_width_pt + 28.0
+        needed_box_width_pt = text_group_width_pt + 24.0
 
-        box_width_pt = min(printable_width_pt, max(160.0, needed_box_width_pt))
+        box_width_pt = min(printable_width_pt, max(40.0, needed_box_width_pt))
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
-        text_left_indent_pt = left_offset_pt + 14.0
+        text_left_indent_pt = left_offset_pt + 12.0
 
         top_padding_pt = 6.0     # Exact symmetric 6.0pt top padding inside box
         bottom_padding_pt = 6.0  # Exact symmetric 6.0pt bottom padding inside box
@@ -1063,7 +1063,7 @@ class ULNWordRenderer:
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
         sel.ParagraphFormat.LeftIndent = text_left_indent_pt
-        sel.ParagraphFormat.RightIndent = max(0.0, printable_width_pt - (left_offset_pt + box_width_pt - 14.0))
+        sel.ParagraphFormat.RightIndent = max(0.0, printable_width_pt - (left_offset_pt + box_width_pt - 12.0))
         sel.ParagraphFormat.KeepWithNext = True  # Group word bank text & box shape on same page
         sel.ParagraphFormat.TabStops.ClearAll()
 
@@ -1105,10 +1105,11 @@ class ULNWordRenderer:
 
             sel.TypeParagraph()
 
-        font_line_height_pt = (self.font_size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
+        font_cap_height_pt = (self.font_size * 0.95) if hasattr(self, 'font_size') and self.font_size else 11.4
+        inter_line_pitch_pt = (self.font_size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
         
-        # Total text block height = (num_rows * single_line_height) + inter-line SpaceBefore (1.5pt between rows)
-        exact_text_height_pt = (num_rows * font_line_height_pt) + max(0, (num_rows - 1) * 1.5)
+        # Total text block height = font cap height for line 0 + (inter-line pitch for additional lines)
+        exact_text_height_pt = font_cap_height_pt + max(0, (num_rows - 1) * (inter_line_pitch_pt + 1.5))
 
         box_height_pt = exact_text_height_pt + top_padding_pt + bottom_padding_pt
 
@@ -1137,7 +1138,8 @@ class ULNWordRenderer:
             if is_top_of_page:
                 shape.Top = -top_padding_pt
             else:
-                shape.Top = space_before_pt - top_padding_pt  # 18.0 - 6.0 = 12.0pt
+                shape.Top = space_before_pt - top_padding_pt
+
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
