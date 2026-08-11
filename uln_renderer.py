@@ -1000,9 +1000,9 @@ class ULNWordRenderer:
 
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
-        Renders Word Bank / Callout Box using MS Word Rounded Rectangle Shape (msoShapeRoundedRectangle = 5)
-        tightly anchored around paragraph text, replacing table borders.
-        Applies exact 2mm (6.0pt) top/bottom padding and precise relative shape offsets.
+        Renders Word Bank / Callout Box using MS Word Native Paragraph Borders (w:pBdr / ParagraphFormat.Borders).
+        Applies clean 1.0pt rectangular borders with exact 2mm (6.0pt) top/bottom padding.
+        Native in-line flow guarantees 0 text overlap above, below, or inside the box.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
@@ -1037,21 +1037,17 @@ class ULNWordRenderer:
             last_col_text_w_pt = last_col_max_len * char_w_pt
 
             text_group_width_pt = min(printable_width_pt - 30.0, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
-            left_offset_pt = max(15.0, (printable_width_pt - text_group_width_pt) / 2.0)
+            left_offset_pt = max(12.0, (printable_width_pt - text_group_width_pt) / 2.0)
         else:
-            text_group_width_pt = printable_width_pt - 30.0
-            left_offset_pt = 15.0  # 15pt left indent so text clears rounded top-left corner arc
+            left_offset_pt = 12.0
 
-        top_padding_pt = 6.0    # Exact 2.12mm top padding inside box
-        bottom_padding_pt = 6.0 # Exact 2.12mm bottom padding inside box
-        space_before_pt = 16.0  # 16pt space before line 0 paragraph
-
-        sel.ParagraphFormat.SpaceBefore = space_before_pt
+        sel.ParagraphFormat.SpaceBefore = 8  # 8pt space before box
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
         sel.ParagraphFormat.LeftIndent = left_offset_pt
-        sel.ParagraphFormat.KeepWithNext = True  # Group word bank text & box shape on same page
+        sel.ParagraphFormat.RightIndent = left_offset_pt
+        sel.ParagraphFormat.KeepWithNext = True  # Keep word bank text on same page
         sel.ParagraphFormat.TabStops.ClearAll()
 
         if cols > 1:
@@ -1059,14 +1055,29 @@ class ULNWordRenderer:
                 tab_pos = left_offset_pt + (col_width_pt * c)
                 sel.ParagraphFormat.TabStops.Add(Position=tab_pos, Alignment=0)
 
-        p_start = sel.Range.Start
-        box_anchor_range = doc.Range(p_start, p_start)
+        # Apply MS Word Native Paragraph Borders (w:pBdr)
+        try:
+            borders = sel.ParagraphFormat.Borders
+            borders.Item(-1).LineStyle = 1  # wdBorderTop = -1, wdLineStyleSingle = 1
+            borders.Item(-2).LineStyle = 1  # wdBorderLeft = -2
+            borders.Item(-3).LineStyle = 1  # wdBorderBottom = -3
+            borders.Item(-4).LineStyle = 1  # wdBorderRight = -4
+
+            borders.Item(-1).LineWidth = 8  # 1.0 pt
+            borders.Item(-2).LineWidth = 8
+            borders.Item(-3).LineWidth = 8
+            borders.Item(-4).LineWidth = 8
+
+            borders.DistanceFromTop = 6      # Exact 2.12mm top padding
+            borders.DistanceFromBottom = 6   # Exact 2.12mm bottom padding
+            borders.DistanceFromLeft = 12    # 12pt left padding
+            borders.DistanceFromRight = 12   # 12pt right padding
+        except Exception as e:
+            print(f"[ULNRenderer] Warning setting paragraph borders: {e}")
 
         lines = []
         for i in range(0, N, cols):
             lines.append(words[i:i + cols])
-
-        num_rows = len(lines)
 
         for idx_line, chunk in enumerate(lines):
             if idx_line > 0:
@@ -1087,43 +1098,19 @@ class ULNWordRenderer:
 
             sel.TypeParagraph()
 
-        font_line_height_pt = (self.font_size * 1.2) if hasattr(self, 'font_size') and self.font_size else 14.4
-        
-        # Total text block height = (num_rows * font_line_height) + inter-line SpaceBefore (2pt between rows)
-        exact_text_height_pt = (num_rows * font_line_height_pt) + max(0, (num_rows - 1) * 2.0)
-
-        box_height_pt = exact_text_height_pt + top_padding_pt + bottom_padding_pt
-        box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + 24.0)
-
+        # Clear paragraph borders for subsequent text paragraphs
         try:
-            shape = doc.Shapes.AddShape(
-                5,  # msoShapeRoundedRectangle = 5
-                0,
-                0,
-                box_width_pt,
-                box_height_pt,
-                Anchor=box_anchor_range
-            )
-            shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
-            shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
-            shape.Left = (0.0 if cols == 1 else (left_offset_pt - 12.0))
-            
-            # Align top border of shape exactly 6pt (2mm) above line 0 text inside the paragraph
-            shape.Top = space_before_pt - top_padding_pt  # 16.0 - 6.0 = 10.0pt
+            sel.ParagraphFormat.Borders.Item(-1).LineStyle = 0
+            sel.ParagraphFormat.Borders.Item(-2).LineStyle = 0
+            sel.ParagraphFormat.Borders.Item(-3).LineStyle = 0
+            sel.ParagraphFormat.Borders.Item(-4).LineStyle = 0
+        except Exception:
+            pass
 
-            shape.Fill.Visible = False  # Transparent fill so words display cleanly
-            shape.Line.Weight = 1.0     # 1pt rounded border
-            shape.Line.ForeColor.RGB = 0  # Black border line
-            try:
-                shape.ZOrder(1)  # Send behind text
-            except Exception:
-                pass
-        except Exception as e:
-            print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
-
-        # Set clean 16pt paragraph spacing after box shape so text following the box never overlaps
+        # Reset paragraph formatting for subsequent text
         sel.ParagraphFormat.LeftIndent = 0
-        sel.ParagraphFormat.SpaceBefore = 16
+        sel.ParagraphFormat.RightIndent = 0
+        sel.ParagraphFormat.SpaceBefore = 8
         sel.ParagraphFormat.SpaceAfter = 4
 
     def render_table(self, sel, doc, tdata, printable_width_cm: float, idx_block: int = 0, blocks: List[ULNBlock] = None):
