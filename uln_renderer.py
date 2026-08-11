@@ -1021,7 +1021,7 @@ class ULNWordRenderer:
             return
 
         N = len(words)
-        char_w_pt = 6.8  # 12pt bold Times New Roman character width
+        char_w_pt = 6.0  # 12pt bold Times New Roman average character width (empirical)
 
         # Determine column count (1 to 5 cols)
         max_len_all = max(len(w) for w in words)
@@ -1077,6 +1077,7 @@ class ULNWordRenderer:
         box_anchor_range = doc.Range(p_start, p_start)
 
         lines = []
+        row_char_ends = []  # cursor position right after last typed char per row
         for i in range(0, N, cols):
             lines.append(words[i:i + cols])
 
@@ -1088,7 +1089,6 @@ class ULNWordRenderer:
 
             sel.ParagraphFormat.LineSpacingRule = 0
             if idx_line == num_rows - 1:
-                # Set SpaceAfter = 18.0pt on last line of box text to push next paragraph 12pt below bottom border
                 sel.ParagraphFormat.SpaceAfter = 18.0
             else:
                 sel.ParagraphFormat.SpaceAfter = 0
@@ -1098,66 +1098,101 @@ class ULNWordRenderer:
                 sel.Font.Size = self.font_size
                 sel.Font.Bold = 1
                 sel.TypeText(word_txt)
-                
                 if idx_w < len(chunk) - 1:
                     sel.Font.Bold = 0
                     sel.TypeText("\t")
 
+            row_char_ends.append(sel.Range.Start)  # cursor = right edge of last typed char
             sel.TypeParagraph()
 
         p_end = sel.Range.Start
 
         r_start = doc.Range(p_start, p_start)
-        r_end = doc.Range(max(p_start, p_end - 2), max(p_start, p_end - 2))
+        r_end   = doc.Range(max(p_start, p_end - 2), max(p_start, p_end - 2))
 
+        # ── Vertical measurement (page-absolute) ──────────────────────────────────
+        # Information(6) = wdVerticalPositionRelativeToPage = absolute Y of char top
         try:
-            top_y = r_start.Information(6)     # wdVerticalPositionRelativeToPage = 6
-            bottom_y = r_end.Information(6)  # wdVerticalPositionRelativeToPage = 6
-            line_h = (r_end.Font.Size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
+            line_h   = self.font_size * 1.15
+            top_y    = r_start.Information(6)   # Y of first text line top
+            bottom_y = r_end.Information(6)     # Y of last text line top
             measured_text_h = max(line_h, (bottom_y - top_y) + line_h)
+            shape_top_abs = top_y - top_padding_pt   # page-absolute Y of box top border
+            final_box_height = measured_text_h + top_padding_pt + bottom_padding_pt
+            use_page_y = True
         except Exception:
-            font_line_h = (self.font_size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
-            measured_text_h = (num_rows * font_line_h) + max(0, (num_rows - 1) * 1.5)
+            line_h = (self.font_size * 1.15) if self.font_size else 13.8
+            measured_text_h = (num_rows * line_h) + max(0, (num_rows - 1) * 1.5)
+            final_box_height = measured_text_h + top_padding_pt + bottom_padding_pt
+            shape_top_abs = None
+            use_page_y = False
 
-        box_height_pt = measured_text_h + top_padding_pt + bottom_padding_pt
+        # ── Horizontal sizing — equal padding by construction ─────────────────────
+        # For 1-col: measure actual longest line right edge via Information(9).
+        #   Info(9) is LeftIndent-relative (not page/margin-relative).
+        #   Actual margin-relative right X = text_left_indent_pt + Info(9) - 1.
+        # For N-col: Info(9) can't cross tab jumps, so use tab-stop arithmetic.
+        #   last_col_tab_pos + col_widths[last] gives the estimated right edge.
+        #   This matches the actual tab-stop layout, so left==right padding exactly.
+        #
+        # Box left  = text_left_indent_pt - left_padding_pt   (margin-relative)
+        # Box right = real_text_right_margin + right_padding_pt
+        # Box width = Box right - Box left
+        left_padding_pt  = 10.0
+        right_padding_pt = 10.0
 
-        # Detect top-of-page position to handle MS Word SpaceBefore suppression
-        top_margin_pt = cm_to_pt(self.margin_top)
-        try:
-            vert_pos_pt = box_anchor_range.Information(6)  # wdVerticalPositionRelativeToPage = 6
-            is_top_of_page = (vert_pos_pt <= top_margin_pt + 8.0)
-        except Exception:
-            is_top_of_page = False
+        if cols == 1:
+            # Measure actual rendered right edge for every row
+            max_right_margin = text_left_indent_pt  # fallback
+            try:
+                for re in row_char_ends:
+                    r_re = doc.Range(re, re)
+                    # Info(9) gives left-indent-relative X of cursor position
+                    row_right = text_left_indent_pt + r_re.Information(9) - 1.0
+                    max_right_margin = max(max_right_margin, row_right)
+            except Exception:
+                max_right_margin = text_left_indent_pt + col_widths[0]
+            real_text_right_margin = max_right_margin
+        else:
+            # Analytical: last column start + that column's max estimated width
+            last_col_tab = text_left_indent_pt
+            for c in range(cols - 1):
+                last_col_tab += col_widths[c] + inter_col_gap_pt
+            real_text_right_margin = last_col_tab + col_widths[cols - 1]
 
+        shape_left_margin  = max(0.0, text_left_indent_pt - left_padding_pt)
+        shape_right_margin = real_text_right_margin + right_padding_pt
+        final_box_width    = shape_right_margin - shape_left_margin
+
+        # ── Draw shape ────────────────────────────────────────────────────────────
         try:
             shape = doc.Shapes.AddShape(
                 5,  # msoShapeRoundedRectangle = 5
                 0,
                 0,
-                box_width_pt,
-                box_height_pt,
+                final_box_width,
+                final_box_height,
                 Anchor=box_anchor_range
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
-            shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
-            shape.Left = left_offset_pt
-            
-            # Position shape.Top based on whether SpaceBefore was suppressed at top of page
-            if is_top_of_page:
-                shape.Top = -top_padding_pt
+            shape.Left = shape_left_margin
+
+            if use_page_y and shape_top_abs is not None:
+                shape.RelativeVerticalPosition = 1  # wdRelativeVerticalPositionPage = 1
+                shape.Top = shape_top_abs
             else:
-                shape.Top = space_before_pt - top_padding_pt  # 12.0 - 6.0 = 6.0pt
+                shape.RelativeVerticalPosition = 2  # wdRelativeVerticalPositionParagraph = 2
+                shape.Top = space_before_pt - top_padding_pt
 
-
-            shape.Fill.Visible = False  # Transparent fill so words display cleanly
-            shape.Line.Weight = 1.0     # 1pt rounded border
-            shape.Line.ForeColor.RGB = 0  # Black border line
+            shape.Fill.Visible = False
+            shape.Line.Weight = 1.0
+            shape.Line.ForeColor.RGB = 0
             try:
                 shape.ZOrder(1)  # Send behind text
             except Exception:
                 pass
         except Exception as e:
-            print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
+            print("[ULNRenderer] Warning drawing box shape: %s" % e)
 
         # Reset selection indents
         sel.ParagraphFormat.LeftIndent = 0
