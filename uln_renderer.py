@@ -336,7 +336,7 @@ class ULNWordRenderer:
                 if blank_symbol_match:
                     trailing_sym = blank_symbol_match.group(1).strip()
                     if idx_block > 0 and blocks[idx_block - 1].tag == "BOX":
-                        sel.ParagraphFormat.SpaceBefore = 24
+                        sel.ParagraphFormat.SpaceBefore = 16
                     # Flush right standalone blank line with dynamic Tab Leader 4 (wdTabLeaderUnderscore = 4)
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
@@ -359,7 +359,7 @@ class ULNWordRenderer:
                     if q_num_match and q_num_match.group(4).strip():
                         self.apply_native_numbered_list(word, sel)
                         if idx_block > 0 and blocks[idx_block - 1].tag == "BOX":
-                            sel.ParagraphFormat.SpaceBefore = 24
+                            sel.ParagraphFormat.SpaceBefore = 16
                         text_part = q_num_match.group(4).strip()
                     else:
                         try:
@@ -367,7 +367,7 @@ class ULNWordRenderer:
                         except Exception:
                             pass
                         if idx_block > 0 and blocks[idx_block - 1].tag == "BOX":
-                            sel.ParagraphFormat.SpaceBefore = 24
+                            sel.ParagraphFormat.SpaceBefore = 16
 
                     from uln_parser import parse_inline_spans as _pis
                     text_spans = _pis(text_part)
@@ -401,7 +401,7 @@ class ULNWordRenderer:
                         if q_match and q_match.group(4).strip():
                             self.apply_native_numbered_list(word, sel)
                             if idx_block > 0 and blocks[idx_block - 1].tag == "BOX":
-                                sel.ParagraphFormat.SpaceBefore = 24
+                                sel.ParagraphFormat.SpaceBefore = 16
                             from uln_parser import parse_inline_spans
                             body_spans = parse_inline_spans(q_match.group(4).strip())
                             self.write_inline_spans(sel, body_spans)
@@ -411,7 +411,7 @@ class ULNWordRenderer:
                             except Exception:
                                 pass
                             if idx_block > 0 and blocks[idx_block - 1].tag == "BOX":
-                                sel.ParagraphFormat.SpaceBefore = 24
+                                sel.ParagraphFormat.SpaceBefore = 16
                             self.write_inline_spans(sel, block.spans)
                         sel.TypeParagraph()
 
@@ -430,7 +430,7 @@ class ULNWordRenderer:
                     except Exception:
                         pass
 
-                space_before_p1 = 24 if (idx_block > 0 and blocks[idx_block - 1].tag == "BOX") else (4 if tag == "P1" else 3)
+                space_before_p1 = 16 if (idx_block > 0 and blocks[idx_block - 1].tag == "BOX") else (4 if tag == "P1" else 3)
                 sel.ParagraphFormat.SpaceBefore = space_before_p1
                 sel.ParagraphFormat.SpaceAfter = 3
                 sel.ParagraphFormat.KeepWithNext = False
@@ -542,7 +542,7 @@ class ULNWordRenderer:
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
-                space_before_tab2 = 24 if (idx_block > 0 and blocks[idx_block - 1].tag == "BOX") else 3
+                space_before_tab2 = 16 if (idx_block > 0 and blocks[idx_block - 1].tag == "BOX") else 3
                 sel.ParagraphFormat.SpaceBefore = space_before_tab2
                 sel.ParagraphFormat.SpaceAfter = 3
 
@@ -660,7 +660,7 @@ class ULNWordRenderer:
 
             elif tag == "QUOTE":
                 # Reading passage: standard body text (Left/Right Indent = 0), only first line indented (0.75 cm), justified
-                space_before_quote = 24 if (idx_block > 0 and blocks[idx_block - 1].tag == "BOX") else 0
+                space_before_quote = 16 if (idx_block > 0 and blocks[idx_block - 1].tag == "BOX") else 0
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.RightIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = cm_to_pt(0.75)
@@ -1043,10 +1043,10 @@ class ULNWordRenderer:
             text_group_width_pt = printable_width_pt - 30.0
             left_offset_pt = 15.0  # 15pt left indent so text clears rounded top-left corner arc
 
-        top_padding_pt = 6.0
-        bottom_padding_pt = 6.0
+        top_padding_pt = 6.0  # Exact 2.12mm top padding
+        bottom_padding_pt = 6.0  # Exact 2.12mm bottom padding
 
-        sel.ParagraphFormat.SpaceBefore = 12  # Top margin clearance
+        sel.ParagraphFormat.SpaceBefore = 16  # 16pt space before line 0 gives 10pt clearance above top border (-6pt)
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
@@ -1062,7 +1062,7 @@ class ULNWordRenderer:
         p_start = sel.Range.Start
         box_anchor_range = doc.Range(p_start, p_start)
         
-        # Measure initial top Y-coordinate via pywin32 COM
+        # Measure initial top Y-coordinate via pywin32 COM at start of line 0 text
         top_y_pt = 0.0
         try:
             top_y_pt = box_anchor_range.Information(6)  # 6 = wdVerticalPositionRelativeToPage
@@ -1073,12 +1073,20 @@ class ULNWordRenderer:
         for i in range(0, N, cols):
             lines.append(words[i:i + cols])
 
+        last_line_y_pt = 0.0
         for idx_line, chunk in enumerate(lines):
             if idx_line > 0:
                 sel.ParagraphFormat.SpaceBefore = 2
 
             sel.ParagraphFormat.LineSpacingRule = 0
             sel.ParagraphFormat.SpaceAfter = 0
+
+            # Capture Y-coordinate at start of the LAST line of text BEFORE TypeParagraph
+            if idx_line == len(lines) - 1:
+                try:
+                    last_line_y_pt = sel.Range.Information(6)  # 6 = wdVerticalPositionRelativeToPage
+                except Exception:
+                    pass
 
             for idx_w, word_txt in enumerate(chunk):
                 sel.Font.Name = self.font_name
@@ -1092,20 +1100,12 @@ class ULNWordRenderer:
 
             sel.TypeParagraph()
 
-        # Measure final bottom Y-coordinate via pywin32 COM
-        bottom_y_pt = 0.0
-        try:
-            bottom_y_pt = sel.Range.Information(6)  # 6 = wdVerticalPositionRelativeToPage
-        except Exception:
-            pass
-
-        # Calculate exact text block height
-        font_line_height_pt = (self.font_size * 1.25) if hasattr(self, 'font_size') and self.font_size else 15.0
+        font_line_height_pt = (self.font_size * 1.15) if hasattr(self, 'font_size') and self.font_size else 14.0
         
-        if bottom_y_pt > top_y_pt > 0:
-            exact_text_height_pt = (bottom_y_pt - top_y_pt) + font_line_height_pt
+        if last_line_y_pt >= top_y_pt > 0:
+            exact_text_height_pt = (last_line_y_pt - top_y_pt) + font_line_height_pt
         else:
-            exact_text_height_pt = (len(lines) * 15.0) + 12.0
+            exact_text_height_pt = (len(lines) * font_line_height_pt)
 
         box_height_pt = exact_text_height_pt + top_padding_pt + bottom_padding_pt
         box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + 24.0)
@@ -1122,7 +1122,7 @@ class ULNWordRenderer:
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
             shape.Left = (0.0 if cols == 1 else (left_offset_pt - 12.0))
-            shape.Top = -top_padding_pt  # Top padding offset aligns top border flush above line 0
+            shape.Top = -top_padding_pt  # Top padding offset (-6pt) aligns top border 2mm above line 0 text
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
@@ -1134,10 +1134,9 @@ class ULNWordRenderer:
         except Exception as e:
             print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
 
-        # Set clean paragraph spacing after box shape so text following the box never overlaps
-        extra_space_below_pt = max(16.0, (box_height_pt - exact_text_height_pt) + 8.0)
+        # Set clean 16pt paragraph spacing after box shape so text following the box never overlaps
         sel.ParagraphFormat.LeftIndent = 0
-        sel.ParagraphFormat.SpaceBefore = extra_space_below_pt
+        sel.ParagraphFormat.SpaceBefore = 16
         sel.ParagraphFormat.SpaceAfter = 4
 
     def render_table(self, sel, doc, tdata, printable_width_cm: float, idx_block: int = 0, blocks: List[ULNBlock] = None):
@@ -1151,10 +1150,10 @@ class ULNWordRenderer:
             return
 
         if idx_block > 0 and blocks and blocks[idx_block - 1].tag == "BOX":
-            sel.ParagraphFormat.SpaceBefore = 24
+            sel.ParagraphFormat.SpaceBefore = 16
             sel.ParagraphFormat.SpaceAfter = 0
             sel.TypeParagraph()
-            sel.ParagraphFormat.SpaceBefore = 24
+            sel.ParagraphFormat.SpaceBefore = 16
             sel.ParagraphFormat.SpaceAfter = 4
         else:
             sel.ParagraphFormat.SpaceBefore = 12
