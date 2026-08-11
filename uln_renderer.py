@@ -540,6 +540,8 @@ class ULNWordRenderer:
                 else:
                     col2_tab_pos_cm = min_col2_start_cm
 
+                col1_needed_cm = col2_tab_pos_cm - base_indent_cm
+
                 space_before_tab2 = 24 if (idx_block > 0 and blocks[idx_block - 1].tag == "BOX") else 3
                 sel.ParagraphFormat.SpaceBefore = space_before_tab2
                 sel.ParagraphFormat.SpaceAfter = 3
@@ -999,8 +1001,9 @@ class ULNWordRenderer:
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
         Renders Word Bank / Callout Box using MS Word Rounded Rectangle Shape (msoShapeRoundedRectangle = 5)
-        tightly anchored around paragraph text (Center Manager standard), replacing table borders.
-        Applies 14pt SpaceBefore on line 0 and 14pt SpaceAfter on post-box paragraph for 0 text overlap.
+        tightly anchored around paragraph text, replacing table borders.
+        Measures exact top/bottom Y-coordinates via pywin32 COM (Information(6) = wdVerticalPositionRelativeToPage)
+        to calculate accurate shape height and dynamic post-box paragraph spacing (0 text overlap).
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
@@ -1040,9 +1043,10 @@ class ULNWordRenderer:
             text_group_width_pt = printable_width_pt - 30.0
             left_offset_pt = 15.0  # 15pt left indent so text clears rounded top-left corner arc
 
-        pad_2mm_pt = 6.0  # Exact 2.0mm+ padding (6.0pt = 2.12mm)
+        top_padding_pt = 6.0
+        bottom_padding_pt = 6.0
 
-        sel.ParagraphFormat.SpaceBefore = 16  # 16pt space before line 0 gives top clearance above shape.Top
+        sel.ParagraphFormat.SpaceBefore = 12  # Top margin clearance
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
@@ -1056,13 +1060,18 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.TabStops.Add(Position=tab_pos, Alignment=0)
 
         p_start = sel.Range.Start
+        box_anchor_range = doc.Range(p_start, p_start)
+        
+        # Measure initial top Y-coordinate via pywin32 COM
+        top_y_pt = 0.0
+        try:
+            top_y_pt = box_anchor_range.Information(6)  # 6 = wdVerticalPositionRelativeToPage
+        except Exception:
+            pass
 
         lines = []
         for i in range(0, N, cols):
             lines.append(words[i:i + cols])
-
-        num_rows = len(lines)
-        total_visual_lines = 0
 
         for idx_line, chunk in enumerate(lines):
             if idx_line > 0:
@@ -1077,27 +1086,31 @@ class ULNWordRenderer:
                 sel.Font.Bold = 1
                 sel.TypeText(word_txt)
                 
-                # Estimate visual lines if cols == 1 and sentence wraps
-                if cols == 1:
-                    lines_est = math.ceil((len(word_txt) * char_w_pt) / (printable_width_pt - 30.0))
-                    total_visual_lines += max(1, lines_est)
-                
                 if idx_w < len(chunk) - 1:
                     sel.Font.Bold = 0
                     sel.TypeText("\t")
 
             sel.TypeParagraph()
 
-        if cols > 1:
-            total_visual_lines = num_rows
+        # Measure final bottom Y-coordinate via pywin32 COM
+        bottom_y_pt = 0.0
+        try:
+            bottom_y_pt = sel.Range.Information(6)  # 6 = wdVerticalPositionRelativeToPage
+        except Exception:
+            pass
 
-        box_anchor_range = doc.Range(p_start, p_start)
+        # Calculate exact text block height
+        font_line_height_pt = (self.font_size * 1.25) if hasattr(self, 'font_size') and self.font_size else 15.0
+        
+        if bottom_y_pt > top_y_pt > 0:
+            exact_text_height_pt = (bottom_y_pt - top_y_pt) + font_line_height_pt
+        else:
+            exact_text_height_pt = (len(lines) * 15.0) + 12.0
+
+        box_height_pt = exact_text_height_pt + top_padding_pt + bottom_padding_pt
+        box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + 24.0)
 
         try:
-            box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + 24.0)
-            text_height_pt = (total_visual_lines * 15.0) + 32.0
-            box_height_pt = text_height_pt
-
             shape = doc.Shapes.AddShape(
                 5,  # msoShapeRoundedRectangle = 5
                 0,
@@ -1109,7 +1122,7 @@ class ULNWordRenderer:
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
             shape.Left = (0.0 if cols == 1 else (left_offset_pt - 12.0))
-            shape.Top = 0.0  # Flush paragraph top gives 16pt top padding above line 0 text
+            shape.Top = -top_padding_pt  # Top padding offset aligns top border flush above line 0
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
@@ -1121,9 +1134,10 @@ class ULNWordRenderer:
         except Exception as e:
             print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
 
-        # Set clean paragraph spacing after box shape
+        # Set clean paragraph spacing after box shape so text following the box never overlaps
+        extra_space_below_pt = max(16.0, (box_height_pt - exact_text_height_pt) + 8.0)
         sel.ParagraphFormat.LeftIndent = 0
-        sel.ParagraphFormat.SpaceBefore = 24
+        sel.ParagraphFormat.SpaceBefore = extra_space_below_pt
         sel.ParagraphFormat.SpaceAfter = 4
 
     def render_table(self, sel, doc, tdata, printable_width_cm: float, idx_block: int = 0, blocks: List[ULNBlock] = None):
