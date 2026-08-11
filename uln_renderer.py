@@ -676,9 +676,10 @@ class ULNWordRenderer:
 
             elif tag == "PIC":
                 if block.pic:
+                    space_before_pic = 14 if (self.last_rendered_tag == "BOX") else 6
                     sel.ParagraphFormat.LeftIndent = 0
                     sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.SpaceBefore = 6
+                    sel.ParagraphFormat.SpaceBefore = space_before_pic
                     sel.ParagraphFormat.SpaceAfter = 6
                     if block.pic.pos == "center":
                         sel.ParagraphFormat.Alignment = 1  # Center
@@ -1005,7 +1006,7 @@ class ULNWordRenderer:
         """
         Renders Word Bank / Callout Box using MS Word Rounded Rectangle Shape (msoShapeRoundedRectangle = 5)
         tightly anchored around paragraph text with rounded corners.
-        Applies symmetric 5pt top/bottom and 14pt left/right inner padding and 14pt post-box clearance.
+        Calculates compact, per-column box width centered on page with symmetric 5pt top/bottom and 14pt left/right padding.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
@@ -1018,15 +1019,16 @@ class ULNWordRenderer:
             return
 
         N = len(words)
-        max_len_all = max(len(w) for w in words)
         char_w_pt = 6.8  # 12pt bold Times New Roman character width
-        col_width_pt = (max_len_all * char_w_pt) + 14.0
 
-        # Calculate max columns that fit printable width safely
-        if col_width_pt >= (printable_width_pt - 20.0):
+        # Determine column count (1 to 5 cols)
+        max_len_all = max(len(w) for w in words)
+        est_single_col_w = (max_len_all * char_w_pt) + 14.0
+
+        if est_single_col_w >= (printable_width_pt - 28.0):
             cols = 1
         else:
-            max_fit_cols = max(1, int((printable_width_pt - 20.0) / col_width_pt))
+            max_fit_cols = max(1, int((printable_width_pt - 28.0) / est_single_col_w))
             if N <= 5:
                 cols = min(N, max_fit_cols)
             elif N <= 9:
@@ -1034,16 +1036,21 @@ class ULNWordRenderer:
             else:
                 cols = min(5, max_fit_cols)
 
-        if cols > 1:
-            last_col_words = [words[i] for i in range(cols - 1, N, cols)] if N >= cols else [words[-1]]
-            last_col_max_len = max(len(w) for w in last_col_words) if last_col_words else 8
-            last_col_text_w_pt = last_col_max_len * char_w_pt
+        # Calculate exact max text width per column
+        col_widths = []
+        for c in range(cols):
+            col_c_words = [words[i] for i in range(c, N, cols)] if N > c else [words[c]]
+            max_len_c = max(len(w) for w in col_c_words) if col_c_words else 5
+            col_widths.append(max_len_c * char_w_pt)
 
-            text_group_width_pt = min(printable_width_pt - 28.0, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
-            left_offset_pt = max(14.0, (printable_width_pt - text_group_width_pt) / 2.0)
-        else:
-            text_group_width_pt = printable_width_pt - 28.0
-            left_offset_pt = 14.0
+        # Calculate compact text group width and centered box width
+        inter_col_gap_pt = 20.0
+        text_group_width_pt = sum(col_widths) + max(0, (cols - 1) * inter_col_gap_pt)
+        needed_box_width_pt = text_group_width_pt + 28.0
+
+        box_width_pt = min(printable_width_pt, max(160.0, needed_box_width_pt))
+        left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+        text_left_indent_pt = left_offset_pt + 14.0
 
         top_padding_pt = 5.0     # Exact symmetric 5.0pt top padding inside box
         bottom_padding_pt = 5.0  # Exact symmetric 5.0pt bottom padding inside box
@@ -1053,15 +1060,16 @@ class ULNWordRenderer:
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
-        sel.ParagraphFormat.LeftIndent = left_offset_pt
-        sel.ParagraphFormat.RightIndent = left_offset_pt
+        sel.ParagraphFormat.LeftIndent = text_left_indent_pt
+        sel.ParagraphFormat.RightIndent = max(0.0, printable_width_pt - (left_offset_pt + box_width_pt - 14.0))
         sel.ParagraphFormat.KeepWithNext = True  # Group word bank text & box shape on same page
         sel.ParagraphFormat.TabStops.ClearAll()
 
         if cols > 1:
+            curr_tab = text_left_indent_pt
             for c in range(1, cols):
-                tab_pos = left_offset_pt + (col_width_pt * c)
-                sel.ParagraphFormat.TabStops.Add(Position=tab_pos, Alignment=0)
+                curr_tab += col_widths[c - 1] + inter_col_gap_pt
+                sel.ParagraphFormat.TabStops.Add(Position=curr_tab, Alignment=0)
 
         p_start = sel.Range.Start
         box_anchor_range = doc.Range(p_start, p_start)
@@ -1097,7 +1105,6 @@ class ULNWordRenderer:
         exact_text_height_pt = (num_rows * font_line_height_pt) + max(0, (num_rows - 1) * 1.5)
 
         box_height_pt = exact_text_height_pt + top_padding_pt + bottom_padding_pt
-        box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + 28.0)
 
         try:
             shape = doc.Shapes.AddShape(
@@ -1110,7 +1117,7 @@ class ULNWordRenderer:
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
-            shape.Left = (0.0 if cols == 1 else (left_offset_pt - 14.0))
+            shape.Left = left_offset_pt
             
             # Align top border of shape exactly 5pt above line 0 text inside paragraph (14.0 - 5.0 = 9.0pt)
             shape.Top = space_before_pt - top_padding_pt
@@ -1216,7 +1223,7 @@ class ULNWordRenderer:
                 from uln_parser import parse_inline_spans
                 spans = parse_inline_spans(txt_line)
 
-                sel.ParagraphFormat.SpaceBefore = 3
+                sel.ParagraphFormat.SpaceBefore = 14 if (idx_r == 0 and self.last_rendered_tag == "BOX") else 3
                 sel.ParagraphFormat.SpaceAfter = 3
                 sel.ParagraphFormat.LineSpacingRule = 0  # Single Line Spacing
                 sel.ParagraphFormat.Alignment = 0  # Left
@@ -1272,7 +1279,7 @@ class ULNWordRenderer:
 
             else:
                 # Tab stop fallback for simple text-only borderless tables
-                sel.ParagraphFormat.SpaceBefore = 3
+                sel.ParagraphFormat.SpaceBefore = 14 if (self.last_rendered_tag == "BOX") else 3
                 sel.ParagraphFormat.SpaceAfter = 3
                 self.setup_tab_stops(sel, num_cols, left_indent_cm=0.5, printable_width_cm=printable_width_cm)
 
@@ -1290,6 +1297,11 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.TabStops.ClearAll()
 
         else:
+            if self.last_rendered_tag == "BOX":
+                sel.ParagraphFormat.SpaceBefore = 14
+                sel.ParagraphFormat.SpaceAfter = 4
+                sel.TypeParagraph()
+
             table = doc.Tables.Add(Range=sel.Range, NumRows=num_rows, NumColumns=num_cols)
             try:
                 # wdAutoFitContent = 1: columns auto-fit to content width, prevents text wrapping
@@ -1373,7 +1385,7 @@ class ULNWordRenderer:
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.FirstLineIndent = 0
             sel.ParagraphFormat.LineSpacingRule = 0  # Single Line Spacing
-            sel.ParagraphFormat.SpaceBefore = 4
+            sel.ParagraphFormat.SpaceBefore = 14 if (i == 0 and self.last_rendered_tag == "BOX") else 4
             sel.ParagraphFormat.SpaceAfter = 2
             sel.ParagraphFormat.TabStops.ClearAll()
 
