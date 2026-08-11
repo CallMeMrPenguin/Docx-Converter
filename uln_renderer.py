@@ -332,7 +332,8 @@ class ULNWordRenderer:
                 # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct
                 blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', block.content, re.IGNORECASE)
                 # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank), ONLY for sentence transformation arrows (→ / ->) or 15+ long underscores
-                trailing_blank_symbol_match = re.match(r'^(?:(?:\s*(?:→|->).+?\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,}))|(?:.+?\s*_{15,}))\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL | re.IGNORECASE) if not blank_symbol_match else None
+                is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', block.content)) or bool(re.search(r'_{15,}', block.content))
+                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and is_transform_or_long) else None
 
                 if blank_symbol_match:
                     trailing_sym = blank_symbol_match.group(1).strip()
@@ -440,7 +441,8 @@ class ULNWordRenderer:
                 # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct
                 blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', block.content, re.IGNORECASE)
                 # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank), ONLY for sentence transformation arrows (→ / ->) or 15+ long underscores
-                trailing_blank_symbol_match = re.match(r'^(?:(?:\s*(?:→|->).+?\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,}))|(?:.+?\s*_{15,}))\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL | re.IGNORECASE) if not blank_symbol_match else None
+                is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', block.content)) or bool(re.search(r'_{15,}', block.content))
+                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and is_transform_or_long) else None
 
                 if blank_symbol_match:
                     trailing_sym = blank_symbol_match.group(1).strip()
