@@ -1054,7 +1054,7 @@ class ULNWordRenderer:
 
         top_padding_pt = 6.0     # Exact symmetric 6.0pt top padding inside box
         bottom_padding_pt = 6.0  # Exact symmetric 6.0pt bottom padding inside box
-        space_before_pt = 18.0   # 18.0pt space before line 0 paragraph
+        space_before_pt = 12.0   # 12.0pt space before line 0 paragraph
 
         sel.ParagraphFormat.SpaceBefore = space_before_pt
         sel.ParagraphFormat.SpaceAfter = 0
