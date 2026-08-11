@@ -1022,16 +1022,19 @@ class ULNWordRenderer:
             return
 
         N = len(words)
-        char_w_pt = 6.0  # 12pt bold Times New Roman character width
+
+        char_w_pt = 7.2  # 12pt bold Times New Roman character width estimate
+        inter_col_gap_pt = 18.0
+        margin_2mm_pt = cm_to_pt(0.2)  # Exact 2mm margins (5.67pt)
 
         # Determine column count (1 to 5 cols)
         max_len_all = max(len(w) for w in words)
-        est_single_col_w = (max_len_all * char_w_pt) + 12.0
+        est_single_col_w = (max_len_all * char_w_pt) + (2 * margin_2mm_pt) + 4.0
 
-        if est_single_col_w >= (printable_width_pt - 24.0):
+        if est_single_col_w >= (printable_width_pt - (2 * margin_2mm_pt)):
             cols = 1
         else:
-            max_fit_cols = max(1, int((printable_width_pt - 24.0) / est_single_col_w))
+            max_fit_cols = max(1, int((printable_width_pt - (2 * margin_2mm_pt)) / est_single_col_w))
             if N <= 5:
                 cols = min(N, max_fit_cols)
             elif N <= 9:
@@ -1047,11 +1050,10 @@ class ULNWordRenderer:
             col_widths.append(max_len_c * char_w_pt)
 
         # Calculate compact text group width and centered box width
-        inter_col_gap_pt = 16.0
         text_group_width_pt = sum(col_widths) + max(0, (cols - 1) * inter_col_gap_pt)
-        needed_box_width_pt = text_group_width_pt + 24.0
+        needed_box_width_pt = text_group_width_pt + (2 * margin_2mm_pt) + 6.0
 
-        box_width_pt = min(printable_width_pt, max(120.0, needed_box_width_pt))
+        box_width_pt = min(printable_width_pt, max(80.0, needed_box_width_pt))
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
         # Record anchor range in document body
@@ -1074,12 +1076,11 @@ class ULNWordRenderer:
             shape.WrapFormat.DistanceTop = 12.0
             shape.WrapFormat.DistanceBottom = 12.0
 
-
             tf = shape.TextFrame
-            tf.MarginTop = 6.0
-            tf.MarginBottom = 6.0
-            tf.MarginLeft = 12.0
-            tf.MarginRight = 12.0
+            tf.MarginTop = margin_2mm_pt
+            tf.MarginBottom = margin_2mm_pt
+            tf.MarginLeft = margin_2mm_pt
+            tf.MarginRight = margin_2mm_pt
             try:
                 tf.AutoSize = True
             except Exception:
@@ -1104,10 +1105,11 @@ class ULNWordRenderer:
             box_sel.ParagraphFormat.TabStops.ClearAll()
 
             if cols > 1:
-                avail_w = box_width_pt - 24.0
-                col_stride = avail_w / max(1, cols)
+                curr_tab = 0.0
                 for c in range(1, cols):
-                    box_sel.ParagraphFormat.TabStops.Add(Position=(c * col_stride), Alignment=0)
+                    curr_tab += col_widths[c - 1] + inter_col_gap_pt
+                    box_sel.ParagraphFormat.TabStops.Add(Position=curr_tab, Alignment=0)
+
 
             lines = []
             for i in range(0, N, cols):
