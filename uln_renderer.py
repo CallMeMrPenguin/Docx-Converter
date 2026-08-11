@@ -1158,12 +1158,14 @@ class ULNWordRenderer:
             end_range.Select()
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.RightIndent = 0
-            sel.ParagraphFormat.Alignment = 0  # Left
+            sel.ParagraphFormat.Alignment = 1  # Center align the box on the page
             sel.ParagraphFormat.SpaceBefore = 14.0
             sel.ParagraphFormat.SpaceAfter = 14.0
             sel.TypeParagraph()
             sel.ParagraphFormat.SpaceBefore = 0
             sel.ParagraphFormat.SpaceAfter = 4
+            sel.ParagraphFormat.Alignment = 0  # Reset to Left align for next text
+
 
 
 
