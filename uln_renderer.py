@@ -1021,17 +1021,16 @@ class ULNWordRenderer:
             return
 
         N = len(words)
-        char_w_pt = 6.0  # 12pt bold Times New Roman character width
-        inter_col_gap_pt = 16.0  # Clean column gap
+        char_w_pt = 6.8  # 12pt bold Times New Roman character width
 
         # Determine column count (1 to 5 cols)
         max_len_all = max(len(w) for w in words)
-        est_single_col_w = (max_len_all * char_w_pt) + 12.0
+        est_single_col_w = (max_len_all * char_w_pt) + 14.0
 
-        if est_single_col_w >= (printable_width_pt - 24.0):
+        if est_single_col_w >= (printable_width_pt - 28.0):
             cols = 1
         else:
-            max_fit_cols = max(1, int((printable_width_pt - 24.0) / est_single_col_w))
+            max_fit_cols = max(1, int((printable_width_pt - 28.0) / est_single_col_w))
             if N <= 5:
                 cols = min(N, max_fit_cols)
             elif N <= 9:
@@ -1047,12 +1046,13 @@ class ULNWordRenderer:
             col_widths.append(max_len_c * char_w_pt)
 
         # Calculate compact text group width and centered box width
+        inter_col_gap_pt = 20.0
         text_group_width_pt = sum(col_widths) + max(0, (cols - 1) * inter_col_gap_pt)
-        needed_box_width_pt = text_group_width_pt + 20.0
+        needed_box_width_pt = text_group_width_pt + 28.0
 
-        box_width_pt = min(printable_width_pt, max(40.0, needed_box_width_pt))
+        box_width_pt = min(printable_width_pt, max(160.0, needed_box_width_pt))
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
-        text_left_indent_pt = left_offset_pt + 10.0
+        text_left_indent_pt = left_offset_pt + 14.0
 
         top_padding_pt = 6.0     # Exact symmetric 6.0pt top padding inside box
         bottom_padding_pt = 6.0  # Exact symmetric 6.0pt bottom padding inside box
@@ -1063,7 +1063,7 @@ class ULNWordRenderer:
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
         sel.ParagraphFormat.LeftIndent = text_left_indent_pt
-        sel.ParagraphFormat.RightIndent = max(0.0, printable_width_pt - (left_offset_pt + box_width_pt - 10.0))
+        sel.ParagraphFormat.RightIndent = max(0.0, printable_width_pt - (left_offset_pt + box_width_pt - 14.0))
         sel.ParagraphFormat.KeepWithNext = True  # Group word bank text & box shape on same page
         sel.ParagraphFormat.TabStops.ClearAll()
 
@@ -1105,13 +1105,29 @@ class ULNWordRenderer:
 
             sel.TypeParagraph()
 
-        font_cap_height_pt = (self.font_size * 0.95) if hasattr(self, 'font_size') and self.font_size else 11.4
-        inter_line_pitch_pt = (self.font_size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
-        
-        # Total text block height = font cap height for line 0 + (inter-line pitch for additional lines)
-        exact_text_height_pt = font_cap_height_pt + max(0, (num_rows - 1) * (inter_line_pitch_pt + 1.5))
+        p_end = sel.Range.Start
 
-        box_height_pt = exact_text_height_pt + top_padding_pt + bottom_padding_pt
+        r_start = doc.Range(p_start, p_start)
+        r_end = doc.Range(max(p_start, p_end - 2), max(p_start, p_end - 2))
+
+        try:
+            top_y = r_start.Information(6)     # wdVerticalPositionRelativeToPage = 6
+            bottom_y = r_end.Information(6)  # wdVerticalPositionRelativeToPage = 6
+            line_h = (r_end.Font.Size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
+            measured_text_h = max(line_h, (bottom_y - top_y) + line_h)
+        except Exception:
+            font_line_h = (self.font_size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
+            measured_text_h = (num_rows * font_line_h) + max(0, (num_rows - 1) * 1.5)
+
+        box_height_pt = measured_text_h + top_padding_pt + bottom_padding_pt
+
+        # Detect top-of-page position to handle MS Word SpaceBefore suppression
+        top_margin_pt = cm_to_pt(self.margin_top)
+        try:
+            vert_pos_pt = box_anchor_range.Information(6)  # wdVerticalPositionRelativeToPage = 6
+            is_top_of_page = (vert_pos_pt <= top_margin_pt + 8.0)
+        except Exception:
+            is_top_of_page = False
 
         try:
             shape = doc.Shapes.AddShape(
@@ -1125,8 +1141,12 @@ class ULNWordRenderer:
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
             shape.Left = left_offset_pt
-            shape.Top = -top_padding_pt  # Always position top padding above paragraph anchor
-
+            
+            # Position shape.Top based on whether SpaceBefore was suppressed at top of page
+            if is_top_of_page:
+                shape.Top = -top_padding_pt
+            else:
+                shape.Top = space_before_pt - top_padding_pt  # 12.0 - 6.0 = 6.0pt
 
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
