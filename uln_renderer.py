@@ -1002,8 +1002,7 @@ class ULNWordRenderer:
         """
         Renders Word Bank / Callout Box using MS Word Rounded Rectangle Shape (msoShapeRoundedRectangle = 5)
         tightly anchored around paragraph text, replacing table borders.
-        Measures exact top/bottom Y-coordinates via pywin32 COM (Information(6) = wdVerticalPositionRelativeToPage)
-        to calculate accurate shape height and dynamic post-box paragraph spacing (0 text overlap).
+        Applies exact 2mm (6.0pt) top/bottom padding and precise relative shape offsets.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
@@ -1043,10 +1042,11 @@ class ULNWordRenderer:
             text_group_width_pt = printable_width_pt - 30.0
             left_offset_pt = 15.0  # 15pt left indent so text clears rounded top-left corner arc
 
-        top_padding_pt = 6.0  # Exact 2.12mm top padding
-        bottom_padding_pt = 6.0  # Exact 2.12mm bottom padding
+        top_padding_pt = 6.0    # Exact 2.12mm top padding inside box
+        bottom_padding_pt = 6.0 # Exact 2.12mm bottom padding inside box
+        space_before_pt = 16.0  # 16pt space before line 0 paragraph
 
-        sel.ParagraphFormat.SpaceBefore = 16  # 16pt space before line 0 gives 10pt clearance above top border (-6pt)
+        sel.ParagraphFormat.SpaceBefore = space_before_pt
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
@@ -1061,32 +1061,19 @@ class ULNWordRenderer:
 
         p_start = sel.Range.Start
         box_anchor_range = doc.Range(p_start, p_start)
-        
-        # Measure initial top Y-coordinate via pywin32 COM at start of line 0 text
-        top_y_pt = 0.0
-        try:
-            top_y_pt = box_anchor_range.Information(6)  # 6 = wdVerticalPositionRelativeToPage
-        except Exception:
-            pass
 
         lines = []
         for i in range(0, N, cols):
             lines.append(words[i:i + cols])
 
-        last_line_y_pt = 0.0
+        num_rows = len(lines)
+
         for idx_line, chunk in enumerate(lines):
             if idx_line > 0:
                 sel.ParagraphFormat.SpaceBefore = 2
 
             sel.ParagraphFormat.LineSpacingRule = 0
             sel.ParagraphFormat.SpaceAfter = 0
-
-            # Capture Y-coordinate at start of the LAST line of text BEFORE TypeParagraph
-            if idx_line == len(lines) - 1:
-                try:
-                    last_line_y_pt = sel.Range.Information(6)  # 6 = wdVerticalPositionRelativeToPage
-                except Exception:
-                    pass
 
             for idx_w, word_txt in enumerate(chunk):
                 sel.Font.Name = self.font_name
@@ -1100,12 +1087,10 @@ class ULNWordRenderer:
 
             sel.TypeParagraph()
 
-        font_line_height_pt = (self.font_size * 1.15) if hasattr(self, 'font_size') and self.font_size else 14.0
+        font_line_height_pt = (self.font_size * 1.2) if hasattr(self, 'font_size') and self.font_size else 14.4
         
-        if last_line_y_pt >= top_y_pt > 0:
-            exact_text_height_pt = (last_line_y_pt - top_y_pt) + font_line_height_pt
-        else:
-            exact_text_height_pt = (len(lines) * font_line_height_pt)
+        # Total text block height = (num_rows * font_line_height) + inter-line SpaceBefore (2pt between rows)
+        exact_text_height_pt = (num_rows * font_line_height_pt) + max(0, (num_rows - 1) * 2.0)
 
         box_height_pt = exact_text_height_pt + top_padding_pt + bottom_padding_pt
         box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + 24.0)
@@ -1122,7 +1107,9 @@ class ULNWordRenderer:
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
             shape.Left = (0.0 if cols == 1 else (left_offset_pt - 12.0))
-            shape.Top = -top_padding_pt  # Top padding offset (-6pt) aligns top border 2mm above line 0 text
+            
+            # Align top border of shape exactly 6pt (2mm) above line 0 text inside the paragraph
+            shape.Top = space_before_pt - top_padding_pt  # 16.0 - 6.0 = 10.0pt
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
@@ -1150,9 +1137,6 @@ class ULNWordRenderer:
             return
 
         if idx_block > 0 and blocks and blocks[idx_block - 1].tag == "BOX":
-            sel.ParagraphFormat.SpaceBefore = 16
-            sel.ParagraphFormat.SpaceAfter = 0
-            sel.TypeParagraph()
             sel.ParagraphFormat.SpaceBefore = 16
             sel.ParagraphFormat.SpaceAfter = 4
         else:
