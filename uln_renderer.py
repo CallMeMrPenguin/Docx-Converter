@@ -1111,23 +1111,21 @@ class ULNWordRenderer:
         r_end = doc.Range(max(p_start, p_end - 2), max(p_start, p_end - 2))
 
         try:
-            top_y = r_start.Information(6)     # wdVerticalPositionRelativeToPage = 6
-            bottom_y = r_end.Information(6)  # wdVerticalPositionRelativeToPage = 6
-            line_h = (r_end.Font.Size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
+            top_y = r_start.Information(6)   # wdVerticalPositionRelativeToPage = 6: absolute Y of first text line
+            bottom_y = r_end.Information(6)  # wdVerticalPositionRelativeToPage = 6: absolute Y of last text line top
+            line_h = self.font_size * 1.15   # estimated single line height in pt
             measured_text_h = max(line_h, (bottom_y - top_y) + line_h)
+
+            # Page-absolute positioning: shape.Top = first line Y - padding
+            shape_top_page = top_y - top_padding_pt
+            box_height_pt = measured_text_h + top_padding_pt + bottom_padding_pt
+            use_page_relative = True
         except Exception:
-            font_line_h = (self.font_size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
+            font_line_h = (self.font_size * 1.15) if self.font_size else 13.8
             measured_text_h = (num_rows * font_line_h) + max(0, (num_rows - 1) * 1.5)
-
-        box_height_pt = measured_text_h + top_padding_pt + bottom_padding_pt
-
-        # Detect top-of-page position to handle MS Word SpaceBefore suppression
-        top_margin_pt = cm_to_pt(self.margin_top)
-        try:
-            vert_pos_pt = box_anchor_range.Information(6)  # wdVerticalPositionRelativeToPage = 6
-            is_top_of_page = (vert_pos_pt <= top_margin_pt + 8.0)
-        except Exception:
-            is_top_of_page = False
+            box_height_pt = measured_text_h + top_padding_pt + bottom_padding_pt
+            shape_top_page = None
+            use_page_relative = False
 
         try:
             shape = doc.Shapes.AddShape(
@@ -1139,16 +1137,16 @@ class ULNWordRenderer:
                 Anchor=box_anchor_range
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
-            shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
-            shape.Left = left_offset_pt
-            
-            # Position shape.Top based on whether SpaceBefore was suppressed at top of page
-            if is_top_of_page:
-                shape.Top = -top_padding_pt
+
+            if use_page_relative and shape_top_page is not None:
+                # Pin shape to page-absolute Y so top/bottom padding are always exactly equal
+                shape.RelativeVerticalPosition = 1  # wdRelativeVerticalPositionPage = 1
+                shape.Top = shape_top_page
             else:
-                shape.Top = space_before_pt - top_padding_pt  # 12.0 - 6.0 = 6.0pt
+                shape.RelativeVerticalPosition = 2  # wdRelativeVerticalPositionParagraph = 2
+                shape.Top = space_before_pt - top_padding_pt
 
-
+            shape.Left = left_offset_pt
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
             shape.Line.ForeColor.RGB = 0  # Black border line
