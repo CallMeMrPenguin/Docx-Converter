@@ -1078,13 +1078,14 @@ class ULNWordRenderer:
 
             tf = shape.TextFrame
             tf.MarginTop = margin_2mm_pt
-            tf.MarginBottom = margin_2mm_pt
+            tf.MarginBottom = cm_to_pt(0.35)  # 3.5mm bottom margin for rounded corner clearance
             tf.MarginLeft = margin_2mm_pt
             tf.MarginRight = margin_2mm_pt
             try:
                 tf.AutoSize = True
             except Exception:
                 pass
+
 
             shape.Fill.Visible = False  # Transparent fill
             shape.Line.Weight = 1.0     # 1pt rounded border
