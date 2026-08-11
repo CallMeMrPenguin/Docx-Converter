@@ -1061,9 +1061,13 @@ class ULNWordRenderer:
         text_block_h = (num_rows * font_line_h) + max(0, (num_rows - 1) * 1.5)
         box_height_pt = text_block_h + (2 * margin_2mm_pt) + 6.0
 
-
-
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
+        try:
+            p_anchor.ParagraphFormat.SpaceBefore = 12.0
+            p_anchor.ParagraphFormat.SpaceAfter = 18.0
+        except Exception:
+            pass
+
 
         try:
             shape = doc.Shapes.AddShape(
@@ -1092,8 +1096,6 @@ class ULNWordRenderer:
             except Exception:
                 pass
 
-
-
             shape.Fill.Visible = False  # Transparent fill
             shape.Line.Weight = 1.0     # 1pt rounded border
             shape.Line.ForeColor.RGB = 0  # Black border line
@@ -1117,7 +1119,6 @@ class ULNWordRenderer:
                 for c in range(1, cols):
                     curr_tab += col_widths[c - 1] + inter_col_gap_pt
                     box_sel.ParagraphFormat.TabStops.Add(Position=curr_tab, Alignment=0)
-
 
             lines = []
             for i in range(0, N, cols):
@@ -1156,12 +1157,13 @@ class ULNWordRenderer:
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.RightIndent = 0
             sel.ParagraphFormat.Alignment = 0  # Left
-            sel.ParagraphFormat.SpaceBefore = 12.0
+            sel.ParagraphFormat.SpaceBefore = 0
             sel.ParagraphFormat.SpaceAfter = 4
         except Exception:
             pass
 
         self.last_rendered_tag = "BOX"
+
 
 
     def render_table(self, sel, doc, tdata, printable_width_cm: float, idx_block: int = 0, blocks: List[ULNBlock] = None):
