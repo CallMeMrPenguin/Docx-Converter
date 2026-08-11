@@ -1052,11 +1052,11 @@ class ULNWordRenderer:
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
         text_left_indent_pt = left_offset_pt + 14.0
 
-        top_padding_pt = 5.0     # Exact symmetric 5.0pt top padding inside box
-        bottom_padding_pt = 5.0  # Exact symmetric 5.0pt bottom padding inside box
-        space_before_pt = 14.0   # 14pt space before line 0 paragraph
+        top_padding_pt = 6.0     # Exact symmetric 6.0pt top padding inside box
+        bottom_padding_pt = 6.0  # Exact symmetric 6.0pt bottom padding inside box
 
-        sel.ParagraphFormat.SpaceBefore = space_before_pt
+        # Set SpaceBefore = 0 on line 0 so top-of-page layout engine never collapses SpaceBefore
+        sel.ParagraphFormat.SpaceBefore = 0
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
@@ -1085,7 +1085,11 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.SpaceBefore = 1.5
 
             sel.ParagraphFormat.LineSpacingRule = 0
-            sel.ParagraphFormat.SpaceAfter = 0
+            if idx_line == num_rows - 1:
+                # Set SpaceAfter = 18.0pt on last line of box text to push next paragraph 12pt below bottom border
+                sel.ParagraphFormat.SpaceAfter = 18.0
+            else:
+                sel.ParagraphFormat.SpaceAfter = 0
 
             for idx_w, word_txt in enumerate(chunk):
                 sel.Font.Name = self.font_name
@@ -1119,8 +1123,8 @@ class ULNWordRenderer:
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
             shape.Left = left_offset_pt
             
-            # Align top border of shape exactly 5pt above line 0 text inside paragraph (14.0 - 5.0 = 9.0pt)
-            shape.Top = space_before_pt - top_padding_pt
+            # Align top border of shape exactly 6pt above line 0 text (immune to top-of-page SpaceBefore collapse)
+            shape.Top = -top_padding_pt
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
@@ -1132,10 +1136,10 @@ class ULNWordRenderer:
         except Exception as e:
             print(f"[ULNRenderer] Warning drawing rounded shape around word box: {e}")
 
-        # Set clean 14pt paragraph spacing after box shape so text following the box never overlaps
+        # Reset selection indents
         sel.ParagraphFormat.LeftIndent = 0
         sel.ParagraphFormat.RightIndent = 0
-        sel.ParagraphFormat.SpaceBefore = 14
+        sel.ParagraphFormat.SpaceBefore = 0
         sel.ParagraphFormat.SpaceAfter = 4
         self.last_rendered_tag = "BOX"
 
@@ -1297,11 +1301,6 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.TabStops.ClearAll()
 
         else:
-            if self.last_rendered_tag == "BOX":
-                sel.ParagraphFormat.SpaceBefore = 14
-                sel.ParagraphFormat.SpaceAfter = 4
-                sel.TypeParagraph()
-
             table = doc.Tables.Add(Range=sel.Range, NumRows=num_rows, NumColumns=num_cols)
             try:
                 # wdAutoFitContent = 1: columns auto-fit to content width, prevents text wrapping
