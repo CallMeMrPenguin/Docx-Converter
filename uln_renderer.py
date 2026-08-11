@@ -626,7 +626,7 @@ class ULNWordRenderer:
 
             elif tag == "TABLE":
                 if block.table_data:
-                    self.render_table(sel, doc, block.table_data, printable_width_cm)
+                    self.render_table(sel, doc, block.table_data, printable_width_cm, idx_block=idx_block, blocks=blocks)
 
             elif tag == "PIC_GRID":
                 self.render_pic_grid(sel, doc, block.children, printable_width_cm)
@@ -867,10 +867,10 @@ class ULNWordRenderer:
         est_item_w_cm = (max_len * 0.165) + 0.4
 
         if N >= 4:
-            # Standard 4-choice options <= 18 chars easily fit in 4 columns across 16cm printable width
-            if max_len <= 18 or (est_item_w_cm * 4) <= remaining_width_cm:
+            # Standard 4-choice options <= 24 chars easily fit in 4 columns on 1 line across 16cm printable width
+            if max_len <= 24 or (est_item_w_cm * 4) <= (remaining_width_cm + 0.5):
                 return 4
-            elif (est_item_w_cm * 2) <= remaining_width_cm:
+            elif (est_item_w_cm * 2) <= (remaining_width_cm + 0.5):
                 return 2
             else:
                 return 1
@@ -1014,14 +1014,14 @@ class ULNWordRenderer:
 
         N = len(words)
         max_len_all = max(len(w) for w in words)
-        char_w_pt = 5.6  # Average 12pt character width
-        col_width_pt = (max_len_all * char_w_pt) + 12.0
+        char_w_pt = 6.8  # 12pt bold Times New Roman character width
+        col_width_pt = (max_len_all * char_w_pt) + 16.0
 
         # Calculate max columns that fit printable width safely
         if col_width_pt >= (printable_width_pt - 20.0):
             cols = 1
         else:
-            max_fit_cols = max(1, int(printable_width_pt / col_width_pt))
+            max_fit_cols = max(1, int((printable_width_pt - 20.0) / col_width_pt))
             if N <= 5:
                 cols = min(N, max_fit_cols)
             elif N <= 9:
@@ -1034,15 +1034,15 @@ class ULNWordRenderer:
             last_col_max_len = max(len(w) for w in last_col_words) if last_col_words else 8
             last_col_text_w_pt = last_col_max_len * char_w_pt
 
-            text_group_width_pt = min(printable_width_pt, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
-            left_offset_pt = max(0.0, (printable_width_pt - text_group_width_pt) / 2.0)
+            text_group_width_pt = min(printable_width_pt - 30.0, ((cols - 1) * col_width_pt) + last_col_text_w_pt)
+            left_offset_pt = max(15.0, (printable_width_pt - text_group_width_pt) / 2.0)
         else:
-            text_group_width_pt = printable_width_pt - 28.0
-            left_offset_pt = 14.0  # 14pt left indent so text clears rounded top-left corner arc
+            text_group_width_pt = printable_width_pt - 30.0
+            left_offset_pt = 15.0  # 15pt left indent so text clears rounded top-left corner arc
 
-        pad_2mm_pt = 5.7  # Exact 2.0mm padding (2mm * 2.83465 = 5.67pt)
+        pad_2mm_pt = 6.0  # Exact 2.0mm+ padding (6.0pt = 2.12mm)
 
-        sel.ParagraphFormat.SpaceBefore = 14  # 14pt space before line 0
+        sel.ParagraphFormat.SpaceBefore = 16  # 16pt space before line 0 gives top clearance above shape.Top
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
@@ -1094,8 +1094,8 @@ class ULNWordRenderer:
         box_anchor_range = doc.Range(p_start, p_start)
 
         try:
-            box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + (pad_2mm_pt * 2))
-            text_height_pt = (total_visual_lines * 15.0) + (20.0 if cols == 1 else (pad_2mm_pt * 2))
+            box_width_pt = printable_width_pt if cols == 1 else (text_group_width_pt + 24.0)
+            text_height_pt = (total_visual_lines * 15.0) + 32.0
             box_height_pt = text_height_pt
 
             shape = doc.Shapes.AddShape(
@@ -1108,8 +1108,8 @@ class ULNWordRenderer:
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
-            shape.Left = (0.0 if cols == 1 else (left_offset_pt - pad_2mm_pt))
-            shape.Top = 2.0  # 2pt below paragraph top
+            shape.Left = (0.0 if cols == 1 else (left_offset_pt - 12.0))
+            shape.Top = 0.0  # Flush paragraph top gives 16pt top padding above line 0 text
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
@@ -1126,7 +1126,7 @@ class ULNWordRenderer:
         sel.ParagraphFormat.SpaceBefore = 24
         sel.ParagraphFormat.SpaceAfter = 4
 
-    def render_table(self, sel, doc, tdata, printable_width_cm: float):
+    def render_table(self, sel, doc, tdata, printable_width_cm: float, idx_block: int = 0, blocks: List[ULNBlock] = None):
         """
         Renders [TABLE] block structure:
         - If borderless: uses divided paragraph tab stop columns with custom spacing.
@@ -1136,8 +1136,15 @@ class ULNWordRenderer:
         if not tdata.rows:
             return
 
-        sel.ParagraphFormat.SpaceBefore = 24
-        sel.ParagraphFormat.SpaceAfter = 4
+        if idx_block > 0 and blocks and blocks[idx_block - 1].tag == "BOX":
+            sel.ParagraphFormat.SpaceBefore = 24
+            sel.ParagraphFormat.SpaceAfter = 0
+            sel.TypeParagraph()
+            sel.ParagraphFormat.SpaceBefore = 24
+            sel.ParagraphFormat.SpaceAfter = 4
+        else:
+            sel.ParagraphFormat.SpaceBefore = 12
+            sel.ParagraphFormat.SpaceAfter = 4
 
         num_rows = len(tdata.rows)
         num_cols = max(len(r.cells) for r in tdata.rows)
