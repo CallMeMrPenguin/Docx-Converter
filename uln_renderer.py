@@ -253,18 +253,9 @@ class ULNWordRenderer:
                 pass
 
     def setup_tab_stops(self, sel, num_cols: int, left_indent_cm: float, printable_width_cm: float, max_item_len: int = 0) -> float:
-        """Calculates exact distance formulas for tab stops so text NEVER wraps unexpectedly."""
+        """Calculates exact equal column division for tab stops so option columns ALWAYS align vertically across all questions."""
         remaining_width_cm = printable_width_cm - left_indent_cm
-
-        # If short options in 4 columns, use tighter tab stops so A, B, C, D sit closer together on 1 line
-        if num_cols == 4 and max_item_len > 0 and max_item_len <= 15:
-            compact_col_w = max(2.8, (max_item_len * 0.175) + 0.6)
-            if (left_indent_cm + (compact_col_w * 4)) <= printable_width_cm:
-                col_width_cm = compact_col_w
-            else:
-                col_width_cm = remaining_width_cm / 4.0
-        else:
-            col_width_cm = remaining_width_cm / max(1, num_cols)
+        col_width_cm = remaining_width_cm / max(1, num_cols)
 
         sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
         sel.ParagraphFormat.TabStops.ClearAll()
@@ -344,6 +335,8 @@ class ULNWordRenderer:
 
                 if blank_symbol_match:
                     trailing_sym = blank_symbol_match.group(1).strip()
+                    if idx_block > 0 and blocks[idx_block - 1].tag == "BOX":
+                        sel.ParagraphFormat.SpaceBefore = 24
                     # Flush right standalone blank line with dynamic Tab Leader 4 (wdTabLeaderUnderscore = 4)
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
@@ -361,6 +354,21 @@ class ULNWordRenderer:
                     # Option B: text before <blank> rendered inline, blank filled dynamically to right margin via Leader=4
                     text_part = trailing_blank_symbol_match.group(1)
                     trailing_sym = trailing_blank_symbol_match.group(2).strip()
+
+                    q_num_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', text_part, re.IGNORECASE)
+                    if q_num_match and q_num_match.group(4).strip():
+                        self.apply_native_numbered_list(word, sel)
+                        if idx_block > 0 and blocks[idx_block - 1].tag == "BOX":
+                            sel.ParagraphFormat.SpaceBefore = 24
+                        text_part = q_num_match.group(4).strip()
+                    else:
+                        try:
+                            sel.Range.ListFormat.RemoveNumbers()
+                        except Exception:
+                            pass
+                        if idx_block > 0 and blocks[idx_block - 1].tag == "BOX":
+                            sel.ParagraphFormat.SpaceBefore = 24
+
                     from uln_parser import parse_inline_spans as _pis
                     text_spans = _pis(text_part)
                     sel.ParagraphFormat.TabStops.ClearAll()
@@ -532,9 +540,8 @@ class ULNWordRenderer:
                 else:
                     col2_tab_pos_cm = min_col2_start_cm
 
-                col1_needed_cm = col2_tab_pos_cm - base_indent_cm
-
-                sel.ParagraphFormat.SpaceBefore = 3
+                space_before_tab2 = 24 if (idx_block > 0 and blocks[idx_block - 1].tag == "BOX") else 3
+                sel.ParagraphFormat.SpaceBefore = space_before_tab2
                 sel.ParagraphFormat.SpaceAfter = 3
 
                 # Check if Column 2 is an answer blank (e.g. ______ or <blank> or [BLANK])
