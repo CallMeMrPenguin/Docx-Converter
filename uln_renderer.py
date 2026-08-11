@@ -1057,9 +1057,10 @@ class ULNWordRenderer:
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
         num_rows = math.ceil(N / cols)
-        font_line_h = (self.font_size * 1.15) if hasattr(self, 'font_size') and self.font_size else 13.8
-        text_block_h = (num_rows * font_line_h) + max(0, (num_rows - 1) * 1.5)
-        box_height_pt = text_block_h + (2 * margin_2mm_pt) + 6.0
+        font_line_h = (self.font_size * 1.45) if hasattr(self, 'font_size') and self.font_size else 17.4
+        text_block_h = (num_rows * font_line_h) + max(0, (num_rows - 1) * 2.0)
+        box_height_pt = text_block_h + (2 * margin_2mm_pt) + 14.0
+
 
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
 
