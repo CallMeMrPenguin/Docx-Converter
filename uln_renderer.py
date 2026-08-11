@@ -1021,10 +1021,7 @@ class ULNWordRenderer:
             return
 
         N = len(words)
-        # 12pt bold Times New Roman empirical average character width.
-        # char_w_pt controls col_widths -> box_width -> RightIndent -> shape.Width all together,
-        # so this is the ONLY safe knob to tune right-side visual padding without decoupling.
-        char_w_pt = 6.0
+        char_w_pt = 6.8  # 12pt bold Times New Roman character width
 
         # Determine column count (1 to 5 cols)
         max_len_all = max(len(w) for w in words)
@@ -1114,19 +1111,21 @@ class ULNWordRenderer:
         r_end = doc.Range(max(p_start, p_end - 2), max(p_start, p_end - 2))
 
         try:
-            line_h   = self.font_size * 1.15
-            top_y    = r_start.Information(6)   # wdVerticalPositionRelativeToPage: absolute page Y
-            bottom_y = r_end.Information(6)
+            top_y = r_start.Information(6)   # wdVerticalPositionRelativeToPage = 6: absolute Y of first text line
+            bottom_y = r_end.Information(6)  # wdVerticalPositionRelativeToPage = 6: absolute Y of last text line top
+            line_h = self.font_size * 1.15   # estimated single line height in pt
             measured_text_h = max(line_h, (bottom_y - top_y) + line_h)
+
+            # Page-absolute positioning: shape.Top = first line Y - padding
+            shape_top_page = top_y - top_padding_pt
             box_height_pt = measured_text_h + top_padding_pt + bottom_padding_pt
-            shape_top_abs = top_y - top_padding_pt   # page-absolute Y of box top border
-            use_page_y = True
+            use_page_relative = True
         except Exception:
-            line_h = (self.font_size * 1.15) if self.font_size else 13.8
-            measured_text_h = (num_rows * line_h) + max(0, (num_rows - 1) * 1.5)
+            font_line_h = (self.font_size * 1.15) if self.font_size else 13.8
+            measured_text_h = (num_rows * font_line_h) + max(0, (num_rows - 1) * 1.5)
             box_height_pt = measured_text_h + top_padding_pt + bottom_padding_pt
-            shape_top_abs = None
-            use_page_y = False
+            shape_top_page = None
+            use_page_relative = False
 
         try:
             shape = doc.Shapes.AddShape(
@@ -1138,15 +1137,16 @@ class ULNWordRenderer:
                 Anchor=box_anchor_range
             )
             shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
-            shape.Left = left_offset_pt
 
-            if use_page_y and shape_top_abs is not None:
+            if use_page_relative and shape_top_page is not None:
+                # Pin shape to page-absolute Y so top/bottom padding are always exactly equal
                 shape.RelativeVerticalPosition = 1  # wdRelativeVerticalPositionPage = 1
-                shape.Top = shape_top_abs
+                shape.Top = shape_top_page
             else:
                 shape.RelativeVerticalPosition = 2  # wdRelativeVerticalPositionParagraph = 2
                 shape.Top = space_before_pt - top_padding_pt
 
+            shape.Left = left_offset_pt
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
             shape.Line.ForeColor.RGB = 0  # Black border line
