@@ -1054,9 +1054,9 @@ class ULNWordRenderer:
 
         top_padding_pt = 6.0     # Exact symmetric 6.0pt top padding inside box
         bottom_padding_pt = 6.0  # Exact symmetric 6.0pt bottom padding inside box
+        space_before_pt = 18.0   # 18.0pt space before line 0 paragraph
 
-        # Set SpaceBefore = 0 on line 0 so top-of-page layout engine never collapses SpaceBefore
-        sel.ParagraphFormat.SpaceBefore = 0
+        sel.ParagraphFormat.SpaceBefore = space_before_pt
         sel.ParagraphFormat.SpaceAfter = 0
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0  # Left align inside tab stops
@@ -1110,6 +1110,14 @@ class ULNWordRenderer:
 
         box_height_pt = exact_text_height_pt + top_padding_pt + bottom_padding_pt
 
+        # Detect top-of-page position to handle MS Word SpaceBefore suppression
+        top_margin_pt = cm_to_pt(self.margin_top)
+        try:
+            vert_pos_pt = box_anchor_range.Information(6)  # wdVerticalPositionRelativeToPage = 6
+            is_top_of_page = (vert_pos_pt <= top_margin_pt + 8.0)
+        except Exception:
+            is_top_of_page = False
+
         try:
             shape = doc.Shapes.AddShape(
                 5,  # msoShapeRoundedRectangle = 5
@@ -1123,8 +1131,11 @@ class ULNWordRenderer:
             shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
             shape.Left = left_offset_pt
             
-            # Align top border of shape exactly 6pt above line 0 text (immune to top-of-page SpaceBefore collapse)
-            shape.Top = -top_padding_pt
+            # Position shape.Top based on whether SpaceBefore was suppressed at top of page
+            if is_top_of_page:
+                shape.Top = -top_padding_pt
+            else:
+                shape.Top = space_before_pt - top_padding_pt  # 18.0 - 6.0 = 12.0pt
 
             shape.Fill.Visible = False  # Transparent fill so words display cleanly
             shape.Line.Weight = 1.0     # 1pt rounded border
