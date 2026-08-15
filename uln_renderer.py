@@ -1066,27 +1066,26 @@ class ULNWordRenderer:
         for c in range(cols):
             col_c_words = [r[c] for r in rows_of_words if len(r) > c]
             max_len_c = max((len(w) for w in col_c_words), default=5)
-            # Generous character width multiplier (6.5pt + 6pt safety buffer for wide chars in 12pt bold Times New Roman)
-            col_w = max(30.0, (max_len_c * 6.5) + 6.0)
+            # Comfortable character width multiplier (7.5pt + 14pt buffer for 12pt bold Times New Roman)
+            col_w = max(40.0, (max_len_c * 7.5) + 14.0)
             col_widths.append(col_w)
 
-        gap_pt = 22.0   # Generous visible gap between columns
-        margin_pt = 14.0 # Generous symmetric 14pt inner padding so rounded corners don't crowd text
+        gap_pt = 26.0   # Generous visible gap between columns
+        pad_pt = 16.0   # Generous symmetric 16pt inner padding on left & right
 
         tab_stops = []
-        curr_tab = 0.0
+        curr_tab = pad_pt
         for c in range(cols - 1):
             curr_tab += col_widths[c] + gap_pt
             tab_stops.append(curr_tab)
 
-        inner_width_pt = (tab_stops[-1] if tab_stops else 0.0) + col_widths[-1]
-        box_width_pt = min(printable_width_pt, inner_width_pt + (2 * margin_pt))
+        inner_end_pt = (tab_stops[-1] if tab_stops else pad_pt) + col_widths[-1]
+        box_width_pt = min(printable_width_pt, inner_end_pt + pad_pt)
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
         num_rows = len(rows_of_words)
-        font_line_h = 17.5
-        box_height_pt = (num_rows * font_line_h) + (2 * margin_pt) + 6.0
-
+        font_line_h = 18.0
+        box_height_pt = (num_rows * font_line_h) + (2 * pad_pt) + 4.0
 
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
         try:
@@ -1113,10 +1112,11 @@ class ULNWordRenderer:
             shape.WrapFormat.DistanceBottom = 12.0
 
             tf = shape.TextFrame
-            tf.MarginTop = margin_pt
-            tf.MarginBottom = margin_pt
-            tf.MarginLeft = margin_pt
-            tf.MarginRight = margin_pt
+            # TextFrame inner margins fixed strictly at 0mm (0.0 pt)
+            tf.MarginTop = 0.0
+            tf.MarginBottom = 0.0
+            tf.MarginLeft = 0.0
+            tf.MarginRight = 0.0
             try:
                 tf.AutoSize = False
             except Exception:
@@ -1134,7 +1134,9 @@ class ULNWordRenderer:
             box_sel.Font.Bold = 1
             box_sel.Font.Color = 0  # Pure Black RGB(0,0,0)
 
-            box_sel.ParagraphFormat.SpaceBefore = 0
+            box_sel.ParagraphFormat.LeftIndent = pad_pt
+            box_sel.ParagraphFormat.FirstLineIndent = 0
+            box_sel.ParagraphFormat.SpaceBefore = 8.0
             box_sel.ParagraphFormat.SpaceAfter = 0
             box_sel.ParagraphFormat.LineSpacingRule = 0
             box_sel.ParagraphFormat.Alignment = 0  # Left align
@@ -1146,7 +1148,9 @@ class ULNWordRenderer:
             from uln_parser import parse_inline_spans
             for idx_line, row_words in enumerate(rows_of_words):
                 if idx_line > 0:
-                    box_sel.ParagraphFormat.SpaceBefore = 1.5
+                    box_sel.ParagraphFormat.SpaceBefore = 2.0
+                else:
+                    box_sel.ParagraphFormat.SpaceBefore = 8.0
 
                 box_sel.ParagraphFormat.SpaceAfter = 0
 
@@ -1168,6 +1172,7 @@ class ULNWordRenderer:
 
         except Exception as e:
             print(f"[ULNRenderer] Warning creating TextFrame box shape: {e}")
+
 
         # Move selection back to document main story below the inline shape
         try:
