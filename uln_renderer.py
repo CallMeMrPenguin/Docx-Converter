@@ -1067,25 +1067,24 @@ class ULNWordRenderer:
             col_c_words = [r[c] for r in rows_of_words if len(r) > c]
             max_len_c = max((len(w) for w in col_c_words), default=5)
             # Comfortable character width multiplier (7.5pt + 14pt buffer for 12pt bold Times New Roman)
-            col_w = max(40.0, (max_len_c * 7.5) + 14.0)
+            col_w = max(45.0, (max_len_c * 7.5) + 14.0)
             col_widths.append(col_w)
 
         gap_pt = 26.0   # Generous visible gap between columns
-        pad_pt = 16.0   # Generous symmetric 16pt inner padding on left & right
 
         tab_stops = []
-        curr_tab = pad_pt
+        curr_tab = 0.0
         for c in range(cols - 1):
             curr_tab += col_widths[c] + gap_pt
             tab_stops.append(curr_tab)
 
-        inner_end_pt = (tab_stops[-1] if tab_stops else pad_pt) + col_widths[-1]
-        box_width_pt = min(printable_width_pt, inner_end_pt + pad_pt)
+        inner_end_pt = (tab_stops[-1] if tab_stops else 0.0) + col_widths[-1]
+        box_width_pt = min(printable_width_pt, inner_end_pt)
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
         num_rows = len(rows_of_words)
-        font_line_h = 18.0
-        box_height_pt = (num_rows * font_line_h) + (2 * pad_pt) + 4.0
+        font_line_h = 16.0
+        box_height_pt = (num_rows * font_line_h) + 4.0
 
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
         try:
@@ -1134,12 +1133,14 @@ class ULNWordRenderer:
             box_sel.Font.Bold = 1
             box_sel.Font.Color = 0  # Pure Black RGB(0,0,0)
 
-            box_sel.ParagraphFormat.LeftIndent = pad_pt
-            box_sel.ParagraphFormat.FirstLineIndent = 0
-            box_sel.ParagraphFormat.SpaceBefore = 8.0
-            box_sel.ParagraphFormat.SpaceAfter = 0
-            box_sel.ParagraphFormat.LineSpacingRule = 0
-            box_sel.ParagraphFormat.Alignment = 0  # Left align
+            # Strict Paragraph settings: Left=0mm, Right=0mm, Special=(none), Before=0pt, After=0pt, Single spacing
+            box_sel.ParagraphFormat.Alignment = 0  # Left
+            box_sel.ParagraphFormat.LeftIndent = 0.0
+            box_sel.ParagraphFormat.RightIndent = 0.0
+            box_sel.ParagraphFormat.FirstLineIndent = 0.0
+            box_sel.ParagraphFormat.SpaceBefore = 0.0
+            box_sel.ParagraphFormat.SpaceAfter = 0.0
+            box_sel.ParagraphFormat.LineSpacingRule = 0  # wdLineSpaceSingle = 0
             box_sel.ParagraphFormat.TabStops.ClearAll()
 
             for tab_pos in tab_stops:
@@ -1147,12 +1148,8 @@ class ULNWordRenderer:
 
             from uln_parser import parse_inline_spans
             for idx_line, row_words in enumerate(rows_of_words):
-                if idx_line > 0:
-                    box_sel.ParagraphFormat.SpaceBefore = 2.0
-                else:
-                    box_sel.ParagraphFormat.SpaceBefore = 8.0
-
-                box_sel.ParagraphFormat.SpaceAfter = 0
+                box_sel.ParagraphFormat.SpaceBefore = 0.0
+                box_sel.ParagraphFormat.SpaceAfter = 0.0
 
                 for idx_w, word_txt in enumerate(row_words):
                     w_spans = parse_inline_spans(word_txt, default_bold=True)
@@ -1172,6 +1169,7 @@ class ULNWordRenderer:
 
         except Exception as e:
             print(f"[ULNRenderer] Warning creating TextFrame box shape: {e}")
+
 
 
         # Move selection back to document main story below the inline shape
