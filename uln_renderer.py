@@ -674,19 +674,66 @@ class ULNWordRenderer:
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
 
-                    self.write_inline_spans(sel, block.col1_spans)
+                    # Format Column 1 with Question Numbering if present (e.g. #1. or Question #1.)
+                    pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
+                    if q_num is not None:
+                        eff_pref = pref if (pref and pref.strip()) else (self.question_prefix or "")
+                        if eff_pref and eff_pref.strip():
+                            eff_pref = f"{eff_pref.strip()} "
+                        else:
+                            eff_pref = ""
+                        eff_delim = self.question_delimiter if (self.question_delimiter and self.question_delimiter != ".") else (delim or ".")
+                        num_str = f"{eff_pref}{q_num}{eff_delim} "
+
+                        sel.Font.Name = self.font_name
+                        sel.Font.Size = self.font_size
+                        sel.Font.Bold = 1
+                        sel.Font.Italic = 0
+                        sel.Font.Underline = 0
+                        q_color_int = parse_color_to_rgb_int(self.question_color)
+                        if q_color_int is not None:
+                            sel.Font.Color = q_color_int
+                        else:
+                            sel.Font.Color = 0
+                        sel.TypeText(num_str)
+                        sel.Font.Bold = 0
+                        sel.Font.Color = 0
+
+                        from uln_parser import parse_inline_spans
+                        c1_spans = parse_inline_spans(c1_body.strip())
+                        self.write_inline_spans(sel, c1_spans)
+                    else:
+                        self.write_inline_spans(sel, block.col1_spans)
+
                     sel.TypeText("\t")
 
                     if m_opt and not block.pic:
+                        opt_let = f"{m_opt.group(1).upper()}."
+                        opt_body = m_opt.group(2).strip()
+
+                        sel.Font.Name = self.font_name
+                        sel.Font.Size = self.font_size
+                        sel.Font.Bold = 1
+                        sel.Font.Italic = 0
+                        sel.Font.Underline = 0
+                        opt_color_int = parse_color_to_rgb_int(self.opt_color)
+                        if opt_color_int is not None:
+                            sel.Font.Color = opt_color_int
+                        else:
+                            sel.Font.Color = 0
+                        sel.TypeText(f"{opt_let} ")
+                        sel.Font.Bold = 0
+                        sel.Font.Color = 0
+
                         from uln_parser import parse_inline_spans as _pis
-                        col2_formatted = f"**{m_opt.group(1).upper()}.** {m_opt.group(2).strip()}"
-                        self.write_inline_spans(sel, _pis(col2_formatted))
+                        self.write_inline_spans(sel, _pis(opt_body))
                     elif block.pic:
                         self.render_pic(sel, doc, block.pic)
                     else:
                         self.write_inline_spans(sel, block.col2_spans)
 
                     sel.TypeParagraph()
+
 
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
