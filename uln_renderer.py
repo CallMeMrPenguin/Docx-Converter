@@ -1093,80 +1093,48 @@ class ULNWordRenderer:
         """
         Renders Word Bank / Callout Box with words typed directly INSIDE a MS Word Rounded Rectangle Shape TextFrame (msoShapeRoundedRectangle = 5).
         Anchors the box to paragraph line flow with wdWrapTopBottom so adding/deleting lines above moves the box AND its text together seamlessly.
-        Calculates exact per-column text widths with snug tab stops and symmetric 10pt margins so there is ZERO excess space on the right.
+        Configures symmetric margins and equal column slot widths for clean, balanced centering without excess space on the right.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
-        raw_text = block.content.strip()
-        if not raw_text:
-            return
-
-        # Check if user provided multi-line structured input
-        if '\n' in raw_text:
-            raw_lines = [l.strip() for l in raw_text.split('\n') if l.strip()]
-            rows_of_words = []
-            for l in raw_lines:
-                if '|' in l:
-                    row = [w.strip() for w in l.split('|') if w.strip()]
-                else:
-                    row = [w.strip() for w in l.split() if w.strip()]
-                if row:
-                    rows_of_words.append(row)
-        elif '|' in raw_text:
-            words = [w.strip() for w in raw_text.split('|') if w.strip()]
-            rows_of_words = [words]
+        
+        if '|' in block.content:
+            words = [w.strip() for w in block.content.split('|') if w.strip()]
         else:
-            words = [w.strip() for w in raw_text.split() if w.strip()]
-            rows_of_words = [words]
+            words = [w.strip() for w in block.content.split() if w.strip()]
 
-        if not rows_of_words:
+        if not words:
             return
 
-        all_words = [w for r in rows_of_words for w in r]
-        N = len(all_words)
-        if N == 0:
-            return
+        N = len(words)
 
-        is_flat = len(rows_of_words) == 1 or all(len(r) == 1 for r in rows_of_words)
-        if is_flat:
-            if N <= 4:
-                cols = N
+        char_w_pt = 6.2  # 12pt bold Times New Roman character width estimate
+        margin_pt = 8.0  # Symmetric 8pt inner margins
+
+        # Determine column count (1 to 5 cols)
+        max_len_all = max(len(w) for w in words)
+        est_slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
+
+        if est_slot_w >= (printable_width_pt - (2 * margin_pt)):
+            cols = 1
+        else:
+            max_fit_cols = max(1, int((printable_width_pt - (2 * margin_pt)) / est_slot_w))
+            if N <= 5:
+                cols = min(N, max_fit_cols)
             elif N <= 8:
-                cols = min(4, N)
+                cols = min(4, max_fit_cols)
             elif N <= 10:
-                cols = 5
+                cols = min(5, max_fit_cols)
             else:
-                cols = 4
+                cols = min(4, max_fit_cols)
 
-            rows_of_words = [all_words[i:i + cols] for i in range(0, N, cols)]
-        else:
-            cols = max(len(r) for r in rows_of_words)
-
-        # Calculate exact max text width per column
-        col_widths = []
-        for c in range(cols):
-            col_c_words = [r[c] for r in rows_of_words if len(r) > c]
-            max_len_c = max((len(w) for w in col_c_words), default=5)
-            # Adjust column width multiplier and buffer here
-            col_w = max(32.0, (max_len_c * 6.2) + 8.0)
-            col_widths.append(col_w)
-
-        gap_pt = 17.0   # Adjust spacing between columns here (e.g. 12.0 to 20.0 pt)
-
-
-
-        tab_stops = []
-        curr_tab = 0.0
-        for c in range(cols - 1):
-            curr_tab += col_widths[c] + gap_pt
-            tab_stops.append(curr_tab)
-
-        inner_end_pt = (tab_stops[-1] if tab_stops else 0.0) + col_widths[-1]
-        box_width_pt = min(printable_width_pt, inner_end_pt)
+        slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
+        inner_w = slot_w * cols
+        box_width_pt = min(printable_width_pt, inner_w + (2 * margin_pt))
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
-        num_rows = len(rows_of_words)
+        num_rows = math.ceil(N / cols)
         font_line_h = 16.0
-        box_height_pt = (num_rows * font_line_h) + 4.0
+        box_height_pt = (num_rows * font_line_h) + (2 * margin_pt) + 4.0
 
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
         try:
@@ -1193,11 +1161,10 @@ class ULNWordRenderer:
             shape.WrapFormat.DistanceBottom = 12.0
 
             tf = shape.TextFrame
-            # TextFrame inner margins fixed strictly at 0mm (0.0 pt)
-            tf.MarginTop = 0.0
-            tf.MarginBottom = 0.0
-            tf.MarginLeft = 0.0
-            tf.MarginRight = 0.0
+            tf.MarginTop = margin_pt
+            tf.MarginBottom = margin_pt
+            tf.MarginLeft = margin_pt
+            tf.MarginRight = margin_pt
             try:
                 tf.AutoSize = False
             except Exception:
@@ -1215,32 +1182,34 @@ class ULNWordRenderer:
             box_sel.Font.Bold = 1
             box_sel.Font.Color = 0  # Pure Black RGB(0,0,0)
 
-            # Strict Paragraph settings: Left=0mm, Right=0mm, Special=(none), Before=0pt, After=0pt, Single spacing
-            box_sel.ParagraphFormat.Alignment = 0  # Left
-            box_sel.ParagraphFormat.LeftIndent = 0.0
-            box_sel.ParagraphFormat.RightIndent = 0.0
-            box_sel.ParagraphFormat.FirstLineIndent = 0.0
-            box_sel.ParagraphFormat.SpaceBefore = 0.0
-            box_sel.ParagraphFormat.SpaceAfter = 0.0
-            box_sel.ParagraphFormat.LineSpacingRule = 0  # wdLineSpaceSingle = 0
+            box_sel.ParagraphFormat.SpaceBefore = 0
+            box_sel.ParagraphFormat.SpaceAfter = 0
+            box_sel.ParagraphFormat.LineSpacingRule = 0
+            box_sel.ParagraphFormat.Alignment = 0  # Left align
             box_sel.ParagraphFormat.TabStops.ClearAll()
 
-            for tab_pos in tab_stops:
-                box_sel.ParagraphFormat.TabStops.Add(Position=tab_pos, Alignment=0)
+            for c in range(1, cols):
+                box_sel.ParagraphFormat.TabStops.Add(Position=slot_w * c, Alignment=0)
+
+            lines = []
+            for i in range(0, N, cols):
+                lines.append(words[i:i + cols])
 
             from uln_parser import parse_inline_spans
-            for idx_line, row_words in enumerate(rows_of_words):
-                box_sel.ParagraphFormat.SpaceBefore = 0.0
-                box_sel.ParagraphFormat.SpaceAfter = 0.0
+            for idx_line, chunk in enumerate(lines):
+                if idx_line > 0:
+                    box_sel.ParagraphFormat.SpaceBefore = 1.5
 
-                for idx_w, word_txt in enumerate(row_words):
+                box_sel.ParagraphFormat.SpaceAfter = 0
+
+                for idx_w, word_txt in enumerate(chunk):
                     w_spans = parse_inline_spans(word_txt, default_bold=True)
                     self.write_inline_spans(box_sel, w_spans)
                     box_sel.Font.Color = 0  # Enforce black text
-                    if idx_w < len(row_words) - 1:
+                    if idx_w < len(chunk) - 1:
                         box_sel.TypeText("\t")
 
-                if idx_line < len(rows_of_words) - 1:
+                if idx_line < len(lines) - 1:
                     box_sel.TypeParagraph()
 
             # Convert shape to native InlineShape ("In Line with Text")
@@ -1251,8 +1220,6 @@ class ULNWordRenderer:
 
         except Exception as e:
             print(f"[ULNRenderer] Warning creating TextFrame box shape: {e}")
-
-
 
         # Move selection back to document main story below the inline shape
         try:
@@ -1271,6 +1238,7 @@ class ULNWordRenderer:
             pass
 
         self.last_rendered_tag = "BOX"
+
 
 
 
