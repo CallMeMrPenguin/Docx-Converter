@@ -56,13 +56,13 @@ def parse_color_to_rgb_int(color_str: str) -> Optional[int]:
 
 def extract_question_prefix_and_body(text: str) -> tuple[Optional[str], str]:
     """
-    Extracts question number (e.g. 1, 2, 3) and body text across all numbering formats:
-    - 1. / 1) / 1: / 1 - / #1. / #1 / **1.** / **#1.** / Question 1. / Question #1: / Câu 1. / Ex 1.
-    Returns (q_num, body_text) if matched, else (None, original_text).
+    Extracts question number ONLY if formatted with explicit '#' placeholder:
+    - #1. / #1) / #1: / #1 / **#1.** / Question #1 / Câu #1: / Task #1. / Ex #1:
+    Lines with plain numbers without '#' (e.g. '1. ', 'Question 1', 'One third...') are NOT list items!
     """
-    if not text:
+    if not text or '#' not in text:
         return None, text
-    pattern = r'^\s*(?:\*\*)?(?:#\s*|(?:Question|Câu|Task|Exercise|Ex|Activity)\s*#?)?\s*(\d+)[\.\)\:\-]?\s*(?:\*\*)?[:\.\)]?\s*(.*)$'
+    pattern = r'^\s*(?:\*\*)?(?:(?:Question|Câu|Task|Exercise|Ex|Activity)\s+)?#(\d+)[\.\)\:\-]?\s*(?:\*\*)?[:\.\)]?\s*(.*)$'
     m = re.match(pattern, text, re.IGNORECASE)
     if m:
         q_num = m.group(1)
@@ -70,6 +70,7 @@ def extract_question_prefix_and_body(text: str) -> tuple[Optional[str], str]:
         body = re.sub(r'^(?:\*\*|[:\.\-\)])\s*', '', body).strip()
         return q_num, body
     return None, text
+
 
 
 def split_line_into_option_items(line_text: str) -> List[str]:
@@ -853,18 +854,15 @@ class ULNWordRenderer:
     def render_num_container(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
         Renders auto-numbered container [NUM] ... [/NUM].
-        Strips/formats '#N' placeholders across child blocks (including tables and TAB2)
-        and flags the first question in this section to start a new independent list.
+        Flags the first question in this section to start a new independent list.
         Pre-computes uniform option alignment across all questions in the exercise.
         """
         if not block.children:
             return
 
-        for child in block.children:
-            self.clean_num_placeholders(child)
-
         # Flag that the first question in this NUM section starts a new list sequence at 1.
         self.is_first_question_in_num_block = True
+
 
         opt_blocks = [c for c in block.children if c.tag == "OPT"]
         old_cols, old_len = self.current_group_opt_cols, self.current_group_max_item_len
@@ -1068,11 +1066,12 @@ class ULNWordRenderer:
         for c in range(cols):
             col_c_words = [r[c] for r in rows_of_words if len(r) > c]
             max_len_c = max((len(w) for w in col_c_words), default=5)
-            col_w = max(24.0, (max_len_c * 5.5) + 2.0)
+            # Generous character width multiplier (6.5pt + 6pt safety buffer for wide chars in 12pt bold Times New Roman)
+            col_w = max(30.0, (max_len_c * 6.5) + 6.0)
             col_widths.append(col_w)
 
-        gap_pt = 18.0   # Clear visible gap between columns
-        margin_pt = 10.0 # Clean symmetric 10pt inner padding on left & right
+        gap_pt = 22.0   # Generous visible gap between columns
+        margin_pt = 14.0 # Generous symmetric 14pt inner padding so rounded corners don't crowd text
 
         tab_stops = []
         curr_tab = 0.0
@@ -1085,8 +1084,9 @@ class ULNWordRenderer:
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
         num_rows = len(rows_of_words)
-        font_line_h = 16.0
-        box_height_pt = (num_rows * font_line_h) + (2 * margin_pt) + 4.0
+        font_line_h = 17.5
+        box_height_pt = (num_rows * font_line_h) + (2 * margin_pt) + 6.0
+
 
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
         try:
