@@ -439,9 +439,9 @@ class ULNParser:
         while i < len(blocks):
             curr = blocks[i]
             if i + 1 < len(blocks) and curr.tag in ["P0", "P1"]:
-                num_only_match = re.match(r'^\s*(#?\d+[\.\)]|Question\s+#?\d+[\.\)]?|Câu\s+#?\d+[\.\)]?)\s*$', curr.content, re.IGNORECASE)
+                num_only_match = re.match(r'^\s*(?:\*\*)?(?:#\s*|(?:Question|Câu|Task|Exercise|Ex|Activity)\s*#?)?\s*(\d+)[\.\)\:\-]?\s*(?:\*\*)?[:\.\)]?\s*$', curr.content, re.IGNORECASE)
                 if num_only_match and blocks[i + 1].tag == "OPT":
-                    q_num = num_only_match.group(1)
+                    q_num = f"{num_only_match.group(1)}."
                     opt_blk = blocks[i + 1]
                     opt_blk.content = f"{q_num} {opt_blk.content}"
                     opt_blk.spans = parse_inline_spans(opt_blk.content)
@@ -450,5 +450,6 @@ class ULNParser:
                     continue
             merged_blocks.append(curr)
             i += 1
+
 
         return merged_blocks
