@@ -1129,7 +1129,8 @@ class ULNWordRenderer:
 
         slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
         inner_w = slot_w * cols
-        box_width_pt = min(printable_width_pt, inner_w + (2 * margin_pt))
+        margin_left_pt = cm_to_pt(0.2)  # 2mm = ~5.67 pt
+        box_width_pt = min(printable_width_pt, inner_w + margin_left_pt)
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
         num_rows = math.ceil(N / cols)
@@ -1163,8 +1164,9 @@ class ULNWordRenderer:
             tf = shape.TextFrame
             tf.MarginTop = 0.0
             tf.MarginBottom = 0.0
-            tf.MarginLeft = 0.0
+            tf.MarginLeft = margin_left_pt   # 2mm left margin
             tf.MarginRight = 0.0
+
 
             try:
                 tf.AutoSize = False
