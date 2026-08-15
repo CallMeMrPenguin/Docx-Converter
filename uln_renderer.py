@@ -54,23 +54,32 @@ def parse_color_to_rgb_int(color_str: str) -> Optional[int]:
     return None
 
 
-def extract_question_prefix_and_body(text: str) -> tuple[Optional[str], str]:
+def extract_question_prefix_and_body(text: str) -> tuple[Optional[str], Optional[str], Optional[str], str]:
     """
-    Extracts question number ONLY if formatted with explicit '#' placeholder:
-    - #1. / #1) / #1: / #1 / **#1.** / Question #1 / Câu #1: / Task #1. / Ex #1:
-    Lines with plain numbers without '#' (e.g. '1. ', 'Question 1', 'One third...') are NOT list items!
+    Extracts (full_prefix, delim_char, q_num, body_text) when formatted with '#' placeholder:
+    - #1. -> ('', '.', '1', 'Mike...') -> Word list: '1.'
+    - Question #1. -> ('Question ', '.', '1', 'What...') -> Word list: 'Question 1.'
+    - Question #1: -> ('Question ', ':', '1', 'What...') -> Word list: 'Question 1:'
+    - Câu #1: -> ('Câu ', ':', '1', '...') -> Word list: 'Câu 1:'
+    - Task #1. -> ('Task ', '.', '1', '...') -> Word list: 'Task 1.'
+    Returns (full_prefix, delim_char, q_num, body_text) if matched, else (None, None, None, original_text).
     """
     if not text or '#' not in text:
-        return None, text
-    pattern = r'^\s*(?:\*\*)?(?:(?:Question|Câu|Task|Exercise|Ex|Activity)\s+)?#(\d+)[\.\)\:\-]?\s*(?:\*\*)?[:\.\)]?\s*(.*)$'
+        return None, None, None, text
+
+    pattern = r'^\s*(?:\*\*)?([A-Za-zÀ-ỹ\s]+?)?#(\d+)([\.\)\:\-]|\s*:\s*|\s*\.\s*)?\s*(?:\*\*)?[:\.\)]?\s*(.*)$'
     m = re.match(pattern, text, re.IGNORECASE)
     if m:
-        q_num = m.group(1)
-        body = m.group(2).strip()
+        prefix_word = m.group(1).strip() if m.group(1) else ""
+        q_num = m.group(2)
+        delimiter = m.group(3).strip() if m.group(3) else "."
+        body = m.group(4).strip()
         body = re.sub(r'^(?:\*\*|[:\.\-\)])\s*', '', body).strip()
-        return q_num, body
-    return None, text
 
+        full_prefix = f"{prefix_word} " if prefix_word else ""
+        delim_char = ":" if ":" in delimiter else ("." if "." in delimiter else (delimiter if delimiter else "."))
+        return full_prefix, delim_char, q_num, body
+    return None, None, None, text
 
 
 def split_line_into_option_items(line_text: str) -> List[str]:
@@ -85,11 +94,12 @@ def split_line_into_option_items(line_text: str) -> List[str]:
     if '\t' in line_text:
         return [x.strip() for x in line_text.split('\t') if x.strip()]
 
-    # Extract potential question number prefix (e.g. "1. ", "#1. ", "Question 1: ")
-    q_num, rest_text = extract_question_prefix_and_body(line_text)
-    q_prefix = f"{q_num}. " if q_num else ""
+    # Extract potential question number prefix (e.g. "#1. ", "Question #1: ")
+    pref, delim, q_num, rest_text = extract_question_prefix_and_body(line_text)
+    q_prefix = f"{pref}#{q_num}{delim} " if q_num else ""
 
     # Search for option choices like A. B. C. D. or a. b. c. d. or (A) (B) (C) or 1. 2. 3. 4.
+
     pattern = r'(?:^|\s+)(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z0-9][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)(?=\s+|$)'
     matches = list(re.finditer(pattern, rest_text))
     if len(matches) >= 2:
@@ -398,9 +408,10 @@ class ULNWordRenderer:
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
-                    q_num, body_text = extract_question_prefix_and_body(block.content)
+                    pref, delim, q_num, body_text = extract_question_prefix_and_body(block.content)
                     if q_num is not None:
-                        self.apply_native_numbered_list(word, sel, q_num=q_num)
+                        num_fmt = f"{pref}%1{delim}"
+                        self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
                     else:
                         try:
                             sel.Range.ListFormat.RemoveNumbers()
@@ -432,16 +443,18 @@ class ULNWordRenderer:
 
 
             elif tag in ["P1", "P2"]:
-                q_num, content_to_render = extract_question_prefix_and_body(block.content)
+                pref, delim, q_num, content_to_render = extract_question_prefix_and_body(block.content)
                 left_indent_cm = 0.0 if (q_num is not None) else (0.5 if tag == "P1" else 1.0)
 
                 if q_num is not None:
-                    self.apply_native_numbered_list(word, sel, q_num=q_num)
+                    num_fmt = f"{pref}%1{delim}"
+                    self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
                 else:
                     try:
                         sel.Range.ListFormat.RemoveNumbers()
                     except Exception:
                         pass
+
 
                 items = split_line_into_option_items(content_to_render)
 
@@ -601,9 +614,10 @@ class ULNWordRenderer:
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
 
-                    q_num, c1_body = extract_question_prefix_and_body(block.col1)
+                    pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
                     if q_num is not None and c1_body.strip():
-                        self.apply_native_numbered_list(word, sel, q_num=q_num)
+                        num_fmt = f"{pref}%1{delim}"
+                        self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
                         from uln_parser import parse_inline_spans
                         c1_spans = parse_inline_spans(c1_body.strip())
                         self.write_inline_spans(sel, c1_spans)
@@ -613,6 +627,7 @@ class ULNWordRenderer:
                         except Exception:
                             pass
                         self.write_inline_spans(sel, block.col1_spans)
+
 
 
                     sel.TypeText(f"\t{'_' * num_underscores}")
@@ -755,7 +770,7 @@ class ULNWordRenderer:
         except Exception:
             pass
 
-    def apply_native_numbered_list(self, word, sel, q_num: Optional[str] = None):
+    def apply_native_numbered_list(self, word, sel, q_num: Optional[str] = None, number_format: Optional[str] = None):
         """
         Applies native MS Word Numbered List:
         - List number is ALWAYS BOLD by default
@@ -763,6 +778,7 @@ class ULNWordRenderer:
         - LeftIndent and FirstLineIndent are flush at 0.0 cm (left page border)
         - Starts a new independent list instance (ContinuePreviousList=False) on first question (q_num == '1' or is_first_question_in_num_block),
           and continues sequential list incrementing (ContinuePreviousList=True) on subsequent questions.
+        - Supports custom prefix formats (e.g. 'Question %1.', 'Question %1:', 'Câu %1:', '%1.').
         """
         restart = self.is_first_question_in_num_block or (q_num == "1")
         self.is_first_question_in_num_block = False
@@ -773,6 +789,8 @@ class ULNWordRenderer:
             lvl.Font.Bold = 1          # ALWAYS BOLD number
             lvl.NumberPosition = 0
             lvl.TextPosition = 0
+            lvl.NumberFormat = number_format if number_format else "%1."
+
             sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=not restart)
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.FirstLineIndent = 0
@@ -785,6 +803,7 @@ class ULNWordRenderer:
                 sel.Font.Bold = 0
             except Exception:
                 pass
+
 
 
 
@@ -838,7 +857,7 @@ class ULNWordRenderer:
                 items = split_line_into_option_items(raw_text)
 
             for idx_i, item in enumerate(items):
-                q_num, clean_item = extract_question_prefix_and_body(item) if idx_i == 0 else (None, item)
+                pref, delim, q_num, clean_item = extract_question_prefix_and_body(item) if idx_i == 0 else (None, None, None, item)
                 m_let = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', clean_item)
                 item_str = f"{m_let.group(1)} {m_let.group(2)}" if m_let else f"A. {clean_item}"
                 all_items.append(item_str)
@@ -936,10 +955,12 @@ class ULNWordRenderer:
 
         # Extract question number prefix if present in first item (e.g. #1., #1, 1., Question #1)
         q_num = None
+        num_fmt = None
         if raw_items:
-            q_num, first_body = extract_question_prefix_and_body(raw_items[0])
+            pref, delim, q_num, first_body = extract_question_prefix_and_body(raw_items[0])
             if q_num is not None:
                 raw_items[0] = first_body
+                num_fmt = f"{pref}%1{delim}"
 
         formatted_items = []
         for idx, item in enumerate(raw_items):
@@ -974,7 +995,7 @@ class ULNWordRenderer:
 
         # Render Question Number Prefix on the SAME line if present
         if q_num is not None:
-            self.apply_native_numbered_list(word, sel, q_num=q_num)
+            self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
             sel.Font.Bold = 0
         else:
             try:
@@ -983,6 +1004,7 @@ class ULNWordRenderer:
                 pass
 
         self.setup_tab_stops(sel, cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm, max_item_len=max_item_len)
+
 
         from uln_parser import parse_inline_spans
         for idx_item, (let_str, body_str) in enumerate(formatted_items):
