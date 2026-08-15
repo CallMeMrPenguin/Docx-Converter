@@ -38,7 +38,7 @@ class ULNTableData:
 
 @dataclass
 class ULNBlock:
-    tag: str  # "H1", "H2", "H3", "P0", "P1", "P2", "TAB2", "BOX", "QUOTE", "PIC", "TABLE", "P", "INS"
+    tag: str  # "H1", "H2", "H3", "H4", "H5", "H6", "P0", "P1", "P2", "TAB2", "BOX", "QUOTE", "PIC", "TABLE", "P", "INS"
     content: str = ""
     col1: str = ""
     col2: str = ""
@@ -387,7 +387,7 @@ class ULNParser:
             if not trimmed:
                 continue
 
-            tag_match = re.match(r'^\[(H1|H2|H3|P0|P1|P2|TAB2|PIC|INS)\]\s*(.*)$', trimmed, re.IGNORECASE)
+            tag_match = re.match(r'^\[(H1|H2|H3|H4|H5|H6|P0|P1|P2|TAB2|PIC|INS)\]\s*(.*)$', trimmed, re.IGNORECASE)
 
             if tag_match:
                 tag = tag_match.group(1).upper()

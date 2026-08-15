@@ -131,6 +131,49 @@ def split_line_into_option_items(line_text: str) -> List[str]:
     return [line_text.strip()]
 
 
+def apply_title_case_to_text(text: str) -> str:
+    """Capitalizes first letter of each main word, keeping minor words in lowercase and preserving Roman numerals."""
+    if not text:
+        return text
+    minor_words = {'a', 'an', 'the', 'and', 'but', 'or', 'for', 'nor', 'on', 'at', 'to', 'from', 'by', 'with', 'in', 'of', 'off'}
+    words = text.split(' ')
+    cased_words = []
+    for idx, w in enumerate(words):
+        if not w:
+            cased_words.append(w)
+            continue
+        m = re.match(r'^([^\w]*)([\w\'-]+)([^\w]*)$', w)
+        if not m:
+            cased_words.append(w)
+            continue
+        pre, core, post = m.group(1), m.group(2), m.group(3)
+        if re.match(r'^(?:[IVXLCDM]+|[A-Z]|\d+)$', core, re.IGNORECASE) and len(core) <= 4 and core.upper() in ["I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X", "XI", "XII", "A", "B", "C", "D", "E", "F", "G"]:
+            cased_words.append(f"{pre}{core.upper()}{post}")
+        elif idx == 0 or idx == len(words) - 1 or core.lower() not in minor_words:
+            cased_words.append(f"{pre}{core.capitalize()}{post}")
+        else:
+            cased_words.append(f"{pre}{core.lower()}{post}")
+    return ' '.join(cased_words)
+
+
+def apply_sentence_case_to_text(text: str) -> str:
+    """Capitalizes ONLY the first letter of the sentence, preserving Roman numeral / section letter prefix."""
+    if not text:
+        return text
+    m = re.match(r'^(\s*(?:[IVXLCDM]+\.?|[A-Z]\.|\#?\d+[\.\:]?)\s*)(.*)$', text)
+    if m:
+        pref = m.group(1)
+        body = m.group(2).strip()
+        if body:
+            body_cased = body[0].upper() + body[1:].lower()
+            return f"{pref}{body_cased}"
+        return text
+    clean = text.strip()
+    if clean:
+        return clean[0].upper() + clean[1:].lower()
+    return text
+
+
 class ULNWordRenderer:
     """Pure tag-driven pywin32 COM document renderer with adaptive column calculation and zero text wrapping into column 1."""
 
@@ -235,7 +278,7 @@ class ULNWordRenderer:
                 except Exception:
                     pass
 
-    def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False, default_uppercase: bool = False):
+    def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False, default_uppercase: bool = False, custom_font_size: Optional[float] = None, force_color: Optional[int] = None):
         """Writes formatted text runs strictly according to span AST properties."""
         for idx, span in enumerate(spans):
             text = span.text
@@ -251,7 +294,7 @@ class ULNWordRenderer:
                 continue
 
             sel.Font.Name = self.font_name
-            sel.Font.Size = self.font_size
+            sel.Font.Size = custom_font_size if custom_font_size is not None else self.font_size
             
             is_bold = span.bold or default_bold
             is_italic = span.italic or default_italic
@@ -261,8 +304,12 @@ class ULNWordRenderer:
             sel.Font.Italic = 1 if is_italic else 0
             sel.Font.Underline = 1 if span.underline else 0
 
-
-            if span.color:
+            if force_color is not None:
+                try:
+                    sel.Font.Color = force_color
+                except Exception:
+                    pass
+            elif span.color:
                 rgb_int = parse_color_to_rgb_int(span.color)
                 if rgb_int is not None:
                     try:
@@ -287,7 +334,6 @@ class ULNWordRenderer:
                 except Exception:
                     pass
 
-
             if span.bg_color:
                 hl_idx = HIGHLIGHT_NAME_TO_INDEX.get(span.bg_color.lower(), 7)
                 try:
@@ -304,11 +350,21 @@ class ULNWordRenderer:
             if re.match(r'^_{30,}$', text):
                 text = '_' * 35
 
-            # Replace <blank>, <BLANK>, [BLANK] tag strings with normalized student answer line _____
-            text = re.sub(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '___________', text)
-
-            text = text.upper() if is_upper else text
-            sel.TypeText(text)
+            # If text contains <blank> or [BLANK], handle answer blank in pure black
+            if re.search(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', text):
+                parts = re.split(r'(<(?:blank|BLANK)>|\[(?:blank|BLANK)\])', text)
+                for part in parts:
+                    if re.match(r'^(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\])$', part, re.IGNORECASE):
+                        sel.Font.Color = 0  # Enforce black for answer blank
+                        sel.Font.Underline = 0
+                        sel.TypeText('___________')
+                    else:
+                        if part:
+                            p_txt = part.upper() if is_upper else part
+                            sel.TypeText(p_txt)
+            else:
+                text = text.upper() if is_upper else text
+                sel.TypeText(text)
 
             try:
                 sel.Font.Underline = 0
@@ -316,6 +372,10 @@ class ULNWordRenderer:
                 pass
             try:
                 sel.Font.HighlightColorIndex = 0
+            except Exception:
+                pass
+            try:
+                sel.Font.Color = 0
             except Exception:
                 pass
 
@@ -355,9 +415,12 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.SpaceBefore = 14
                 sel.ParagraphFormat.SpaceAfter = 6
                 sel.ParagraphFormat.KeepWithNext = True
-                sel.ParagraphFormat.Alignment = 0  # Left
-                self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True)
+                sel.ParagraphFormat.PageBreakBefore = True
+                sel.ParagraphFormat.Alignment = 1  # Centered
+                self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True, custom_font_size=self.font_size + 1.0, force_color=0)
                 sel.TypeParagraph()
+                sel.ParagraphFormat.PageBreakBefore = False
+                sel.ParagraphFormat.Alignment = 0
 
             elif tag == "H2":
                 try:
@@ -369,8 +432,9 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.SpaceBefore = 12
                 sel.ParagraphFormat.SpaceAfter = 4
                 sel.ParagraphFormat.KeepWithNext = True
-                sel.ParagraphFormat.Alignment = 0
-                self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True)
+                sel.ParagraphFormat.PageBreakBefore = False
+                sel.ParagraphFormat.Alignment = 0  # Left
+                self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True, force_color=0)
                 sel.TypeParagraph()
 
             elif tag == "H3":
@@ -383,13 +447,68 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.SpaceBefore = 10
                 sel.ParagraphFormat.SpaceAfter = 4
                 sel.ParagraphFormat.KeepWithNext = True
-                sel.ParagraphFormat.Alignment = 0
-                self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True)
+                sel.ParagraphFormat.PageBreakBefore = False
+                sel.ParagraphFormat.Alignment = 0  # Left
+                for s in block.spans:
+                    s.text = apply_title_case_to_text(s.text)
+                self.write_inline_spans(sel, block.spans, default_bold=True, force_color=0)
+                sel.TypeParagraph()
+
+            elif tag == "H4":
+                try:
+                    sel.Style = doc.Styles("Heading 4")
+                except Exception:
+                    pass
+                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.SpaceBefore = 8
+                sel.ParagraphFormat.SpaceAfter = 4
+                sel.ParagraphFormat.KeepWithNext = True
+                sel.ParagraphFormat.PageBreakBefore = False
+                sel.ParagraphFormat.Alignment = 0  # Left
+                for s in block.spans:
+                    s.text = apply_sentence_case_to_text(s.text)
+                self.write_inline_spans(sel, block.spans, default_bold=True, force_color=0)
+                sel.TypeParagraph()
+
+            elif tag == "H5":
+                try:
+                    sel.Style = doc.Styles("Heading 5")
+                except Exception:
+                    pass
+                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.SpaceBefore = 6
+                sel.ParagraphFormat.SpaceAfter = 4
+                sel.ParagraphFormat.KeepWithNext = True
+                sel.ParagraphFormat.PageBreakBefore = False
+                sel.ParagraphFormat.Alignment = 0  # Left
+                for s in block.spans:
+                    s.text = apply_sentence_case_to_text(s.text)
+                self.write_inline_spans(sel, block.spans, default_bold=False, force_color=0)
+                sel.TypeParagraph()
+
+            elif tag == "H6":
+                try:
+                    sel.Style = doc.Styles("Heading 6")
+                except Exception:
+                    pass
+                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.SpaceBefore = 6
+                sel.ParagraphFormat.SpaceAfter = 4
+                sel.ParagraphFormat.KeepWithNext = True
+                sel.ParagraphFormat.PageBreakBefore = False
+                sel.ParagraphFormat.Alignment = 0  # Left
+                for s in block.spans:
+                    s.text = apply_sentence_case_to_text(s.text)
+                self.write_inline_spans(sel, block.spans, default_bold=False, default_italic=True, force_color=0)
                 sel.TypeParagraph()
 
             elif tag in ["P0", "P"]:
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.PageBreakBefore = False
                 is_ins_block = block.is_instruction or any(s.is_instruction for s in block.spans)
                 if is_ins_block:
                     sel.ParagraphFormat.SpaceBefore = 14 if self.last_rendered_tag == "BOX" else 8
@@ -418,6 +537,7 @@ class ULNWordRenderer:
                     sel.Font.Size = self.font_size
                     sel.Font.Bold = 0
                     sel.Font.Underline = 0
+                    sel.Font.Color = 0  # Enforce black for answer blank leader
                     if trailing_sym:
                         sel.TypeText(f"\t{trailing_sym}")
                     else:
@@ -448,6 +568,9 @@ class ULNWordRenderer:
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                     self.write_inline_spans(sel, text_spans)
+                    sel.Font.Color = 0  # Enforce black for trailing answer blank
+                    sel.Font.Underline = 0
+                    sel.Font.Bold = 0
                     if trailing_sym:
                         sel.TypeText(f"\t{trailing_sym}")
                     else:
@@ -529,6 +652,7 @@ class ULNWordRenderer:
                     sel.Font.Size = self.font_size
                     sel.Font.Bold = 0
                     sel.Font.Underline = 0
+                    sel.Font.Color = 0  # Enforce black for answer blank leader
                     if trailing_sym:
                         sel.TypeText(f"\t{trailing_sym}")
                     else:
@@ -546,6 +670,9 @@ class ULNWordRenderer:
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                     self.write_inline_spans(sel, text_spans)
+                    sel.Font.Color = 0  # Enforce black for trailing answer blank
+                    sel.Font.Underline = 0
+                    sel.Font.Bold = 0
                     if trailing_sym:
                         sel.TypeText(f"\t{trailing_sym}")
                     else:
@@ -679,6 +806,9 @@ class ULNWordRenderer:
 
 
 
+                    sel.Font.Color = 0
+                    sel.Font.Bold = 0
+                    sel.Font.Underline = 0
                     sel.TypeText(f"\t{'_' * num_underscores}")
                     sel.TypeParagraph()
 
