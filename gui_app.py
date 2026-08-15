@@ -52,62 +52,103 @@ class ULNFormatterApp:
         size_sp.pack(fill="x", pady=(0, 10))
 
         # Margins Settings
-        ttk.Label(sidebar, text="Margins (cm):", font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(10, 5))
+        ttk.Label(sidebar, text="Margins (cm):", font=("Segoe UI", 10, "bold")).pack(anchor="w", pady=(8, 3))
         
         m_frame = tk.Frame(sidebar, bg="#1e293b")
         m_frame.pack(fill="x", pady=2)
         
         tk.Label(m_frame, text="Top:", bg="#1e293b", fg="#f8fafc").grid(row=0, column=0, sticky="w", pady=2)
         self.m_top_var = tk.DoubleVar(value=2.0)
-        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_top_var, width=6).grid(row=0, column=1, padx=5, pady=2)
+        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_top_var, width=5).grid(row=0, column=1, padx=4, pady=2)
 
-        tk.Label(m_frame, text="Bottom:", bg="#1e293b", fg="#f8fafc").grid(row=1, column=0, sticky="w", pady=2)
+        tk.Label(m_frame, text="Bottom:", bg="#1e293b", fg="#f8fafc").grid(row=0, column=2, sticky="w", pady=2, padx=(6, 0))
         self.m_bottom_var = tk.DoubleVar(value=2.0)
-        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_bottom_var, width=6).grid(row=1, column=1, padx=5, pady=2)
+        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_bottom_var, width=5).grid(row=0, column=3, padx=4, pady=2)
 
-        tk.Label(m_frame, text="Left:", bg="#1e293b", fg="#f8fafc").grid(row=2, column=0, sticky="w", pady=2)
+        tk.Label(m_frame, text="Left:", bg="#1e293b", fg="#f8fafc").grid(row=1, column=0, sticky="w", pady=2)
         self.m_left_var = tk.DoubleVar(value=3.0)
-        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_left_var, width=6).grid(row=2, column=1, padx=5, pady=2)
+        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_left_var, width=5).grid(row=1, column=1, padx=4, pady=2)
 
-        tk.Label(m_frame, text="Right:", bg="#1e293b", fg="#f8fafc").grid(row=3, column=0, sticky="w", pady=2)
+        tk.Label(m_frame, text="Right:", bg="#1e293b", fg="#f8fafc").grid(row=1, column=2, sticky="w", pady=2, padx=(6, 0))
         self.m_right_var = tk.DoubleVar(value=1.5)
-        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_right_var, width=6).grid(row=3, column=1, padx=5, pady=2)
+        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_right_var, width=5).grid(row=1, column=3, padx=4, pady=2)
+
+        # Question & Option Numbering / Formatting Frame
+        q_frame = ttk.LabelFrame(sidebar, text=" 🎯 Question & Option Styling ", padding=8)
+        q_frame.pack(fill="x", pady=(8, 6))
+
+        # Question Prefix (Default: "")
+        ttk.Label(q_frame, text="Prefix:").grid(row=0, column=0, sticky="w", pady=2)
+        self.q_prefix_var = tk.StringVar(value="")
+        q_pref_cb = ttk.Combobox(q_frame, textvariable=self.q_prefix_var, values=["", "Question ", "Câu ", "Task ", "Exercise ", "Ex ", "Activity "], width=16)
+        q_pref_cb.grid(row=0, column=1, padx=4, pady=2, sticky="ew")
+
+        # Question Delimiter (Default: ".")
+        ttk.Label(q_frame, text="Delimiter:").grid(row=1, column=0, sticky="w", pady=2)
+        self.q_delim_var = tk.StringVar(value=".")
+        q_delim_cb = ttk.Combobox(q_frame, textvariable=self.q_delim_var, values=[".", ":", ")", "-"], width=16)
+        q_delim_cb.grid(row=1, column=1, padx=4, pady=2, sticky="ew")
+
+        # Color Options Palette
+        color_choices = [
+            "Default (Black) #000000",
+            "Blue #2563eb",
+            "Navy #1e40af",
+            "Red #dc2626",
+            "Emerald #059669",
+            "Purple #7c3aed",
+            "Amber #d97706",
+            "Dark Grey #475569"
+        ]
+
+        # Question Number Color
+        ttk.Label(q_frame, text="Num Color:").grid(row=2, column=0, sticky="w", pady=2)
+        self.q_color_var = tk.StringVar(value="Default (Black) #000000")
+        q_col_cb = ttk.Combobox(q_frame, textvariable=self.q_color_var, values=color_choices, width=16)
+        q_col_cb.grid(row=2, column=1, padx=4, pady=2, sticky="ew")
+
+        # Option Letter (ABCD) Color
+        ttk.Label(q_frame, text="Opt Color:").grid(row=3, column=0, sticky="w", pady=2)
+        self.opt_color_var = tk.StringVar(value="Default (Black) #000000")
+        opt_col_cb = ttk.Combobox(q_frame, textvariable=self.opt_color_var, values=color_choices, width=16)
+        opt_col_cb.grid(row=3, column=1, padx=4, pady=2, sticky="ew")
 
         # Page Numbering Checkbox
         self.pg_num_var = tk.BooleanVar(value=True)
         pg_check = tk.Checkbutton(sidebar, text="Include Page Numbers (Page X / Y)", variable=self.pg_num_var, bg="#1e293b", fg="#f8fafc", selectcolor="#0f172a", activebackground="#1e293b", activeforeground="#f8fafc")
-        pg_check.pack(anchor="w", pady=(15, 10))
+        pg_check.pack(anchor="w", pady=(6, 4))
 
         # Open in Word after compile
         self.open_word_var = tk.BooleanVar(value=True)
         open_check = tk.Checkbutton(sidebar, text="Open DOCX in Word after saving", variable=self.open_word_var, bg="#1e293b", fg="#f8fafc", selectcolor="#0f172a", activebackground="#1e293b", activeforeground="#f8fafc")
-        open_check.pack(anchor="w", pady=(0, 5))
+        open_check.pack(anchor="w", pady=(0, 4))
 
         # Background Mode Checkbox (Silent, 0 Mouse Interruption)
         self.bg_mode_var = tk.BooleanVar(value=False)
         bg_check = tk.Checkbutton(sidebar, text="⚡ Background Mode (0 Mouse Freeze)", variable=self.bg_mode_var, bg="#1e293b", fg="#38bdf8", selectcolor="#0f172a", activebackground="#1e293b", activeforeground="#38bdf8")
-        bg_check.pack(anchor="w", pady=(0, 10))
+        bg_check.pack(anchor="w", pady=(0, 6))
 
         # Image Queue (Order for [PIC] tags)
         self.user_image_paths = []
-        img_frame = ttk.LabelFrame(sidebar, text=" 🖼️ Image Queue ([PIC] Order) ", padding=8)
-        img_frame.pack(fill="x", pady=(5, 10))
+        img_frame = ttk.LabelFrame(sidebar, text=" 🖼️ Image Queue ([PIC] Order) ", padding=6)
+        img_frame.pack(fill="x", pady=(2, 6))
 
-        self.img_listbox = tk.Listbox(img_frame, height=4, bg="#090d16", fg="#e2e8f0", font=("Segoe UI", 9), selectbackground="#3b82f6")
-        self.img_listbox.pack(fill="x", pady=(0, 6))
+        self.img_listbox = tk.Listbox(img_frame, height=3, bg="#090d16", fg="#e2e8f0", font=("Segoe UI", 9), selectbackground="#3b82f6")
+        self.img_listbox.pack(fill="x", pady=(0, 4))
 
         img_btn_bar = tk.Frame(img_frame, bg="#1e293b")
         img_btn_bar.pack(fill="x")
 
-        btn_add_img = tk.Button(img_btn_bar, text="➕ Add Images...", command=self.add_images, bg="#3b82f6", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", pady=3)
+        btn_add_img = tk.Button(img_btn_bar, text="➕ Add Images...", command=self.add_images, bg="#3b82f6", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", pady=2)
         btn_add_img.pack(side="left", fill="x", expand=True, padx=(0, 2))
 
-        btn_clear_img = tk.Button(img_btn_bar, text="🗑️ Clear", command=self.clear_images, bg="#64748b", fg="#ffffff", font=("Segoe UI", 8), relief="flat", pady=3)
+        btn_clear_img = tk.Button(img_btn_bar, text="🗑️ Clear", command=self.clear_images, bg="#64748b", fg="#ffffff", font=("Segoe UI", 8), relief="flat", pady=2)
         btn_clear_img.pack(side="right", padx=(2, 0))
 
         # Action Buttons on Sidebar
-        btn_sample = tk.Button(sidebar, text="Load Sample ULN", command=self.load_sample, bg="#475569", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=6)
-        btn_sample.pack(fill="x", pady=4)
+        btn_sample = tk.Button(sidebar, text="Load Sample ULN", command=self.load_sample, bg="#475569", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=4)
+        btn_sample.pack(fill="x", pady=2)
+
 
         # Right Text Area (Editor)
         editor_frame = ttk.LabelFrame(main_container, text=" Raw ULN Text Input (Paste or Edit) ", padding=10)
@@ -230,8 +271,13 @@ class ULNFormatterApp:
             "margin_left": self.m_left_var.get(),
             "margin_right": self.m_right_var.get(),
             "enable_page_numbers": self.pg_num_var.get(),
+            "question_prefix": self.q_prefix_var.get(),
+            "question_delimiter": self.q_delim_var.get(),
+            "question_color": self.q_color_var.get(),
+            "opt_color": self.opt_color_var.get(),
             "user_images": list(self.user_image_paths),
         }
+
 
         try:
             # Dynamic Hot-Reload of format engine modules without restarting the GUI app

@@ -42,16 +42,17 @@ def parse_color_to_rgb_int(color_str: str) -> Optional[int]:
     if not color_str:
         return None
     clean = color_str.strip().lower()
+    hex_match = re.search(r'#([0-9a-fA-F]{6})', color_str)
+    if hex_match:
+        hex_val = hex_match.group(1).lower()
+        r = int(hex_val[0:2], 16)
+        g = int(hex_val[2:4], 16)
+        b = int(hex_val[4:6], 16)
+        return r + (g * 256) + (b * 65536)
     if clean in COLOR_NAME_TO_RGB:
         return COLOR_NAME_TO_RGB[clean]
-    if clean.startswith('#'):
-        hex_val = clean.lstrip('#')
-        if len(hex_val) == 6:
-            r = int(hex_val[0:2], 16)
-            g = int(hex_val[2:4], 16)
-            b = int(hex_val[4:6], 16)
-            return r + (g * 256) + (b * 65536)
     return None
+
 
 
 def extract_question_prefix_and_body(text: str) -> tuple[Optional[str], Optional[str], Optional[str], str]:
@@ -144,14 +145,37 @@ class ULNWordRenderer:
         self.margin_left = float(self.settings.get("margin_left", 3.0))
         self.margin_right = float(self.settings.get("margin_right", 1.5))
         self.line_spacing = float(self.settings.get("line_spacing", 1.15))
-        self.space_before = float(self.settings.get("space_before", 4.0))
         self.enable_page_numbers = self.settings.get("enable_page_numbers", True)
+        # Question & Option Styling Settings
+        self.question_prefix = self.settings.get("question_prefix", "")  # e.g. "", "Question ", "Câu ", "Task "
+        self.question_delimiter = self.settings.get("question_delimiter", ".")  # e.g. ".", ":", ")", "-"
+        self.question_color = self.settings.get("question_color", "#000000")  # Hex or color name
+        self.opt_color = self.settings.get("opt_color", "#000000")  # Hex or color name
+
+
         self.user_images = list(self.settings.get("user_images", []))
         self.user_img_idx = 0
         self.is_first_question_in_num_block = False
         self.current_group_opt_cols = None
         self.current_group_max_item_len = None
         self.last_rendered_tag = None
+
+    def get_effective_number_format(self, extracted_pref: Optional[str], extracted_delim: Optional[str]) -> str:
+        """
+        Determines the effective list NumberFormat string:
+        - If prefix was explicitly specified in text (e.g. 'Question ' or 'Câu '), use that.
+          Otherwise, fall back to global self.question_prefix setting.
+        - If delimiter was selected in GUI settings (and is non-default, e.g. ':', ')', '-'), use GUI delimiter.
+          Otherwise use extracted delimiter from text or global default.
+        """
+        pref = extracted_pref if (extracted_pref and extracted_pref.strip()) else (self.question_prefix or "")
+        if self.question_delimiter and self.question_delimiter != ".":
+            delim = self.question_delimiter
+        else:
+            delim = extracted_delim if (extracted_delim and extracted_delim.strip()) else (self.question_delimiter or ".")
+        return f"{pref}%1{delim}"
+
+
 
     def get_next_image_path(self, pic: Optional[PicInfo] = None) -> Optional[str]:
         """Returns next user-queued image in order, or falls back to test pic directory."""
@@ -410,7 +434,7 @@ class ULNWordRenderer:
                 else:
                     pref, delim, q_num, body_text = extract_question_prefix_and_body(block.content)
                     if q_num is not None:
-                        num_fmt = f"{pref}%1{delim}"
+                        num_fmt = self.get_effective_number_format(pref, delim)
                         self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
                     else:
                         try:
@@ -447,13 +471,14 @@ class ULNWordRenderer:
                 left_indent_cm = 0.0 if (q_num is not None) else (0.5 if tag == "P1" else 1.0)
 
                 if q_num is not None:
-                    num_fmt = f"{pref}%1{delim}"
+                    num_fmt = self.get_effective_number_format(pref, delim)
                     self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
                 else:
                     try:
                         sel.Range.ListFormat.RemoveNumbers()
                     except Exception:
                         pass
+
 
 
                 items = split_line_into_option_items(content_to_render)
@@ -616,11 +641,12 @@ class ULNWordRenderer:
 
                     pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
                     if q_num is not None and c1_body.strip():
-                        num_fmt = f"{pref}%1{delim}"
+                        num_fmt = self.get_effective_number_format(pref, delim)
                         self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
                         from uln_parser import parse_inline_spans
                         c1_spans = parse_inline_spans(c1_body.strip())
                         self.write_inline_spans(sel, c1_spans)
+
                     else:
                         try:
                             sel.Range.ListFormat.RemoveNumbers()
@@ -790,11 +816,18 @@ class ULNWordRenderer:
             lvl.NumberPosition = 0
             lvl.TextPosition = 0
             lvl.NumberFormat = number_format if number_format else "%1."
+            q_color_int = parse_color_to_rgb_int(self.question_color)
+            if q_color_int is not None:
+                lvl.Font.Color = q_color_int
+            else:
+                lvl.Font.Color = 0
 
             sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=not restart)
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.FirstLineIndent = 0
             sel.Font.Bold = 0
+            sel.Font.Color = 0  # Black body text
+
         except Exception:
             try:
                 sel.Range.ListFormat.ApplyNumberDefault()
@@ -960,7 +993,7 @@ class ULNWordRenderer:
             pref, delim, q_num, first_body = extract_question_prefix_and_body(raw_items[0])
             if q_num is not None:
                 raw_items[0] = first_body
-                num_fmt = f"{pref}%1{delim}"
+                num_fmt = self.get_effective_number_format(pref, delim)
 
         formatted_items = []
         for idx, item in enumerate(raw_items):
@@ -1005,17 +1038,23 @@ class ULNWordRenderer:
 
         self.setup_tab_stops(sel, cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm, max_item_len=max_item_len)
 
+        opt_color_int = parse_color_to_rgb_int(self.opt_color)
 
         from uln_parser import parse_inline_spans
         for idx_item, (let_str, body_str) in enumerate(formatted_items):
-            # Render Option Letter in BOLD
+            # Render Option Letter in BOLD with custom opt_color
             sel.Font.Name = self.font_name
             sel.Font.Size = self.font_size
             sel.Font.Bold = 1
             sel.Font.Italic = 0
             sel.Font.Underline = 0
+            if opt_color_int is not None:
+                sel.Font.Color = opt_color_int
+            else:
+                sel.Font.Color = 0
             sel.TypeText(f"{let_str} ")
             sel.Font.Bold = 0
+            sel.Font.Color = 0  # Reset to black for body text
 
             # Render Option Body Text
             body_spans = parse_inline_spans(body_str)
@@ -1030,6 +1069,7 @@ class ULNWordRenderer:
         sel.ParagraphFormat.LeftIndent = 0
         sel.ParagraphFormat.TabStops.ClearAll()
         self.last_rendered_tag = "OPT"
+
 
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """

@@ -441,15 +441,16 @@ class ULNParser:
             if i + 1 < len(blocks) and curr.tag in ["P0", "P1"]:
                 num_only_match = re.match(r'^\s*(?:\*\*)?(?:(?:Question|Câu|Task|Exercise|Ex|Activity)\s+)?#(\d+)[\.\)\:\-]?\s*(?:\*\*)?[:\.\)]?\s*$', curr.content, re.IGNORECASE)
                 if num_only_match and blocks[i + 1].tag == "OPT":
-                    q_num = f"#{num_only_match.group(1)}."
                     opt_blk = blocks[i + 1]
-                    opt_blk.content = f"{q_num} {opt_blk.content}"
+                    # Preserve exact question prefix (e.g. "Question #1.", "Câu #1:", "#1.")
+                    opt_blk.content = f"{curr.content.strip()} {opt_blk.content}"
                     opt_blk.spans = parse_inline_spans(opt_blk.content)
                     merged_blocks.append(opt_blk)
                     i += 2
                     continue
             merged_blocks.append(curr)
             i += 1
+
 
 
 
