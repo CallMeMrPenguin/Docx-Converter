@@ -1067,10 +1067,11 @@ class ULNWordRenderer:
             col_c_words = [r[c] for r in rows_of_words if len(r) > c]
             max_len_c = max((len(w) for w in col_c_words), default=5)
             # Adjust column width multiplier and buffer here
-            col_w = max(30.0, (max_len_c * 6.0) + 6.0)
+            col_w = max(32.0, (max_len_c * 6.2) + 8.0)
             col_widths.append(col_w)
 
-        gap_pt = 16.0   # Adjust spacing between columns here (e.g. 12.0 to 20.0 pt)
+        gap_pt = 17.0   # Adjust spacing between columns here (e.g. 12.0 to 20.0 pt)
+
 
 
         tab_stops = []

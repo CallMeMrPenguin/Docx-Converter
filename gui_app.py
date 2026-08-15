@@ -234,10 +234,21 @@ class ULNFormatterApp:
         }
 
         try:
+            # Dynamic Hot-Reload of format engine modules without restarting the GUI app
+            import importlib
+            import uln_parser
+            import uln_renderer
+            import uln_compiler
+            importlib.reload(uln_parser)
+            importlib.reload(uln_renderer)
+            importlib.reload(uln_compiler)
+            from uln_compiler import ULNCompiler
+
             compiler = ULNCompiler(settings)
             keep_open_val = self.open_word_var.get()
             bg_mode_val = self.bg_mode_var.get()
             compiled_file = compiler.compile(uln_text, out_path, keep_open=keep_open_val, background_mode=bg_mode_val)
+
             
             try:
                 self.root.deiconify()
