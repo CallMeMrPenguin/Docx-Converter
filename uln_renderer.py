@@ -436,6 +436,8 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.Alignment = 0  # Left
                 self.write_inline_spans(sel, block.spans, default_bold=True, default_uppercase=True, force_color=0)
                 sel.TypeParagraph()
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.PageBreakBefore = False
 
             elif tag == "H3":
                 try:
@@ -453,6 +455,8 @@ class ULNWordRenderer:
                     s.text = apply_title_case_to_text(s.text)
                 self.write_inline_spans(sel, block.spans, default_bold=True, force_color=0)
                 sel.TypeParagraph()
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.PageBreakBefore = False
 
             elif tag == "H4":
                 try:
@@ -470,6 +474,8 @@ class ULNWordRenderer:
                     s.text = apply_sentence_case_to_text(s.text)
                 self.write_inline_spans(sel, block.spans, default_bold=True, force_color=0)
                 sel.TypeParagraph()
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.PageBreakBefore = False
 
             elif tag == "H5":
                 try:
@@ -487,6 +493,8 @@ class ULNWordRenderer:
                     s.text = apply_sentence_case_to_text(s.text)
                 self.write_inline_spans(sel, block.spans, default_bold=False, force_color=0)
                 sel.TypeParagraph()
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.PageBreakBefore = False
 
             elif tag == "H6":
                 try:
@@ -504,6 +512,8 @@ class ULNWordRenderer:
                     s.text = apply_sentence_case_to_text(s.text)
                 self.write_inline_spans(sel, block.spans, default_bold=False, default_italic=True, force_color=0)
                 sel.TypeParagraph()
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.PageBreakBefore = False
 
             elif tag in ["P0", "P"]:
                 sel.ParagraphFormat.LeftIndent = 0
@@ -752,6 +762,8 @@ class ULNWordRenderer:
                 space_before_tab2 = 14 if (self.last_rendered_tag == "BOX") else 3
                 sel.ParagraphFormat.SpaceBefore = space_before_tab2
                 sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.PageBreakBefore = False
 
                 # Check if Column 2 is an answer blank (e.g. ______ or <blank> or [BLANK])
                 col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?(?:_{2,}|<blank>|\[BLANK\])\s*$', block.col2, re.IGNORECASE))
@@ -784,11 +796,6 @@ class ULNWordRenderer:
                     blank_w_cm = min(3.5, avail_w_cm)
                     num_underscores = int(blank_w_cm * 5.5)
 
-                    sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
-
                     pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
                     if q_num is not None and c1_body.strip():
                         num_fmt = self.get_effective_number_format(pref, delim)
@@ -796,7 +803,6 @@ class ULNWordRenderer:
                         from uln_parser import parse_inline_spans
                         c1_spans = parse_inline_spans(c1_body.strip())
                         self.write_inline_spans(sel, c1_spans)
-
                     else:
                         try:
                             sel.Range.ListFormat.RemoveNumbers()
@@ -804,7 +810,12 @@ class ULNWordRenderer:
                             pass
                         self.write_inline_spans(sel, block.col1_spans)
 
-
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
+                    sel.ParagraphFormat.KeepWithNext = False
+                    sel.ParagraphFormat.PageBreakBefore = False
 
                     sel.Font.Color = 0
                     sel.Font.Bold = 0
@@ -816,42 +827,27 @@ class ULNWordRenderer:
                     col2_trim = block.col2.strip()
                     m_opt = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z])[\.\)](?:\*\*|\*|\]|\}|\{u\}|\))*)\s+(.*)$', col2_trim)
 
+                    pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
+                    if q_num is not None:
+                        num_fmt = self.get_effective_number_format(pref, delim)
+                        self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
+                        from uln_parser import parse_inline_spans
+                        c1_spans = parse_inline_spans(c1_body.strip())
+                        self.write_inline_spans(sel, c1_spans)
+                    else:
+                        try:
+                            sel.Range.ListFormat.RemoveNumbers()
+                        except Exception:
+                            pass
+                        self.write_inline_spans(sel, block.col1_spans)
+
                     # Single tab stop: col1 text → \t → col2 content (option letter + body inline)
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_tab_pos_cm)
                     sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-col1_needed_cm)
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
-
-                    # Format Column 1 with Question Numbering if present (e.g. #1. or Question #1.)
-                    pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
-                    if q_num is not None:
-                        eff_pref = pref if (pref and pref.strip()) else (self.question_prefix or "")
-                        if eff_pref and eff_pref.strip():
-                            eff_pref = f"{eff_pref.strip()} "
-                        else:
-                            eff_pref = ""
-                        eff_delim = self.question_delimiter if (self.question_delimiter and self.question_delimiter != ".") else (delim or ".")
-                        num_str = f"{eff_pref}{q_num}{eff_delim} "
-
-                        sel.Font.Name = self.font_name
-                        sel.Font.Size = self.font_size
-                        sel.Font.Bold = 1
-                        sel.Font.Italic = 0
-                        sel.Font.Underline = 0
-                        q_color_int = parse_color_to_rgb_int(self.question_color)
-                        if q_color_int is not None:
-                            sel.Font.Color = q_color_int
-                        else:
-                            sel.Font.Color = 0
-                        sel.TypeText(num_str)
-                        sel.Font.Bold = 0
-                        sel.Font.Color = 0
-
-                        from uln_parser import parse_inline_spans
-                        c1_spans = parse_inline_spans(c1_body.strip())
-                        self.write_inline_spans(sel, c1_spans)
-                    else:
-                        self.write_inline_spans(sel, block.col1_spans)
+                    sel.ParagraphFormat.KeepWithNext = False
+                    sel.ParagraphFormat.PageBreakBefore = False
 
                     sel.TypeText("\t")
 
