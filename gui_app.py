@@ -183,6 +183,26 @@ class ULNFormatterApp:
         btn_clear = tk.Button(btn_bar, text="🗑️ Clear Text", command=self.clear_text, bg="#334155", fg="#f43f5e", font=("Segoe UI", 9), relief="flat", padx=10, pady=4)
         btn_clear.pack(side="left", padx=5)
 
+        # Heading Quick Action Buttons (Alt+1..6)
+        hdr_bar = tk.Frame(btn_bar, bg="#1e293b")
+        hdr_bar.pack(side="left", padx=10)
+        tk.Label(hdr_bar, text="Headings:", bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 9)).pack(side="left", padx=(0, 2))
+        for lvl in range(1, 7):
+            h_btn = tk.Button(
+                hdr_bar,
+                text=f"H{lvl}",
+                command=lambda l=lvl: self.apply_heading_shortcut(l),
+                bg="#090d16",
+                fg="#38bdf8",
+                activebackground="#3b82f6",
+                activeforeground="#ffffff",
+                font=("Segoe UI", 8, "bold"),
+                relief="flat",
+                padx=4,
+                pady=2
+            )
+            h_btn.pack(side="left", padx=1)
+
         btn_compile = tk.Button(btn_bar, text="🚀 COMPILE TO DOCX", command=self.compile_docx, bg="#16a34a", fg="#ffffff", font=("Segoe UI", 10, "bold"), relief="flat", padx=15, pady=4)
         btn_compile.pack(side="right", padx=5)
 
@@ -204,8 +224,53 @@ class ULNFormatterApp:
         self.text_editor.pack(fill="both", expand=True)
         txt_scroll.config(command=self.text_editor.yview)
 
+        # Bind Alt+1 to Alt+6 heading shortcuts
+        for lvl in range(1, 7):
+            self.root.bind(f"<Alt-Key-{lvl}>", lambda e, l=lvl: self.apply_heading_shortcut(l, e))
+            self.root.bind(f"<Alt-KP_{lvl}>", lambda e, l=lvl: self.apply_heading_shortcut(l, e))
+            self.text_editor.bind(f"<Alt-Key-{lvl}>", lambda e, l=lvl: self.apply_heading_shortcut(l, e))
+            self.text_editor.bind(f"<Alt-KP_{lvl}>", lambda e, l=lvl: self.apply_heading_shortcut(l, e))
+
         # Preload default sample text
         self.load_sample()
+
+    def apply_heading_shortcut(self, level: int, event=None):
+        """
+        Applies [H1] to [H6] heading tag to the current line (or selected lines).
+        If a tag already exists at the beginning of the line (e.g. [P0], [H2], [INS], etc.),
+        it replaces it with [H{level}].
+        """
+        tag_str = f"[H{level}]"
+        try:
+            sel_ranges = self.text_editor.tag_ranges("sel")
+            if sel_ranges:
+                start_line = int(self.text_editor.index("sel.first").split('.')[0])
+                end_line = int(self.text_editor.index("sel.last").split('.')[0])
+                if self.text_editor.index("sel.last").endswith(".0") and end_line > start_line:
+                    end_line -= 1
+            else:
+                insert_pos = self.text_editor.index(tk.INSERT)
+                start_line = int(insert_pos.split('.')[0])
+                end_line = start_line
+
+            for line_num in range(start_line, end_line + 1):
+                line_start = f"{line_num}.0"
+                line_end = f"{line_num}.end"
+                line_text = self.text_editor.get(line_start, line_end)
+                if not line_text.strip():
+                    continue
+
+                # Strip existing block tag if present
+                clean_text = re.sub(r'^\s*\[(?:H[1-6]|P[0-2]|INS|QUOTE|BOX|TABLE(?::\s*borderless)?|TAB2|PIC)\]\s*', '', line_text, flags=re.IGNORECASE)
+                new_line = f"{tag_str} {clean_text}"
+                
+                self.text_editor.delete(line_start, line_end)
+                self.text_editor.insert(line_start, new_line)
+
+            return "break"
+        except Exception as e:
+            print(f"Error applying heading shortcut: {e}")
+            return "break"
 
     def add_images(self):
         files = filedialog.askopenfilenames(
