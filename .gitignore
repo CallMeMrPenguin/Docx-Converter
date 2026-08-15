@@ -2,5 +2,8 @@ output_test.docx
 output_test.pdf
 cli_output_test.docx
 cli_output_test.pdf
+output/
+~$*
 __pycache__/
 *.pyc
+

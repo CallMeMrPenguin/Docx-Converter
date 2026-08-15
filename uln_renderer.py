@@ -57,9 +57,8 @@ def parse_color_to_rgb_int(color_str: str) -> Optional[int]:
 def split_line_into_option_items(line_text: str) -> List[str]:
     """
     Splits line text into multi-column items automatically by detecting:
-    1. Explicit \t characters
-    2. Multiple option choices like A. text B. text C. text D. text or a. b. c. d. e. f.
-    3. Multiple spaces / double spaces
+    1. Explicit \\t characters
+    2. Multiple sequential option choices like A. text B. text C. text D. text or a. b. c. d. or 1. 2. 3. 4.
     """
     if not line_text:
         return []
@@ -67,30 +66,44 @@ def split_line_into_option_items(line_text: str) -> List[str]:
     if '\t' in line_text:
         return [x.strip() for x in line_text.split('\t') if x.strip()]
 
-    # Search for option choices like A. B. C. D. E. F. or a. b. c. d. e. f. or **a.** **b.**
-    pattern = r'(?:^|\s+)(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)(?=\s+|$)'
-    matches = list(re.finditer(pattern, line_text))
+    # Extract potential question number prefix (e.g. "1. ", "#1. ", "Question 1: ")
+    q_prefix = ""
+    rest_text = line_text
+    q_match = re.match(r'^(\s*(?:#?\d+[\.\)]|Question\s+#?\d+[\.\)]?|Câu\s+#?\d+[\.\)]?)\s*)(.*)$', line_text, re.IGNORECASE)
+    if q_match:
+        q_prefix = q_match.group(1)
+        rest_text = q_match.group(2)
+
+    # Search for option choices like A. B. C. D. or a. b. c. d. or (A) (B) (C) or 1. 2. 3. 4.
+    pattern = r'(?:^|\s+)(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z0-9][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)(?=\s+|$)'
+    matches = list(re.finditer(pattern, rest_text))
     if len(matches) >= 2:
-        items = []
-        first_start = matches[0].start()
-        q_prefix = line_text[:first_start].strip()
+        labels = [re.sub(r'[\*\_\`\[\]\(\)\.\s]', '', m.group(1)) for m in matches]
+        
+        is_seq = False
+        if all(len(l) == 1 and l.isalpha() for l in labels):
+            if labels[0] == 'A' and all(ord(l) == ord('A') + i for i, l in enumerate(labels)):
+                is_seq = True
+            elif labels[0] == 'a' and all(ord(l) == ord('a') + i for i, l in enumerate(labels)):
+                is_seq = True
+        elif all(l.isdigit() for l in labels):
+            nums = [int(l) for l in labels]
+            if nums[0] == 1 and all(n == 1 + i for i, n in enumerate(nums)):
+                is_seq = True
 
-        for i in range(len(matches)):
-            start = matches[i].start()
-            end = matches[i + 1].start() if i + 1 < len(matches) else len(line_text)
-            item_txt = line_text[start:end].strip()
-            if i == 0 and q_prefix:
-                item_txt = f"{q_prefix} {item_txt}"
-            items.append(item_txt)
-        return items
-
-    # Fallback to double space split if multiple columns exist
-    if '  ' in line_text:
-        parts = [p.strip() for p in re.split(r'\s{2,}', line_text) if p.strip()]
-        if len(parts) >= 2:
-            return parts
+        if is_seq:
+            items = []
+            for i in range(len(matches)):
+                start = matches[i].start()
+                end = matches[i + 1].start() if i + 1 < len(matches) else len(rest_text)
+                item_txt = rest_text[start:end].strip()
+                if i == 0 and q_prefix:
+                    item_txt = f"{q_prefix.strip()} {item_txt}"
+                items.append(item_txt)
+            return items
 
     return [line_text.strip()]
+
 
 
 class ULNWordRenderer:
@@ -149,7 +162,6 @@ class ULNWordRenderer:
         if self.enable_page_numbers:
             for section in doc.Sections:
                 footer = section.Footers(1)  # wdHeaderFooterPrimary = 1
-                footer.Range.ParagraphFormat.Alignment = 1  # wdAlignParagraphCenter = 1
                 footer.Range.Font.Name = self.font_name
                 footer.Range.Font.Size = 10
                 footer.Range.Text = ""
@@ -160,6 +172,15 @@ class ULNWordRenderer:
                 end_range = footer.Range
                 end_range.Collapse(0)  # wdCollapseEnd = 0
                 doc.Fields.Add(Range=end_range, Type=-1, Text="NUMPAGES")
+
+                # Center footer page numbers across all paragraphs in footer
+                try:
+                    footer.Range.ParagraphFormat.TabStops.ClearAll()
+                    for p in footer.Range.Paragraphs:
+                        p.Alignment = 1  # wdAlignParagraphCenter = 1
+                    footer.Range.ParagraphFormat.Alignment = 1
+                except Exception:
+                    pass
 
     def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False, default_uppercase: bool = False):
         """Writes formatted text runs strictly according to span AST properties."""
@@ -183,31 +204,10 @@ class ULNWordRenderer:
             is_italic = span.italic or default_italic
             is_upper = span.uppercase or default_uppercase
 
-            # Auto-capitalize & bold option letters: "a. ", "b. ", "c. ", "d. ", "e. ", "f. ", "a) ", "b) "
-            opt_match = re.match(r'^(\s*(?:\d+\.\s*)?)([a-zA-Z])([\.\)])(\s*.*)$', text)
-            if opt_match:
-                prefix_num = opt_match.group(1)
-                opt_let = opt_match.group(2).upper()
-                opt_punct = opt_match.group(3)
-                rest_txt = opt_match.group(4)
-
-                if prefix_num:
-                    sel.Font.Bold = 1 if default_bold else 0
-                    sel.Font.Italic = 1 if default_italic else 0
-                    sel.Font.Underline = 0
-                    sel.TypeText(prefix_num)
-
-                sel.Font.Bold = 1
-                sel.Font.Italic = 0
-                sel.Font.Underline = 0
-                sel.TypeText(f"{opt_let}{opt_punct} ")
-
-                text = rest_txt
-                is_bold = span.bold
-
             sel.Font.Bold = 1 if is_bold else 0
             sel.Font.Italic = 1 if is_italic else 0
             sel.Font.Underline = 1 if span.underline else 0
+
 
             if span.color:
                 rgb_int = parse_color_to_rgb_int(span.color)
@@ -384,7 +384,20 @@ class ULNWordRenderer:
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
-                    items = split_line_into_option_items(block.content)
+                    q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', block.content, re.IGNORECASE)
+                    starts_with_num = bool(q_match and (q_match.group(1) or q_match.group(2) or q_match.group(3)))
+
+                    if starts_with_num:
+                        self.apply_native_numbered_list(word, sel)
+                        body_text = q_match.group(len(q_match.groups())).strip()
+                    else:
+                        try:
+                            sel.Range.ListFormat.RemoveNumbers()
+                        except Exception:
+                            pass
+                        body_text = block.content
+
+                    items = split_line_into_option_items(body_text)
                     if len(items) > 1:
                         num_cols = self.calculate_optimal_option_cols(items, 0.0, printable_width_cm)
                         max_item_len = max(len(i) for i in items)
@@ -400,39 +413,32 @@ class ULNWordRenderer:
                                 sel.TypeText("\t")
                         sel.ParagraphFormat.TabStops.ClearAll()
                     else:
-                        q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', block.content, re.IGNORECASE)
-                        if q_match and q_match.group(4).strip():
-                            self.apply_native_numbered_list(word, sel)
-                            if self.last_rendered_tag == "BOX":
-                                sel.ParagraphFormat.SpaceBefore = 0
-                            from uln_parser import parse_inline_spans
-                            body_spans = parse_inline_spans(q_match.group(4).strip())
-                            self.write_inline_spans(sel, body_spans)
-                        else:
-                            try:
-                                sel.Range.ListFormat.RemoveNumbers()
-                            except Exception:
-                                pass
-                            if self.last_rendered_tag == "BOX":
-                                sel.ParagraphFormat.SpaceBefore = 0
-                            self.write_inline_spans(sel, block.spans)
+                        if self.last_rendered_tag == "BOX":
+                            sel.ParagraphFormat.SpaceBefore = 0
+                        from uln_parser import parse_inline_spans
+                        body_spans = parse_inline_spans(body_text)
+                        self.write_inline_spans(sel, body_spans)
                         sel.TypeParagraph()
 
 
             elif tag in ["P1", "P2"]:
-                items = split_line_into_option_items(block.content)
-                starts_with_num = bool(re.match(r'^\s*#?\d+[\.\)]', block.content))
+                q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', block.content, re.IGNORECASE)
+                starts_with_num = bool(q_match and (q_match.group(1) or q_match.group(2) or q_match.group(3)))
 
                 # Question lines starting with a number (1. A. ... B. ...) MUST start flush at 0cm left margin!
                 left_indent_cm = 0.0 if starts_with_num else (0.5 if tag == "P1" else 1.0)
 
                 if starts_with_num:
                     self.apply_native_numbered_list(word, sel)
+                    content_to_render = q_match.group(len(q_match.groups())).strip()
                 else:
                     try:
                         sel.Range.ListFormat.RemoveNumbers()
                     except Exception:
                         pass
+                    content_to_render = block.content
+
+                items = split_line_into_option_items(content_to_render)
 
                 space_before_p1 = 14 if (self.last_rendered_tag == "BOX") else (4 if tag == "P1" else 3)
                 sel.ParagraphFormat.SpaceBefore = space_before_p1
@@ -441,10 +447,10 @@ class ULNWordRenderer:
                 sel.ParagraphFormat.Alignment = 0
 
                 # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct
-                blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', block.content, re.IGNORECASE)
+                blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', content_to_render, re.IGNORECASE)
                 # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank), ONLY for sentence transformation arrows (→ / ->) or 15+ long underscores
-                is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', block.content)) or bool(re.search(r'_{15,}', block.content))
-                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and is_transform_or_long) else None
+                is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', content_to_render)) or bool(re.search(r'_{15,}', content_to_render))
+                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', content_to_render, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and is_transform_or_long) else None
 
                 if blank_symbol_match:
                     trailing_sym = blank_symbol_match.group(1).strip()
@@ -481,13 +487,12 @@ class ULNWordRenderer:
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
                     # Detect horizontal picture choice grids
-                    pic_matches = list(re.finditer(r'(?:\d+\.\s*)?\[PIC:[^\]]+\]\s*_{2,}', block.content))
+                    pic_matches = list(re.finditer(r'(?:\d+\.\s*)?\[PIC:[^\]]+\]\s*_{2,}', content_to_render))
                     if len(pic_matches) >= 2:
                         num_cols = min(4, len(pic_matches))
                         self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
                         
                         from uln_parser import parse_inline_spans
-                        items = split_line_into_option_items(block.content)
                         for idx_item, item in enumerate(items):
                             spans = parse_inline_spans(item.strip())
                             self.write_inline_spans(sel, spans)
@@ -513,8 +518,11 @@ class ULNWordRenderer:
                         else:
                             sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
                             sel.ParagraphFormat.FirstLineIndent = 0
-                            self.write_inline_spans(sel, block.spans)
+                            from uln_parser import parse_inline_spans
+                            c_spans = parse_inline_spans(content_to_render)
+                            self.write_inline_spans(sel, c_spans)
                             sel.TypeParagraph()
+
 
             elif tag == "TAB2":
                 # Find the TRUE start of this consecutive TAB2 run (scan backward)
@@ -761,13 +769,16 @@ class ULNWordRenderer:
             sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=not restart)
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.FirstLineIndent = 0
+            sel.Font.Bold = 0
         except Exception:
             try:
                 sel.Range.ListFormat.ApplyNumberDefault()
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
+                sel.Font.Bold = 0
             except Exception:
                 pass
+
 
     def clean_num_placeholders(self, b: ULNBlock):
         r"""Recursively cleans #(\d+) placeholders from content, columns, spans, tables, and child blocks."""
@@ -959,21 +970,8 @@ class ULNWordRenderer:
 
         # Render Question Number Prefix on the SAME line if present
         if q_num_prefix:
-            if self.is_first_question_in_num_block or '#' in q_num_prefix:
-                self.apply_native_numbered_list(word, sel)
-            else:
-                try:
-                    sel.Range.ListFormat.RemoveNumbers()
-                except Exception:
-                    pass
-                sel.ParagraphFormat.LeftIndent = 0
-                sel.ParagraphFormat.FirstLineIndent = 0
-                sel.Font.Name = self.font_name
-                sel.Font.Size = self.font_size
-                sel.Font.Bold = 1
-                sel.Font.Italic = 0
-                sel.Font.Underline = 0
-                sel.TypeText(f"{q_num_prefix} ")
+            self.apply_native_numbered_list(word, sel)
+            sel.Font.Bold = 0
         else:
             try:
                 sel.Range.ListFormat.RemoveNumbers()
@@ -991,10 +989,11 @@ class ULNWordRenderer:
             sel.Font.Italic = 0
             sel.Font.Underline = 0
             sel.TypeText(f"{let_str} ")
+            sel.Font.Bold = 0
 
             # Render Option Body Text
             body_spans = parse_inline_spans(body_str)
-            self.write_inline_spans(sel, body_spans)
+            self.write_inline_spans(sel, body_spans, default_bold=False)
 
             # Insert tab or paragraph break based on calculated column layout
             if (idx_item + 1) % cols == 0 or idx_item == N - 1:
@@ -1010,7 +1009,7 @@ class ULNWordRenderer:
         """
         Renders Word Bank / Callout Box with words typed directly INSIDE a MS Word Rounded Rectangle Shape TextFrame (msoShapeRoundedRectangle = 5).
         Anchors the box to paragraph line flow with wdWrapTopBottom so adding/deleting lines above moves the box AND its text together seamlessly.
-        Configures symmetric 6.0pt top/bottom and 12.0pt left/right TextFrame inner margins with AutoSize enabled.
+        Configures symmetric margins and equal column slot widths for clean, balanced centering without excess space on the right.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         
@@ -1024,43 +1023,34 @@ class ULNWordRenderer:
 
         N = len(words)
 
-        char_w_pt = 7.2  # 12pt bold Times New Roman character width estimate
-        inter_col_gap_pt = 18.0
-        margin_2mm_pt = cm_to_pt(0.2)  # Exact 2mm margins (5.67pt)
+        char_w_pt = 6.2  # 12pt bold Times New Roman character width estimate
+        margin_pt = 8.0  # Symmetric 8pt inner margins
 
         # Determine column count (1 to 5 cols)
         max_len_all = max(len(w) for w in words)
-        est_single_col_w = (max_len_all * char_w_pt) + (2 * margin_2mm_pt) + 4.0
+        est_slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
 
-        if est_single_col_w >= (printable_width_pt - (2 * margin_2mm_pt)):
+        if est_slot_w >= (printable_width_pt - (2 * margin_pt)):
             cols = 1
         else:
-            max_fit_cols = max(1, int((printable_width_pt - (2 * margin_2mm_pt)) / est_single_col_w))
+            max_fit_cols = max(1, int((printable_width_pt - (2 * margin_pt)) / est_slot_w))
             if N <= 5:
                 cols = min(N, max_fit_cols)
-            elif N <= 9:
+            elif N <= 8:
                 cols = min(4, max_fit_cols)
-            else:
+            elif N <= 10:
                 cols = min(5, max_fit_cols)
+            else:
+                cols = min(4, max_fit_cols)
 
-        # Calculate exact max text width per column
-        col_widths = []
-        for c in range(cols):
-            col_c_words = [words[i] for i in range(c, N, cols)] if N > c else [words[c]]
-            max_len_c = max(len(w) for w in col_c_words) if col_c_words else 5
-            col_widths.append(max_len_c * char_w_pt)
-
-        # Calculate compact text group width and centered box width
-        text_group_width_pt = sum(col_widths) + max(0, (cols - 1) * inter_col_gap_pt)
-        needed_box_width_pt = text_group_width_pt + (2 * margin_2mm_pt) + 6.0
-
-        box_width_pt = min(printable_width_pt, max(80.0, needed_box_width_pt))
+        slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
+        inner_w = slot_w * cols
+        box_width_pt = min(printable_width_pt, inner_w + (2 * margin_pt))
         left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
         num_rows = math.ceil(N / cols)
-        font_line_h = (self.font_size * 1.3) if hasattr(self, 'font_size') and self.font_size else 15.6
-        text_block_h = (num_rows * font_line_h) + max(0, (num_rows - 1) * 1.5)
-        box_height_pt = text_block_h + (2 * margin_2mm_pt) + 6.0
+        font_line_h = 16.0
+        box_height_pt = (num_rows * font_line_h) + (2 * margin_pt) + 4.0
 
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
         try:
@@ -1068,8 +1058,6 @@ class ULNWordRenderer:
             p_anchor.ParagraphFormat.SpaceAfter = 14.0
         except Exception:
             pass
-
-
 
         try:
             shape = doc.Shapes.AddShape(
@@ -1089,10 +1077,10 @@ class ULNWordRenderer:
             shape.WrapFormat.DistanceBottom = 12.0
 
             tf = shape.TextFrame
-            tf.MarginTop = margin_2mm_pt
-            tf.MarginBottom = margin_2mm_pt
-            tf.MarginLeft = margin_2mm_pt
-            tf.MarginRight = margin_2mm_pt
+            tf.MarginTop = margin_pt
+            tf.MarginBottom = margin_pt
+            tf.MarginLeft = margin_pt
+            tf.MarginRight = margin_pt
             try:
                 tf.AutoSize = False
             except Exception:
@@ -1116,11 +1104,8 @@ class ULNWordRenderer:
             box_sel.ParagraphFormat.Alignment = 0  # Left align
             box_sel.ParagraphFormat.TabStops.ClearAll()
 
-            if cols > 1:
-                curr_tab = 0.0
-                for c in range(1, cols):
-                    curr_tab += col_widths[c - 1] + inter_col_gap_pt
-                    box_sel.ParagraphFormat.TabStops.Add(Position=curr_tab, Alignment=0)
+            for c in range(1, cols):
+                box_sel.ParagraphFormat.TabStops.Add(Position=slot_w * c, Alignment=0)
 
             lines = []
             for i in range(0, N, cols):
@@ -1165,14 +1150,11 @@ class ULNWordRenderer:
             sel.ParagraphFormat.SpaceBefore = 0
             sel.ParagraphFormat.SpaceAfter = 4
             sel.ParagraphFormat.Alignment = 0  # Reset to Left align for next text
-
-
-
-
         except Exception:
             pass
 
         self.last_rendered_tag = "BOX"
+
 
 
 
