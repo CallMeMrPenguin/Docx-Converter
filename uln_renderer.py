@@ -1108,7 +1108,7 @@ class ULNWordRenderer:
         N = len(words)
 
         char_w_pt = 6.2  # 12pt bold Times New Roman character width estimate
-        margin_pt = 8.0  # Symmetric 8pt inner margins
+        margin_pt = 0.0  # 0mm inner margins on all 4 sides
 
         # Determine column count (1 to 5 cols)
         max_len_all = max(len(w) for w in words)
@@ -1161,10 +1161,11 @@ class ULNWordRenderer:
             shape.WrapFormat.DistanceBottom = 12.0
 
             tf = shape.TextFrame
-            tf.MarginTop = margin_pt
-            tf.MarginBottom = margin_pt
-            tf.MarginLeft = margin_pt
-            tf.MarginRight = margin_pt
+            tf.MarginTop = 0.0
+            tf.MarginBottom = 0.0
+            tf.MarginLeft = 0.0
+            tf.MarginRight = 0.0
+
             try:
                 tf.AutoSize = False
             except Exception:
