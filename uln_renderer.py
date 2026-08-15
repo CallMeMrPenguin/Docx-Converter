@@ -151,7 +151,7 @@ class ULNWordRenderer:
         self.question_delimiter = self.settings.get("question_delimiter", ".")  # e.g. ".", ":", ")", "-"
         self.question_color = self.settings.get("question_color", "#000000")  # Hex or color name
         self.opt_color = self.settings.get("opt_color", "#000000")  # Hex or color name
-
+        self.instruction_color = self.settings.get("instruction_color", self.settings.get("ins_color", "#000000"))  # Hex or color name for [ins]
 
         self.user_images = list(self.settings.get("user_images", []))
         self.user_img_idx = 0
@@ -269,6 +269,18 @@ class ULNWordRenderer:
                         sel.Font.Color = rgb_int
                     except Exception:
                         pass
+            elif span.is_instruction and self.instruction_color:
+                ins_color_int = parse_color_to_rgb_int(self.instruction_color)
+                if ins_color_int is not None:
+                    try:
+                        sel.Font.Color = ins_color_int
+                    except Exception:
+                        pass
+                else:
+                    try:
+                        sel.Font.Color = 0
+                    except Exception:
+                        pass
             else:
                 try:
                     sel.Font.Color = 0  # Pure Black RGB(0,0,0)
@@ -378,9 +390,15 @@ class ULNWordRenderer:
             elif tag in ["P0", "P"]:
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
-                sel.ParagraphFormat.SpaceBefore = 6
-                sel.ParagraphFormat.SpaceAfter = 4
-                sel.ParagraphFormat.KeepWithNext = False
+                is_ins_block = block.is_instruction or any(s.is_instruction for s in block.spans)
+                if is_ins_block:
+                    sel.ParagraphFormat.SpaceBefore = 14 if self.last_rendered_tag == "BOX" else 8
+                    sel.ParagraphFormat.SpaceAfter = 4
+                    sel.ParagraphFormat.KeepWithNext = True
+                else:
+                    sel.ParagraphFormat.SpaceBefore = 6
+                    sel.ParagraphFormat.SpaceAfter = 4
+                    sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.Alignment = 0
 
                 # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct

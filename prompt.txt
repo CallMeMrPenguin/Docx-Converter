@@ -14,9 +14,10 @@ Place these tags at the very beginning of the line:
 - [H2] : Sub-heading / Sub-section Title (Formatted as ALL BOLD, ALL CAPITALIZED)
 - [H3] : Minor Heading or Category Title (Formatted as ALL BOLD, ALL CAPITALIZED)
 
-- [P0] : Base Paragraph / Main Instruction / Level 0 Question (Left Indent: 0 cm, e.g., "**I. Choose the correct answer.**", "1. Question text...")
-  - NOTE: All lines starting with a question number (1., 2., 3.) MUST use [P0] so they start flush at 0 cm left margin.
-  - CRITICAL BOLD MANDATE FOR INSTRUCTIONS: All Roman numerals (I., II., III., IV.), section letters (A., B., C.), and main exercise instruction headings MUST be wrapped in bold `**...**`.
+- [P0] : Base Paragraph / Main Instruction / Level 0 Question (Left Indent: 0 cm, e.g., "[ins]**I. Choose the correct answer.**", "1. Question text...")
+  - EXERCISE INSTRUCTION CLASS MANDATE ([ins]): All exercise instruction headings and task directives (Roman numerals I., II., III., IV., sub-section letters A., B., C., or standalone exercise directives) MUST be prefixed with `[ins]` and bolded: `[P0] [ins]**I. Choose the best answer A, B, C, or D.**` (or `[P0] [ins]**II. Match the pictures with the volunteer activities.**`). This applies the dedicated instruction class for custom color theming and typography.
+  - NOTE: All lines starting with a question number (1., 2., 3.) MUST use [P0] so they start flush at 0 cm left margin, but individual questions do NOT use `[ins]`.
+  - CRITICAL BOLD MANDATE FOR INSTRUCTIONS: All Roman numerals (I., II., III., IV.), section letters (A., B., C.), and main exercise instruction headings MUST be wrapped in bold `**...**` inside `[ins]`.
   - Plain numbered questions (1., 2., 3.) MUST NOT be bolded unless explicitly bold in the original source image/text.
 
 - [P1] : Sub-question or secondary line placed below a question (Left Indent: 0.5 cm).
@@ -90,6 +91,7 @@ Place these tags at the very beginning of the line:
 ### 2. INLINE TEXT FORMATTING & STYLING RULES
 Apply these syntax rules directly inside strings:
 
+- [ins]**text**     -> Exercise Instruction class tag (MUST be wrapped around all exercise instructions: Roman numerals I., II., III. or task directives)
 - **text**          -> Bold text (MUST be applied to all section headers, Roman numerals I./II., and instruction headings)
 - *text*            -> Italic text (applied ONLY to explicitly italicized text)
 - [text]{u}         -> Underlined text (ONLY wrap the exact underlined target letters/words, e.g. `[e]{u}xciting`, `[ch]{u}ildren`)
@@ -171,7 +173,7 @@ Word Bank: [ photosynthesis | chlorophyll | sunlight ]
 Target ULN Output:
 ```uln
 [H1] **SECTION A: MULTIPLE CHOICE**
-[P0] **I. Choose the best answer A, B, C, or D.**
+[P0] [ins]**I. Choose the best answer A, B, C, or D.**
 
 [P0] 1. She is looking forward to <blank> her old friends.
 [OPT] see | seeing | saw | seen [/OPT]

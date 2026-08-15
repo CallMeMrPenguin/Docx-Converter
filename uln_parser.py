@@ -11,6 +11,7 @@ class InlineSpan:
     uppercase: bool = False
     color: Optional[str] = None      # e.g., "red", "#FF0000"
     bg_color: Optional[str] = None   # e.g., "yellow", "#FFFF00"
+    is_instruction: bool = False     # Flag for [ins]...[/ins] instruction formatting
 
 @dataclass
 class PicInfo:
@@ -37,7 +38,7 @@ class ULNTableData:
 
 @dataclass
 class ULNBlock:
-    tag: str  # "H1", "H2", "H3", "P0", "P1", "P2", "TAB2", "BOX", "QUOTE", "PIC", "TABLE", "P"
+    tag: str  # "H1", "H2", "H3", "P0", "P1", "P2", "TAB2", "BOX", "QUOTE", "PIC", "TABLE", "P", "INS"
     content: str = ""
     col1: str = ""
     col2: str = ""
@@ -47,6 +48,7 @@ class ULNBlock:
     pic: Optional[PicInfo] = None
     table_data: Optional[ULNTableData] = None
     children: List['ULNBlock'] = field(default_factory=list)
+    is_instruction: bool = False
 
 
 def parse_pic_tag(text: str) -> Optional[PicInfo]:
@@ -72,18 +74,25 @@ def parse_pic_tag(text: str) -> Optional[PicInfo]:
     return None
 
 
-def parse_inline_spans(text: str, default_bold: bool = False, default_italic: bool = False) -> List[InlineSpan]:
+def parse_inline_spans(text: str, default_bold: bool = False, default_italic: bool = False, default_instruction: bool = False) -> List[InlineSpan]:
     """
-    Parses inline formatting elements recursively, handling nested tags like **bold with *italic***.
+    Parses inline formatting elements recursively, handling nested tags like **bold with *italic*** and [ins] instruction tags.
     """
     if not text:
         return []
 
+    # Handle unclosed [ins] tag at the start of line/text (e.g. [ins]**II. Choose...**)
+    if re.match(r'^\s*\[ins\]', text, re.IGNORECASE) and not re.search(r'\[/ins\]', text, re.IGNORECASE):
+        cleaned_text = re.sub(r'^\s*\[ins\]\s*', '', text, flags=re.IGNORECASE)
+        return parse_inline_spans(cleaned_text, default_bold=default_bold, default_italic=default_italic, default_instruction=True)
+
     pattern = re.compile(
         r'(?P<pic>\[PIC(?::[^\]]+)?\])|'
+        r'(?P<ins>\[ins\](?P<ins_txt>.*?)\[/ins\])|'
         r'(?P<annot>\[(?P<ann_txt>[^\]]+)\]\{(?P<ann_mod>[^\}]+)\})|'
         r'(?P<bold>\*\*(?P<b_txt>.*?)\*\*)|'
-        r'(?P<italic>\*(?P<i_txt>.*?)\*)'
+        r'(?P<italic>\*(?P<i_txt>.*?)\*)',
+        re.IGNORECASE | re.DOTALL
     )
 
     spans = []
@@ -93,13 +102,19 @@ def parse_inline_spans(text: str, default_bold: bool = False, default_italic: bo
         start, end = match.span()
         if start > last_idx:
             plain_txt = text[last_idx:start]
+            plain_txt = re.sub(r'\[\/?ins\]', '', plain_txt, flags=re.IGNORECASE)
             if plain_txt:
-                spans.append(InlineSpan(text=plain_txt, bold=default_bold, italic=default_italic))
+                spans.append(InlineSpan(text=plain_txt, bold=default_bold, italic=default_italic, is_instruction=default_instruction))
 
         gd = match.groupdict()
 
         if gd['pic']:
-            spans.append(InlineSpan(text=gd['pic'], bold=default_bold, italic=default_italic))
+            spans.append(InlineSpan(text=gd['pic'], bold=default_bold, italic=default_italic, is_instruction=default_instruction))
+
+        elif gd['ins']:
+            ins_inner = gd['ins_txt']
+            inner_spans = parse_inline_spans(ins_inner, default_bold=default_bold, default_italic=default_italic, default_instruction=True)
+            spans.extend(inner_spans)
 
         elif gd['annot']:
             ann_txt = gd['ann_txt']
@@ -135,25 +150,27 @@ def parse_inline_spans(text: str, default_bold: bool = False, default_italic: bo
                 underline=underline,
                 uppercase=uppercase,
                 color=color,
-                bg_color=bg_color
+                bg_color=bg_color,
+                is_instruction=default_instruction
             ))
 
         elif gd['bold']:
             b_inner = gd['b_txt']
-            inner_spans = parse_inline_spans(b_inner, default_bold=True, default_italic=default_italic)
+            inner_spans = parse_inline_spans(b_inner, default_bold=True, default_italic=default_italic, default_instruction=default_instruction)
             spans.extend(inner_spans)
 
         elif gd['italic']:
             i_inner = gd['i_txt']
-            inner_spans = parse_inline_spans(i_inner, default_bold=default_bold, default_italic=True)
+            inner_spans = parse_inline_spans(i_inner, default_bold=default_bold, default_italic=True, default_instruction=default_instruction)
             spans.extend(inner_spans)
 
         last_idx = end
 
     if last_idx < len(text):
         remaining = text[last_idx:]
+        remaining = re.sub(r'\[\/?ins\]', '', remaining, flags=re.IGNORECASE)
         if remaining:
-            spans.append(InlineSpan(text=remaining, bold=default_bold, italic=default_italic))
+            spans.append(InlineSpan(text=remaining, bold=default_bold, italic=default_italic, is_instruction=default_instruction))
 
     return spans
 
@@ -370,13 +387,19 @@ class ULNParser:
             if not trimmed:
                 continue
 
-            tag_match = re.match(r'^\[(H1|H2|H3|P0|P1|P2|TAB2|PIC)\]\s*(.*)$', trimmed, re.IGNORECASE)
+            tag_match = re.match(r'^\[(H1|H2|H3|P0|P1|P2|TAB2|PIC|INS)\]\s*(.*)$', trimmed, re.IGNORECASE)
 
             if tag_match:
                 tag = tag_match.group(1).upper()
                 rest_content = tag_match.group(2)
 
-                if tag == "TAB2":
+                if tag == "INS":
+                    tag = "P0"
+                    spans = parse_inline_spans(rest_content, default_instruction=True)
+                    pic_info = parse_pic_tag(rest_content)
+                    blocks.append(ULNBlock(tag=tag, content=rest_content, spans=spans, pic=pic_info, is_instruction=True))
+
+                elif tag == "TAB2":
                     pic_start_match = re.match(r'^\s*(\[PIC:[^\]]+\])\s+(.*)$', rest_content, re.IGNORECASE)
                     if pic_start_match:
                         col1_raw = pic_start_match.group(1).strip()
@@ -423,7 +446,8 @@ class ULNParser:
                 else:
                     spans = parse_inline_spans(rest_content)
                     pic_info = parse_pic_tag(rest_content)
-                    blocks.append(ULNBlock(tag=tag, content=rest_content, spans=spans, pic=pic_info))
+                    is_ins = any(s.is_instruction for s in spans) or bool(re.search(r'\[ins\]', rest_content, re.IGNORECASE))
+                    blocks.append(ULNBlock(tag=tag, content=rest_content, spans=spans, pic=pic_info, is_instruction=is_ins))
 
             else:
                 pic_info = parse_pic_tag(trimmed)
@@ -431,7 +455,8 @@ class ULNParser:
                     blocks.append(ULNBlock(tag="PIC", pic=pic_info))
                 else:
                     spans = parse_inline_spans(trimmed)
-                    blocks.append(ULNBlock(tag="P0", content=trimmed, spans=spans, pic=pic_info))
+                    is_ins = any(s.is_instruction for s in spans) or bool(re.search(r'\[ins\]', trimmed, re.IGNORECASE))
+                    blocks.append(ULNBlock(tag="P0", content=trimmed, spans=spans, pic=pic_info, is_instruction=is_ins))
 
         # Merge empty P0/P1 question-number-only blocks preceding OPT blocks
         merged_blocks: List[ULNBlock] = []

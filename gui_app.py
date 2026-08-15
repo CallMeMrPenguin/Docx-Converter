@@ -87,7 +87,7 @@ class ULNFormatterApp:
 
 
         # Question & Option Numbering / Formatting Frame
-        q_frame = ttk.LabelFrame(sidebar, text=" 🎯 Question & Option Styling ", padding=8)
+        q_frame = ttk.LabelFrame(sidebar, text=" 🎯 Question, Option & Ins Styling ", padding=8)
         q_frame.pack(fill="x", pady=(8, 6))
 
         # Question Prefix (Default: "")
@@ -125,6 +125,12 @@ class ULNFormatterApp:
         self.opt_color_var = tk.StringVar(value="Default (Black) #000000")
         opt_col_cb = ttk.Combobox(q_frame, textvariable=self.opt_color_var, values=color_choices, width=16)
         opt_col_cb.grid(row=3, column=1, padx=4, pady=2, sticky="ew")
+
+        # Instruction Heading ([ins]) Color
+        ttk.Label(q_frame, text="Ins Color:").grid(row=4, column=0, sticky="w", pady=2)
+        self.ins_color_var = tk.StringVar(value="Default (Black) #000000")
+        ins_col_cb = ttk.Combobox(q_frame, textvariable=self.ins_color_var, values=color_choices, width=16)
+        ins_col_cb.grid(row=4, column=1, padx=4, pady=2, sticky="ew")
 
         # Page Numbering Checkbox
         self.pg_num_var = tk.BooleanVar(value=True)
@@ -288,6 +294,8 @@ class ULNFormatterApp:
             "question_delimiter": self.q_delim_var.get(),
             "question_color": self.q_color_var.get(),
             "opt_color": self.opt_color_var.get(),
+            "instruction_color": self.ins_color_var.get(),
+            "ins_color": self.ins_color_var.get(),
             "user_images": list(self.user_image_paths),
         }
 
