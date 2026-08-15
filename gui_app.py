@@ -8,7 +8,7 @@ class ULNFormatterApp:
     def __init__(self, root):
         self.root = root
         self.root.title("Universal Layout Notation (ULN) → DOCX Formatter (pywin32)")
-        self.root.geometry("1100x750")
+        self.root.geometry("1200x820")
         self.root.configure(bg="#0f172a")
 
         # Configure dark theme styling
@@ -21,6 +21,18 @@ class ULNFormatterApp:
         style.configure("TLabelframe.Label", background="#1e293b", foreground="#38bdf8", font=("Segoe UI", 10, "bold"))
         style.configure("TButton", font=("Segoe UI", 10, "bold"), background="#3b82f6", foreground="#ffffff", borderwidth=0, padding=8)
         style.map("TButton", background=[("active", "#2563eb")])
+
+        # Configure Combobox and Spinbox dark inputs with crisp white readable text
+        style.configure("TCombobox", fieldbackground="#090d16", background="#1e293b", foreground="#f8fafc", selectbackground="#3b82f6", selectforeground="#ffffff", arrowcolor="#38bdf8", insertcolor="#ffffff")
+        style.map("TCombobox", fieldbackground=[("readonly", "#090d16"), ("active", "#1e293b"), ("focus", "#090d16"), ("!disabled", "#090d16")], foreground=[("readonly", "#f8fafc"), ("active", "#ffffff"), ("!disabled", "#f8fafc")])
+        style.configure("TSpinbox", fieldbackground="#090d16", background="#1e293b", foreground="#f8fafc", selectbackground="#3b82f6", selectforeground="#ffffff", arrowcolor="#38bdf8", insertcolor="#ffffff")
+        style.map("TSpinbox", fieldbackground=[("readonly", "#090d16"), ("active", "#1e293b"), ("focus", "#090d16"), ("!disabled", "#090d16")], foreground=[("readonly", "#f8fafc"), ("active", "#ffffff"), ("!disabled", "#f8fafc")])
+
+        self.root.option_add("*TCombobox*Listbox.background", "#090d16")
+        self.root.option_add("*TCombobox*Listbox.foreground", "#f8fafc")
+        self.root.option_add("*TCombobox*Listbox.selectBackground", "#3b82f6")
+        self.root.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
+        self.root.option_add("*TCombobox*Listbox.font", ("Segoe UI", 9))
 
         # Top Title Bar
         header_frame = tk.Frame(self.root, bg="#1e293b", height=60, padx=20, pady=10)
@@ -59,19 +71,20 @@ class ULNFormatterApp:
         
         tk.Label(m_frame, text="Top:", bg="#1e293b", fg="#f8fafc").grid(row=0, column=0, sticky="w", pady=2)
         self.m_top_var = tk.DoubleVar(value=2.0)
-        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_top_var, width=5).grid(row=0, column=1, padx=4, pady=2)
+        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_top_var, width=5, bg="#090d16", fg="#f8fafc", insertbackground="#ffffff", buttonbackground="#1e293b").grid(row=0, column=1, padx=4, pady=2)
 
         tk.Label(m_frame, text="Bottom:", bg="#1e293b", fg="#f8fafc").grid(row=0, column=2, sticky="w", pady=2, padx=(6, 0))
         self.m_bottom_var = tk.DoubleVar(value=2.0)
-        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_bottom_var, width=5).grid(row=0, column=3, padx=4, pady=2)
+        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_bottom_var, width=5, bg="#090d16", fg="#f8fafc", insertbackground="#ffffff", buttonbackground="#1e293b").grid(row=0, column=3, padx=4, pady=2)
 
         tk.Label(m_frame, text="Left:", bg="#1e293b", fg="#f8fafc").grid(row=1, column=0, sticky="w", pady=2)
         self.m_left_var = tk.DoubleVar(value=3.0)
-        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_left_var, width=5).grid(row=1, column=1, padx=4, pady=2)
+        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_left_var, width=5, bg="#090d16", fg="#f8fafc", insertbackground="#ffffff", buttonbackground="#1e293b").grid(row=1, column=1, padx=4, pady=2)
 
         tk.Label(m_frame, text="Right:", bg="#1e293b", fg="#f8fafc").grid(row=1, column=2, sticky="w", pady=2, padx=(6, 0))
         self.m_right_var = tk.DoubleVar(value=1.5)
-        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_right_var, width=5).grid(row=1, column=3, padx=4, pady=2)
+        tk.Spinbox(m_frame, from_=0.5, to=5.0, increment=0.5, textvariable=self.m_right_var, width=5, bg="#090d16", fg="#f8fafc", insertbackground="#ffffff", buttonbackground="#1e293b").grid(row=1, column=3, padx=4, pady=2)
+
 
         # Question & Option Numbering / Formatting Frame
         q_frame = ttk.LabelFrame(sidebar, text=" 🎯 Question & Option Styling ", padding=8)

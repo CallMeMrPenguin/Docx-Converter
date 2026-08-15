@@ -163,17 +163,22 @@ class ULNWordRenderer:
     def get_effective_number_format(self, extracted_pref: Optional[str], extracted_delim: Optional[str]) -> str:
         """
         Determines the effective list NumberFormat string:
-        - If prefix was explicitly specified in text (e.g. 'Question ' or 'Câu '), use that.
-          Otherwise, fall back to global self.question_prefix setting.
+        - Ensures a proper single space between prefix word and %1 (e.g. 'Question ' -> 'Question %1.').
         - If delimiter was selected in GUI settings (and is non-default, e.g. ':', ')', '-'), use GUI delimiter.
           Otherwise use extracted delimiter from text or global default.
         """
         pref = extracted_pref if (extracted_pref and extracted_pref.strip()) else (self.question_prefix or "")
+        if pref and pref.strip():
+            pref = f"{pref.strip()} "
+        else:
+            pref = ""
+
         if self.question_delimiter and self.question_delimiter != ".":
             delim = self.question_delimiter
         else:
             delim = extracted_delim if (extracted_delim and extracted_delim.strip()) else (self.question_delimiter or ".")
         return f"{pref}%1{delim}"
+
 
 
 
@@ -1036,7 +1041,20 @@ class ULNWordRenderer:
             except Exception:
                 pass
 
-        self.setup_tab_stops(sel, cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm, max_item_len=max_item_len)
+        # Setup Tab Stops:
+        # When Question prefix (e.g. 'Question 1.') is on the same line as options, offset tabs to balance all 4 columns cleanly
+        if q_num is not None and cols > 1:
+            bullet_sample = (num_fmt or "%1.").replace("%1", str(q_num or "1"))
+            q_bullet_w_cm = max(0.8, (len(bullet_sample) * 0.19) + 0.35)
+            rem_w = max(4.0, printable_width_cm - q_bullet_w_cm)
+            col_slot = rem_w / cols
+            tab_stops_cm = [q_bullet_w_cm + (col_slot * (i + 1)) for i in range(cols - 1)]
+            sel.ParagraphFormat.TabStops.ClearAll()
+            for t in tab_stops_cm:
+                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(t), Alignment=0)
+        else:
+            self.setup_tab_stops(sel, cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm, max_item_len=max_item_len)
+
 
         opt_color_int = parse_color_to_rgb_int(self.opt_color)
 
