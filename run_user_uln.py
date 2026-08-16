@@ -106,7 +106,7 @@ compiler = ULNCompiler({
     "enable_page_numbers": True
 })
 
-output_file = os.path.join(compiler.output_dir, "unit_1_test_formatted.docx")
+output_file = os.path.abspath("unit_1_test_formatted.docx")
 print("Compiling ULN input to Word document with real-time visual editing...")
 compiled_path = compiler.compile(uln_input, output_file, keep_open=True)
 print(f"Compilation finished! Word is open and interactive on screen at: {compiled_path}")

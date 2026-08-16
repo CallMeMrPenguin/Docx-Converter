@@ -18,35 +18,27 @@ class ULNCompiler:
     def __init__(self, settings: Optional[Dict[str, Any]] = None):
         self.settings = settings or {}
         self.renderer = ULNWordRenderer(self.settings)
-        self.output_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "output"))
-        os.makedirs(self.output_dir, exist_ok=True)
 
     def compile(self, uln_text: str, output_filepath: Optional[str] = None, visible: bool = False, keep_open: bool = False, background_mode: bool = False) -> str:
         """
         Compiles raw ULN plain text into a formatted MS Word (.docx) file.
-        Returns absolute path to generated file in output/ directory by default.
+        Saves directly to the specified output_filepath.
         """
         if not pywin32_available:
             raise RuntimeError("pywin32 package is not installed or available on this Python runtime.")
 
         from datetime import datetime
-        import re
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
 
         if not output_filepath:
-            output_filepath = os.path.join(self.output_dir, f"uln_document_{timestamp}.docx")
+            output_filepath = os.path.abspath(f"uln_document_{timestamp}.docx")
         else:
-            base, ext = os.path.splitext(output_filepath)
-            if not re.search(r'_\d{8}_\d{6}$', base):
-                output_filepath = f"{base}_{timestamp}{ext}"
-            if not os.path.isabs(output_filepath):
-                if not output_filepath.startswith("output"):
-                    output_filepath = os.path.join(self.output_dir, output_filepath)
-                else:
-                    output_filepath = os.path.abspath(output_filepath)
+            output_filepath = os.path.abspath(output_filepath)
 
-        abs_output_path = os.path.abspath(output_filepath)
-        os.makedirs(os.path.dirname(abs_output_path), exist_ok=True)
+        abs_output_path = output_filepath
+        parent_dir = os.path.dirname(abs_output_path)
+        if parent_dir:
+            os.makedirs(parent_dir, exist_ok=True)
 
         blocks = ULNParser.parse(uln_text)
         word = None
