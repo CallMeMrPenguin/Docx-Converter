@@ -35,6 +35,7 @@ def build_portable():
         "--name", "DocxConverter_Portable",
         "--add-data", f"{os.path.join(base_dir, 'VERSION')};.",
         "--add-data", f"{os.path.join(base_dir, 'uln_test.txt')};.",
+        "--add-data", f"{os.path.join(base_dir, 'prompt.txt')};.",
         "--hidden-import", "pythoncom",
         "--hidden-import", "win32com",
         "--hidden-import", "win32com.client",
