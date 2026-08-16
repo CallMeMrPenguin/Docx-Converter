@@ -48,6 +48,33 @@ def get_current_version() -> str:
 
     return FALLBACK_VERSION
 
+def get_github_token() -> Optional[str]:
+    """Retrieves GitHub token from env or git credentials if available."""
+    # Check env vars first
+    for key in ("GITHUB_TOKEN", "GH_TOKEN", "DOCX_CONVERTER_GITHUB_TOKEN"):
+        t = os.environ.get(key)
+        if t:
+            return t.strip()
+    
+    # Try Git Credential Manager (works on developer/authenticated machines)
+    try:
+        proc = subprocess.Popen(
+            ['git', 'credential', 'fill'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        out, _ = proc.communicate(input='protocol=https\nhost=github.com\n\n', timeout=2)
+        for line in out.strip().split('\n'):
+            if line.startswith('password='):
+                val = line.split('=', 1)[1].strip()
+                if val:
+                    return val
+    except Exception:
+        pass
+    return None
+
 def parse_version(v_str: str) -> Tuple[int, ...]:
     """Parses a version string like 'v1.2.3' or '1.2' into a tuple of ints."""
     clean = v_str.strip().lstrip("vV")
@@ -85,12 +112,16 @@ def check_for_updates(repo: str = DEFAULT_REPO) -> Dict[str, Any]:
         "error": None
     }
 
+    token = get_github_token()
+
     # 1. Try GitHub API for Latest Release
     api_url = f"https://api.github.com/repos/{repo}/releases/latest"
     headers = {
         "User-Agent": "Docx-Converter-Updater/1.0",
         "Accept": "application/vnd.github.v3+json"
     }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
 
     req = urllib.request.Request(api_url, headers=headers)
     try:
@@ -110,7 +141,8 @@ def check_for_updates(repo: str = DEFAULT_REPO) -> Dict[str, Any]:
                 for asset in data.get("assets", []):
                     name = asset.get("name", "")
                     if name.lower().endswith(".exe"):
-                        result["download_url"] = asset.get("browser_download_url")
+                        # If token present, use asset url with octet-stream for private repos, else browser download url
+                        result["download_url"] = asset.get("url") if token else asset.get("browser_download_url")
                         result["asset_name"] = name
                         break
 
@@ -118,7 +150,6 @@ def check_for_updates(repo: str = DEFAULT_REPO) -> Dict[str, Any]:
                     result["has_update"] = True
                 return result
     except urllib.error.HTTPError as he:
-        # If 404 (no releases yet) or 403 (API rate limit), try raw VERSION check
         pass
     except Exception as e:
         result["error"] = str(e)
@@ -126,7 +157,10 @@ def check_for_updates(repo: str = DEFAULT_REPO) -> Dict[str, Any]:
     # 2. Fallback: Check raw VERSION file from main branch
     raw_url = f"https://raw.githubusercontent.com/{repo}/main/VERSION"
     try:
-        raw_req = urllib.request.Request(raw_url, headers={"User-Agent": "Docx-Converter-Updater/1.0"})
+        raw_headers = {"User-Agent": "Docx-Converter-Updater/1.0"}
+        if token:
+            raw_headers["Authorization"] = f"Bearer {token}"
+        raw_req = urllib.request.Request(raw_url, headers=raw_headers)
         with urllib.request.urlopen(raw_req, timeout=5) as response:
             if response.status == 200:
                 raw_ver = response.read().decode("utf-8").strip()
@@ -167,10 +201,18 @@ def download_and_install_update(
     temp_dir = tempfile.gettempdir()
     download_target = os.path.join(temp_dir, f"DocxConverter_Update_{int(time.time())}.exe")
 
+    token = get_github_token()
+    headers = {
+        "User-Agent": "Docx-Converter-Updater/1.0",
+        "Accept": "application/octet-stream"
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     try:
         # Download new executable with progress reporting
-        req = urllib.request.Request(download_url, headers={"User-Agent": "Docx-Converter-Updater/1.0"})
-        with urllib.request.urlopen(req, timeout=30) as resp:
+        req = urllib.request.Request(download_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=40) as resp:
             total_size = int(resp.headers.get('content-length', 0))
             downloaded = 0
             block_size = 65536
