@@ -1282,51 +1282,18 @@ class ULNWordRenderer:
 
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
-        Renders Word Bank / Callout Box with words typed directly INSIDE a MS Word Rounded Rectangle Shape TextFrame (msoShapeRoundedRectangle = 5).
-        Anchors the box to paragraph line flow with wdWrapTopBottom so adding/deleting lines above moves the box AND its text together seamlessly.
-        Configures symmetric margins and equal column slot widths for clean, balanced centering without excess space on the right.
+        Renders Word Bank / Callout Box / Formula Box inside a MS Word Rounded Rectangle Shape TextFrame (msoShapeRoundedRectangle = 5).
+        Anchors the box to paragraph line flow with wdWrapTopBottom / wdWrapInline so adding/deleting lines above moves the box AND its text together seamlessly.
+        - If the content contains '|' (or tag is WORDBANK / BOX:bank): Treats it as a Word Bank and lays out items into balanced columns.
+        - If the content has NO '|': Treats it as a Formula / Rule / Callout Box, preserving complete lines/sentences without shredding words into columns.
         """
+        from uln_parser import parse_inline_spans
         printable_width_pt = cm_to_pt(printable_width_cm)
-        
-        if '|' in block.content:
-            words = [w.strip() for w in block.content.split('|') if w.strip()]
-        else:
-            words = [w.strip() for w in block.content.split() if w.strip()]
-
-        if not words:
+        raw_content = block.content.strip() if block.content else ""
+        if not raw_content:
             return
 
-        N = len(words)
-
-        char_w_pt = 6.2  # 12pt bold Times New Roman character width estimate
-        margin_pt = 0.0  # 0mm inner margins on all 4 sides
-
-        # Determine column count (1 to 5 cols)
-        max_len_all = max(len(w) for w in words)
-        est_slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
-
-        if est_slot_w >= (printable_width_pt - (2 * margin_pt)):
-            cols = 1
-        else:
-            max_fit_cols = max(1, int((printable_width_pt - (2 * margin_pt)) / est_slot_w))
-            if N <= 5:
-                cols = min(N, max_fit_cols)
-            elif N <= 8:
-                cols = min(4, max_fit_cols)
-            elif N <= 10:
-                cols = min(5, max_fit_cols)
-            else:
-                cols = min(4, max_fit_cols)
-
-        slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
-        inner_w = slot_w * cols
-        margin_left_pt = cm_to_pt(0.2)  # 2mm = ~5.67 pt
-        box_width_pt = min(printable_width_pt, inner_w + margin_left_pt)
-        left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
-
-        num_rows = math.ceil(N / cols)
-        font_line_h = 16.0
-        box_height_pt = (num_rows * font_line_h) + (2 * margin_pt) + 4.0
+        is_word_bank = ('|' in raw_content) or (block.tag == "WORDBANK") or (block.tag.endswith(":bank"))
 
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
         try:
@@ -1335,87 +1302,223 @@ class ULNWordRenderer:
         except Exception:
             pass
 
-        try:
-            shape = doc.Shapes.AddShape(
-                5,  # msoShapeRoundedRectangle = 5
-                0,
-                0,
-                box_width_pt,
-                box_height_pt,
-                Anchor=p_anchor
-            )
-            shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
-            shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
-            shape.Left = left_offset_pt
-            shape.Top = 0
-            shape.WrapFormat.Type = 7             # wdWrapInline = 7 ("In Line with Text")
-            shape.WrapFormat.DistanceTop = 12.0
-            shape.WrapFormat.DistanceBottom = 12.0
+        if not is_word_bank:
+            # ─────────────────────────────────────────────────────────────
+            # PATHWAY A: FORMULA / CALLOUT / TEXT BOX (Continuous Text / Lines)
+            # ─────────────────────────────────────────────────────────────
+            lines = [l.strip() for l in raw_content.split('\n') if l.strip()]
+            if not lines:
+                return
 
-            tf = shape.TextFrame
-            tf.MarginTop = 0.0
-            tf.MarginBottom = 0.0
-            tf.MarginLeft = margin_left_pt   # 2mm left margin
-            tf.MarginRight = 0.0
+            char_w_pt = max(5.0, self.font_size * 0.52)
+            pad_left_pt = cm_to_pt(0.3)   # ~8.5 pt padding
+            pad_right_pt = cm_to_pt(0.3)
+            pad_top_pt = cm_to_pt(0.12)   # ~3.4 pt
+            pad_bottom_pt = cm_to_pt(0.12)
 
+            max_len = max(len(l) for l in lines)
+            est_content_w = (max_len * char_w_pt) + pad_left_pt + pad_right_pt + 16.0
+
+            if est_content_w >= (printable_width_pt * 0.85):
+                box_width_pt = printable_width_pt
+                left_offset_pt = 0.0
+            else:
+                box_width_pt = min(printable_width_pt, max(120.0, est_content_w))
+                left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+
+            font_line_h = max(14.0, self.font_size * 1.35)
+            avail_text_w = max(1.0, box_width_pt - pad_left_pt - pad_right_pt)
+            est_total_lines = 0
+            for l in lines:
+                est_w = len(l) * char_w_pt
+                est_total_lines += max(1, math.ceil(est_w / avail_text_w))
+
+            num_display_lines = max(len(lines), est_total_lines)
+            box_height_pt = (num_display_lines * font_line_h) + pad_top_pt + pad_bottom_pt + 8.0
 
             try:
-                tf.AutoSize = False
-            except Exception:
-                pass
+                shape = doc.Shapes.AddShape(
+                    5,  # msoShapeRoundedRectangle = 5
+                    0,
+                    0,
+                    box_width_pt,
+                    box_height_pt,
+                    Anchor=p_anchor
+                )
+                shape.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
+                shape.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
+                shape.Left = left_offset_pt
+                shape.Top = 0
+                shape.WrapFormat.Type = 7             # wdWrapInline = 7 ("In Line with Text")
+                shape.WrapFormat.DistanceTop = 12.0
+                shape.WrapFormat.DistanceBottom = 12.0
 
-            shape.Fill.Visible = False  # Transparent fill
-            shape.Line.Weight = 1.0     # 1pt rounded border
-            shape.Line.ForeColor.RGB = 0  # Black border line
+                tf = shape.TextFrame
+                tf.MarginTop = pad_top_pt
+                tf.MarginBottom = pad_bottom_pt
+                tf.MarginLeft = pad_left_pt
+                tf.MarginRight = pad_right_pt
+                try:
+                    tf.WordWrap = -1  # msoTrue = -1
+                except Exception:
+                    pass
 
-            # Select inside shape TextFrame to typeset text runs
-            tf.TextRange.Select()
-            box_sel = word.Selection
-            box_sel.Font.Name = self.font_name
-            box_sel.Font.Size = self.font_size
-            box_sel.Font.Bold = 1
-            box_sel.Font.Color = 0  # Pure Black RGB(0,0,0)
+                try:
+                    tf.AutoSize = False
+                except Exception:
+                    pass
 
-            box_sel.ParagraphFormat.SpaceBefore = 0
-            box_sel.ParagraphFormat.SpaceAfter = 0
-            box_sel.ParagraphFormat.LineSpacingRule = 0
-            box_sel.ParagraphFormat.Alignment = 0  # Left align
-            box_sel.ParagraphFormat.TabStops.ClearAll()
+                shape.Fill.Visible = False  # Transparent fill
+                shape.Line.Weight = 1.0     # 1pt rounded border
+                shape.Line.ForeColor.RGB = 0  # Black border line
 
-            for c in range(1, cols):
-                box_sel.ParagraphFormat.TabStops.Add(Position=slot_w * c, Alignment=0)
+                # Select inside shape TextFrame to typeset text runs
+                tf.TextRange.Select()
+                box_sel = word.Selection
+                box_sel.Font.Name = self.font_name
+                box_sel.Font.Size = self.font_size
+                box_sel.Font.Bold = 1
+                box_sel.Font.Color = 0  # Pure Black RGB(0,0,0)
 
-            lines = []
-            for i in range(0, N, cols):
-                lines.append(words[i:i + cols])
-
-            from uln_parser import parse_inline_spans
-            for idx_line, chunk in enumerate(lines):
-                if idx_line > 0:
-                    box_sel.ParagraphFormat.SpaceBefore = 1.5
-
+                box_sel.ParagraphFormat.SpaceBefore = 0
                 box_sel.ParagraphFormat.SpaceAfter = 0
+                box_sel.ParagraphFormat.LineSpacingRule = 0
+                box_sel.ParagraphFormat.Alignment = 1  # Center alignment inside formula box
+                box_sel.ParagraphFormat.TabStops.ClearAll()
 
-                for idx_w, word_txt in enumerate(chunk):
-                    w_spans = parse_inline_spans(word_txt, default_bold=True)
-                    self.write_inline_spans(box_sel, w_spans)
+                for idx_line, line_str in enumerate(lines):
+                    if idx_line > 0:
+                        box_sel.ParagraphFormat.SpaceBefore = 2.0
+                    box_sel.ParagraphFormat.SpaceAfter = 0
+
+                    line_spans = parse_inline_spans(line_str, default_bold=True)
+                    self.write_inline_spans(box_sel, line_spans)
                     box_sel.Font.Color = 0  # Enforce black text
-                    if idx_w < len(chunk) - 1:
-                        box_sel.TypeText("\t")
+                    if idx_line < len(lines) - 1:
+                        box_sel.TypeParagraph()
 
-                if idx_line < len(lines) - 1:
-                    box_sel.TypeParagraph()
+                # Convert shape to native InlineShape ("In Line with Text")
+                try:
+                    shape.ConvertToInlineShape()
+                except Exception:
+                    pass
 
-            # Convert shape to native InlineShape ("In Line with Text")
+            except Exception as e:
+                print(f"[ULNRenderer] Warning creating Formula/Callout TextFrame box shape: {e}")
+
+        else:
+            # ─────────────────────────────────────────────────────────────
+            # PATHWAY B: WORD BANK (Multi-column list delimited by '|')
+            # ─────────────────────────────────────────────────────────────
+            words = [w.strip() for w in raw_content.split('|') if w.strip()]
+            if not words:
+                return
+
+            N = len(words)
+            char_w_pt = max(5.0, self.font_size * 0.52)
+            margin_pt = 0.0
+
+            max_len_all = max(len(w) for w in words)
+            est_slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
+
+            if est_slot_w >= (printable_width_pt - (2 * margin_pt)):
+                cols = 1
+            else:
+                max_fit_cols = max(1, int((printable_width_pt - (2 * margin_pt)) / est_slot_w))
+                if N <= 5:
+                    cols = min(N, max_fit_cols)
+                elif N <= 8:
+                    cols = min(4, max_fit_cols)
+                elif N <= 10:
+                    cols = min(5, max_fit_cols)
+                else:
+                    cols = min(4, max_fit_cols)
+
+            slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
+            inner_w = slot_w * cols
+            margin_left_pt = cm_to_pt(0.2)
+            box_width_pt = min(printable_width_pt, inner_w + margin_left_pt)
+            left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+
+            num_rows = math.ceil(N / cols)
+            font_line_h = max(14.0, self.font_size * 1.35)
+            box_height_pt = (num_rows * font_line_h) + (2 * margin_pt) + 4.0
+
             try:
-                shape.ConvertToInlineShape()
-            except Exception:
-                pass
+                shape = doc.Shapes.AddShape(
+                    5,  # msoShapeRoundedRectangle = 5
+                    0,
+                    0,
+                    box_width_pt,
+                    box_height_pt,
+                    Anchor=p_anchor
+                )
+                shape.RelativeHorizontalPosition = 0
+                shape.RelativeVerticalPosition = 2
+                shape.Left = left_offset_pt
+                shape.Top = 0
+                shape.WrapFormat.Type = 7
+                shape.WrapFormat.DistanceTop = 12.0
+                shape.WrapFormat.DistanceBottom = 12.0
 
-        except Exception as e:
-            print(f"[ULNRenderer] Warning creating TextFrame box shape: {e}")
+                tf = shape.TextFrame
+                tf.MarginTop = 0.0
+                tf.MarginBottom = 0.0
+                tf.MarginLeft = margin_left_pt
+                tf.MarginRight = 0.0
+                try:
+                    tf.AutoSize = False
+                except Exception:
+                    pass
 
-        # Move selection back to document main story below the inline shape
+                shape.Fill.Visible = False
+                shape.Line.Weight = 1.0
+                shape.Line.ForeColor.RGB = 0
+
+                tf.TextRange.Select()
+                box_sel = word.Selection
+                box_sel.Font.Name = self.font_name
+                box_sel.Font.Size = self.font_size
+                box_sel.Font.Bold = 1
+                box_sel.Font.Color = 0
+
+                box_sel.ParagraphFormat.SpaceBefore = 0
+                box_sel.ParagraphFormat.SpaceAfter = 0
+                box_sel.ParagraphFormat.LineSpacingRule = 0
+                box_sel.ParagraphFormat.Alignment = 0  # Left align inside Word Bank
+                box_sel.ParagraphFormat.TabStops.ClearAll()
+
+                for c in range(1, cols):
+                    box_sel.ParagraphFormat.TabStops.Add(Position=slot_w * c, Alignment=0)
+
+                lines_bank = []
+                for i in range(0, N, cols):
+                    lines_bank.append(words[i:i + cols])
+
+                for idx_line, chunk in enumerate(lines_bank):
+                    if idx_line > 0:
+                        box_sel.ParagraphFormat.SpaceBefore = 1.5
+                    box_sel.ParagraphFormat.SpaceAfter = 0
+
+                    for idx_w, word_txt in enumerate(chunk):
+                        w_spans = parse_inline_spans(word_txt, default_bold=True)
+                        self.write_inline_spans(box_sel, w_spans)
+                        box_sel.Font.Color = 0
+                        if idx_w < len(chunk) - 1:
+                            box_sel.TypeText("\t")
+
+                    if idx_line < len(lines_bank) - 1:
+                        box_sel.TypeParagraph()
+
+                try:
+                    shape.ConvertToInlineShape()
+                except Exception:
+                    pass
+
+            except Exception as e:
+                print(f"[ULNRenderer] Warning creating Word Bank TextFrame box shape: {e}")
+
+        # Common epilogue: move selection below the inline shape
         try:
             end_range = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
             end_range.Select()

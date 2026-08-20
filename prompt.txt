@@ -68,10 +68,12 @@ Place these tags at the very beginning of the line:
     [TR] ______ | ______
     [/TABLE]
 
-- [BOX] ... [/BOX] : Framing container for Word Banks, rule callouts, or framed text boxes.
-  - List ONLY the word/phrase items separated by pipes. Do NOT include a "Word Bank:" label or any heading inside — the compiler renders the box automatically.
-  - Example: `[BOX] photosynthesis | chlorophyll | sunlight [/BOX]`
-  - WRONG: `[BOX] **Word Bank:** photosynthesis | chlorophyll | sunlight [/BOX]` ← NEVER do this.
+- [BOX] ... [/BOX] : Framing container for Grammar Formulas, Rule Callouts, Notes, or Word Banks.
+  - For Grammar Formulas & Rules: Put the full formula / rule sentence directly inside without pipes. It will be rendered as a centered, continuous single-line (or multi-line) rounded framed box.
+    - Example: `[BOX] Từ phủ định / Cụm từ phủ định + Trợ động từ / To be / Modal Verb + S + V (nguyên thể) [/BOX]`
+    - Example: `[BOX] S + have/has + V3/ed + ... [/BOX]`
+  - For Word Banks: Separate vocabulary items using pipes `|`. The compiler will auto-calculate columns into a balanced word bank.
+    - Example: `[BOX] photosynthesis | chlorophyll | sunlight [/BOX]`
 - [QUOTE] ... [/QUOTE] : Indented, JUSTIFIED text block for reading passages, stories, or dialogs (first line indent: 0.75 cm, no empty line gaps).
 
 - [PIC_GRID] ... [/PIC_GRID] : 4-column picture grid container (4 pictures per row).

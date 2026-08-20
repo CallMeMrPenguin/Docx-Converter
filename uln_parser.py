@@ -330,17 +330,28 @@ class ULNParser:
                     opt_lines.append(line)
                 continue
 
-            # Handle multi-line [BOX] ... [/BOX]
-            if trimmed.upper() == "[BOX]" or trimmed.upper().startswith("[BOX] "):
-                if trimmed.upper() == "[BOX]":
+            # Handle multi-line [BOX] ... [/BOX] or [WORDBANK] ... [/WORDBANK]
+            is_box_start = (
+                trimmed.upper() == "[BOX]" or trimmed.upper().startswith("[BOX] ") or trimmed.upper().startswith("[BOX:") or
+                trimmed.upper() == "[WORDBANK]" or trimmed.upper().startswith("[WORDBANK] ") or trimmed.upper().startswith("[WORDBANK:")
+            )
+            if is_box_start:
+                end_bracket_idx = trimmed.find("]")
+                box_tag = trimmed[1:end_bracket_idx].strip() if end_bracket_idx != -1 else "BOX"
+                rest = trimmed[end_bracket_idx + 1:].strip() if end_bracket_idx != -1 else ""
+
+                if not rest:
                     in_box = True
                     box_lines = []
                     continue
                 else:
-                    rest = trimmed[5:].strip()
                     if rest.upper().endswith("[/BOX]"):
-                        box_content = rest[:-7].strip()
-                        blocks.append(ULNBlock(tag="BOX", content=box_content, spans=parse_inline_spans(box_content)))
+                        box_content = rest[:-6].strip()
+                        blocks.append(ULNBlock(tag=box_tag, content=box_content, spans=parse_inline_spans(box_content)))
+                        continue
+                    elif rest.upper().endswith("[/WORDBANK]"):
+                        box_content = rest[:-11].strip()
+                        blocks.append(ULNBlock(tag=box_tag, content=box_content, spans=parse_inline_spans(box_content)))
                         continue
                     else:
                         in_box = True
@@ -348,7 +359,7 @@ class ULNParser:
                         continue
             
             if in_box:
-                if trimmed.upper() == "[/BOX]":
+                if trimmed.upper() in ("[/BOX]", "[/WORDBANK]"):
                     in_box = False
                     box_content = "\n".join(box_lines)
                     blocks.append(ULNBlock(tag="BOX", content=box_content, spans=parse_inline_spans(box_content)))
