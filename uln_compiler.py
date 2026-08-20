@@ -1,6 +1,8 @@
 import os
 import sys
-from typing import Dict, Any, Optional
+import re
+import zipfile
+from typing import Dict, Any, Optional, List
 from uln_parser import ULNParser
 from uln_renderer import ULNWordRenderer
 
@@ -70,6 +72,14 @@ class ULNCompiler:
             # Execute pywin32 rendering
             self.renderer.render(blocks, doc, word)
 
+            # Embed raw ULN into Word CustomXMLParts (100% native OpenXML, invisible in Word UI)
+            try:
+                safe_uln = uln_text.replace("]]>", "]]]]><![CDATA[>")
+                xml_part = f"<uln_raw_data><![CDATA[{safe_uln}]]></uln_raw_data>"
+                doc.CustomXMLParts.Add(xml_part)
+            except Exception as e_xml:
+                print(f"[ULNCompiler] Warning adding CustomXMLParts: {e_xml}")
+
             # Save as DOCX (FileFormat = 16)
             try:
                 doc.SaveAs2(abs_output_path, FileFormat=16)
@@ -115,6 +125,12 @@ class ULNCompiler:
                         word.Quit()
                     except Exception:
                         pass
+                # Once Word closes and releases file lock, inject backup zip entry
+                if abs_output_path and os.path.exists(abs_output_path):
+                    try:
+                        embed_raw_uln_zip(abs_output_path, uln_text)
+                    except Exception:
+                        pass
             else:
                 # Fully detach COM object references so Word operates as a standalone user window
                 try:
@@ -122,7 +138,6 @@ class ULNCompiler:
                 except Exception:
                     pass
                 doc = None
-                word = None
                 word = None
 
             try:
@@ -172,3 +187,86 @@ class ULNCompiler:
                 pythoncom.CoUninitialize()
             except Exception:
                 pass
+
+
+def extract_raw_uln(docx_path: str) -> Optional[str]:
+    """
+    Extracts raw ULN source text embedded in a .docx file without requiring MS Word to be opened.
+    Returns the raw string if present, or None if the file has no embedded ULN.
+    """
+    if not os.path.exists(docx_path):
+        return None
+    try:
+        with zipfile.ZipFile(docx_path, 'r') as zf:
+            # Check 1: direct text file
+            if 'customXml/uln_raw_source.txt' in zf.namelist():
+                raw = zf.read('customXml/uln_raw_source.txt').decode('utf-8', errors='ignore')
+                return raw.replace('\r\n', '\n')
+            # Check 2: Word CustomXMLParts item
+            for name in zf.namelist():
+                if name.startswith('customXml/item') and name.endswith('.xml'):
+                    xml_str = zf.read(name).decode('utf-8', errors='ignore')
+                    m = re.search(r'<uln_raw_data><!\[CDATA\[(.*?)\]\]></uln_raw_data>', xml_str, re.DOTALL)
+                    if m:
+                        raw = m.group(1).replace("]]]]><![CDATA[>", "]]>")
+                        return raw.replace('\r\n', '\n')
+                    m2 = re.search(r'<uln_raw_data>(.*?)</uln_raw_data>', xml_str, re.DOTALL)
+                    if m2:
+                        raw = m2.group(1).replace("]]]]><![CDATA[>", "]]>")
+                        return raw.replace('\r\n', '\n')
+    except Exception as e:
+        print(f"[ULNCompiler] Could not extract raw ULN from {docx_path}: {e}")
+    return None
+
+
+def has_embedded_uln(docx_path: str) -> bool:
+    """Checks if a docx file contains embedded raw ULN data."""
+    raw = extract_raw_uln(docx_path)
+    return raw is not None and len(raw.strip()) > 0
+
+
+def embed_raw_uln_zip(docx_path: str, raw_uln_text: str):
+    """Directly appends/updates customXml/uln_raw_source.txt in the docx zip archive."""
+    try:
+        with zipfile.ZipFile(docx_path, 'a', compression=zipfile.ZIP_DEFLATED) as zf:
+            zf.writestr('customXml/uln_raw_source.txt', raw_uln_text.encode('utf-8'))
+    except Exception as e:
+        print(f"[ULNCompiler] Warning injecting zip uln_raw_source.txt: {e}")
+
+
+def scan_folder_for_uln_docx(folder_path: str) -> List[Dict[str, Any]]:
+    """
+    Scans a directory for .docx files, inspecting each for embedded raw ULN.
+    Returns list of dicts with file metadata, status, and preview text.
+    """
+    results = []
+    if not os.path.exists(folder_path):
+        return results
+    try:
+        entries = sorted(os.listdir(folder_path))
+    except Exception:
+        return results
+
+    from datetime import datetime
+    for fname in entries:
+        if not fname.lower().endswith(".docx") or fname.startswith("~$"):
+            continue
+        fpath = os.path.join(folder_path, fname)
+        try:
+            stat = os.stat(fpath)
+            size_kb = stat.st_size / 1024.0
+            mtime = datetime.fromtimestamp(stat.st_mtime).strftime("%d/%m/%Y %H:%M")
+            raw_uln = extract_raw_uln(fpath)
+            has_uln = (raw_uln is not None and len(raw_uln.strip()) > 0)
+            results.append({
+                "filename": fname,
+                "filepath": fpath,
+                "size_kb": size_kb,
+                "mtime": mtime,
+                "has_uln": has_uln,
+                "raw_uln": raw_uln or ""
+            })
+        except Exception:
+            continue
+    return results
+
