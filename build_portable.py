@@ -40,11 +40,16 @@ def build_portable():
         "--hidden-import", "win32com",
         "--hidden-import", "win32com.client",
         "--hidden-import", "win32timezone",
-        "--hidden-import", "docx",
         "--hidden-import", "updater",
         "--hidden-import", "uln_parser",
         "--hidden-import", "uln_renderer",
         "--hidden-import", "uln_compiler",
+        "--hidden-import", "renderer_utils",
+        "--hidden-import", "renderer_blocks",
+        "--hidden-import", "gui_styles",
+        "--hidden-import", "gui_prompt_editor",
+        "--hidden-import", "gui_update_modal",
+        "--hidden-import", "gui_docx_picker",
         os.path.join(base_dir, "gui_app.py")
     ]
 

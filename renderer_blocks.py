@@ -1,0 +1,935 @@
+import os
+import re
+import math
+from typing import List, Dict, Any, Optional
+from uln_parser import ULNBlock, InlineSpan, PicInfo, parse_pic_tag, parse_inline_spans
+from renderer_utils import (
+    cm_to_pt,
+    pt_to_cm,
+    parse_color_to_rgb_int,
+    extract_question_prefix_and_body,
+    split_line_into_option_items
+)
+
+class RendererBlocksMixin:
+    """
+    Mixin containing specialized block-level renderers for MS Word documents:
+    - Tables (bordered & borderless)
+    - Box Shapes (Formulas, Callouts, Word Banks)
+    - Multiple-Choice Option Grids ([OPT])
+    - Picture Grids ([PIC_GRID]) & Diagrams ([PIC])
+    - Auto-numbered Exercise Containers ([NUM])
+    """
+
+    def render_pic(self, sel, doc, pic: PicInfo):
+        """Renders an image file from user queue in order, or falls back to 'test pic/' folder."""
+        target_path = self.get_next_image_path(pic)
+
+        if target_path and os.path.exists(target_path):
+            try:
+                shape = sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
+                if pic.size == "small":
+                    shape.Width = cm_to_pt(3.5)
+                    shape.Height = cm_to_pt(2.5)
+                elif pic.size == "large":
+                    shape.Width = cm_to_pt(10.0)
+                    shape.Height = cm_to_pt(6.5)
+                else:
+                    shape.Width = cm_to_pt(6.0)
+                    shape.Height = cm_to_pt(4.0)
+                return
+            except Exception as e:
+                print(f"[ULNRenderer] Warning adding picture {target_path}: {e}")
+
+        # Visual Placeholder Box for OCR / Diagram References
+        desc_text = f"🖼️ [ DIAGRAM / IMAGE: {pic.description} ]"
+        sel.Font.Name = self.font_name
+        sel.Font.Size = 10.0
+        sel.Font.Italic = True
+        sel.Font.Bold = True
+        try:
+            sel.Font.Color = 8421504  # Grey
+        except Exception:
+            pass
+        sel.TypeText(desc_text)
+        try:
+            sel.Font.ColorIndex = 0
+        except Exception:
+            pass
+
+    def apply_native_numbered_list(self, word, sel, q_num: Optional[str] = None, number_format: Optional[str] = None):
+        """
+        Applies native MS Word Numbered List:
+        - List number is ALWAYS BOLD by default
+        - Text and numbering are separated by a SINGLE SPACE (TrailingCharacter = wdTrailingSpace = 2), NOT a tab!
+        - LeftIndent and FirstLineIndent are flush at 0.0 cm (left page border)
+        - Starts a new independent list instance (ContinuePreviousList=False) on first question (q_num == '1' or is_first_question_in_num_block),
+          and continues sequential list incrementing (ContinuePreviousList=True) on subsequent questions.
+        - Supports custom prefix formats (e.g. 'Question %1.', 'Question %1:', 'Câu %1:', '%1.').
+        """
+        restart = self.is_first_question_in_num_block or (q_num == "1")
+        self.is_first_question_in_num_block = False
+        try:
+            list_tpl = word.ListGalleries(2).ListTemplates(1)  # wdNumberGallery = 2 (Numbered List 1., 2., 3.)
+            lvl = list_tpl.ListLevels(1)
+            lvl.TrailingCharacter = 1  # wdTrailingSpace = 1 (SPACE separator, "Follow number with: Space")
+            lvl.Font.Bold = 1          # ALWAYS BOLD number
+            lvl.NumberPosition = 0
+            lvl.TextPosition = 0
+            lvl.NumberFormat = number_format if number_format else "%1."
+            q_color_int = parse_color_to_rgb_int(self.question_color)
+            if q_color_int is not None:
+                lvl.Font.Color = q_color_int
+            else:
+                lvl.Font.Color = 0
+
+            sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=not restart)
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.Font.Bold = 0
+            sel.Font.Color = 0  # Black body text
+
+        except Exception:
+            try:
+                sel.Range.ListFormat.ApplyNumberDefault()
+                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
+                sel.Font.Bold = 0
+            except Exception:
+                pass
+
+    def clean_num_placeholders(self, b: ULNBlock):
+        r"""Recursively cleans #(\d+) placeholders from content, columns, spans, tables, and child blocks."""
+        def process_text_num(text: str) -> str:
+            if not text:
+                return text
+            # Format #N to N so q_num_match can extract question number prefix
+            return re.sub(r'#(\d+)', r'\1', text)
+
+        if b.content:
+            b.content = process_text_num(b.content)
+        if b.col1:
+            b.col1 = process_text_num(b.col1)
+        if b.col2:
+            b.col2 = process_text_num(b.col2)
+        if b.spans:
+            for span in b.spans:
+                span.text = process_text_num(span.text)
+        if b.col1_spans:
+            for span in b.col1_spans:
+                span.text = process_text_num(span.text)
+        if b.col2_spans:
+            for span in b.col2_spans:
+                span.text = process_text_num(span.text)
+
+        if b.table_data and b.table_data.rows:
+            for row in b.table_data.rows:
+                for cell in row.cells:
+                    if cell.content:
+                        cell.content = process_text_num(cell.content)
+                    if cell.spans:
+                        for span in cell.spans:
+                            span.text = process_text_num(span.text)
+
+        if b.children:
+            for child in b.children:
+                self.clean_num_placeholders(child)
+
+    def compute_group_option_params(self, opt_blocks: List[ULNBlock], printable_width_cm: float):
+        """Pre-scans all OPT blocks in an exercise group to compute uniform column count and tab stops."""
+        all_items = []
+        for b in opt_blocks:
+            raw_text = b.content.strip()
+            if '|' in raw_text:
+                items = [x.strip() for x in raw_text.split('|') if x.strip()]
+            elif '\n' in raw_text:
+                items = [x.strip() for x in raw_text.split('\n') if x.strip()]
+            else:
+                items = split_line_into_option_items(raw_text)
+
+            for idx_i, item in enumerate(items):
+                pref, delim, q_num, clean_item = extract_question_prefix_and_body(item) if idx_i == 0 else (None, None, None, item)
+                m_let = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', clean_item)
+                item_str = f"{m_let.group(1)} {m_let.group(2)}" if m_let else f"A. {clean_item}"
+                all_items.append(item_str)
+
+        if all_items:
+            left_indent_cm = 0.5
+            cols = self.calculate_optimal_option_cols(all_items, left_indent_cm, printable_width_cm)
+            max_len = max(len(i) for i in all_items)
+            return cols, max_len
+        return None, None
+
+    def render_num_container(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
+        """
+        Renders auto-numbered container [NUM] ... [/NUM].
+        Flags the first question in this section to start a new independent list.
+        Pre-computes uniform option alignment across all questions in the exercise.
+        """
+        if not block.children:
+            return
+
+        self.is_first_question_in_num_block = True
+
+        opt_blocks = [c for c in block.children if c.tag == "OPT"]
+        old_cols, old_len = self.current_group_opt_cols, self.current_group_max_item_len
+        if opt_blocks:
+            g_cols, g_len = self.compute_group_option_params(opt_blocks, printable_width_cm)
+            self.current_group_opt_cols = g_cols
+            self.current_group_max_item_len = g_len
+
+        try:
+            self.render(block.children, doc, word)
+        finally:
+            self.current_group_opt_cols, self.current_group_max_item_len = old_cols, old_len
+
+    def calculate_optimal_option_cols(self, items: List[str], left_indent_cm: float, printable_width_cm: float) -> int:
+        """
+        Calculates optimal column count (1, 2, 3, or 4 columns) for multiple-choice options
+        so text wrapping NEVER occurs across available printable width.
+        """
+        N = len(items)
+        if N <= 1:
+            return 1
+
+        remaining_width_cm = max(5.0, printable_width_cm - left_indent_cm)
+        max_len = max(len(item) for item in items) if items else 0
+        
+        # Estimated option width in cm (0.165cm per char for 12pt Times New Roman + 0.4cm safety buffer for option letter)
+        est_item_w_cm = (max_len * 0.165) + 0.4
+
+        if N >= 4:
+            if max_len <= 24 or (est_item_w_cm * 4) <= (remaining_width_cm + 0.5):
+                return 4
+            elif (est_item_w_cm * 2) <= (remaining_width_cm + 0.5):
+                return 2
+            else:
+                return 1
+        elif N == 3:
+            if (est_item_w_cm * 3) <= remaining_width_cm:
+                return 3
+            else:
+                return 1
+        elif N == 2:
+            if (est_item_w_cm * 2) <= remaining_width_cm:
+                return 2
+            else:
+                return 1
+
+        return 1
+
+    def render_opt(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
+        """
+        Renders dedicated multiple-choice option container [OPT] ... [/OPT].
+        Automatically formats option letters (A., B., C., D.) as bold, and calculates optimal column count
+        (1, 2, 3, or 4 columns) based on max item length so text wrapping NEVER occurs.
+        """
+        raw_text = block.content.strip()
+        if not raw_text:
+            return
+
+        if '|' in raw_text:
+            items = [x.strip() for x in raw_text.split('|') if x.strip()]
+        elif '\n' in raw_text:
+            items = [x.strip() for x in raw_text.split('\n') if x.strip()]
+        else:
+            items = split_line_into_option_items(raw_text)
+
+        if not items:
+            return
+
+        # Check if first item has a question number (Pronunciation/Stress question with options-only)
+        q_num_extracted = None
+        has_standalone_q_num = False
+        extracted_pref, extracted_delim, extracted_num, clean_item_0 = extract_question_prefix_and_body(items[0])
+        if extracted_num is not None:
+            has_standalone_q_num = True
+            q_num_extracted = extracted_num
+            items[0] = clean_item_0
+        else:
+            q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', items[0], re.IGNORECASE)
+            if q_match:
+                has_standalone_q_num = True
+                q_num_extracted = q_match.group(1) or q_match.group(2) or q_match.group(3)
+                items[0] = q_match.group(4).strip() if q_match.group(4) else items[0]
+
+        has_any_letters = False
+        for item in items:
+            if re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z0-9][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*', item):
+                has_any_letters = True
+                break
+
+        normalized_items = []
+        for idx_item, item in enumerate(items):
+            m_let = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z0-9][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', item)
+            if m_let:
+                let_part = m_let.group(1).rstrip('.)')
+                body_part = m_let.group(2).strip()
+                normalized_items.append((let_part, body_part))
+            else:
+                let_part = chr(65 + idx_item) if idx_item < 26 else str(idx_item + 1)
+                normalized_items.append((let_part, item))
+
+        left_indent_cm = 0.0 if has_standalone_q_num else 0.5
+
+        if self.current_group_opt_cols is not None:
+            num_cols = self.current_group_opt_cols
+            max_item_len = self.current_group_max_item_len or 0
+        else:
+            formatted_item_strings = [f"{let}. {body}" for let, body in normalized_items]
+            num_cols = self.calculate_optimal_option_cols(formatted_item_strings, left_indent_cm, printable_width_cm)
+            max_item_len = max(len(s) for s in formatted_item_strings) if formatted_item_strings else 0
+
+        if has_standalone_q_num:
+            num_fmt = self.get_effective_number_format(extracted_pref, extracted_delim)
+            self.apply_native_numbered_list(word, sel, q_num=q_num_extracted, number_format=num_fmt)
+        else:
+            try:
+                sel.Range.ListFormat.RemoveNumbers()
+            except Exception:
+                pass
+            sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
+            sel.ParagraphFormat.FirstLineIndent = 0
+
+        sel.ParagraphFormat.SpaceBefore = 3
+        sel.ParagraphFormat.SpaceAfter = 3
+        sel.ParagraphFormat.LineSpacingRule = 0
+        sel.ParagraphFormat.Alignment = 0
+
+        opt_color_int = parse_color_to_rgb_int(getattr(self, 'opt_color', '#000000'))
+
+        if num_cols >= 2 and len(normalized_items) >= 2:
+            self.setup_tab_stops(sel, num_cols, left_indent_cm, printable_width_cm, max_item_len=max_item_len)
+
+            for idx_opt, (opt_letter, opt_body) in enumerate(normalized_items):
+                col_idx = idx_opt % num_cols
+
+                if idx_opt > 0 and col_idx == 0:
+                    sel.TypeParagraph()
+                    if has_standalone_q_num:
+                        try:
+                            sel.Range.ListFormat.RemoveNumbers()
+                        except Exception:
+                            pass
+                        sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
+                        sel.ParagraphFormat.FirstLineIndent = 0
+
+                sel.Font.Name = self.font_name
+                sel.Font.Size = self.font_size
+                sel.Font.Bold = 1
+                sel.Font.Italic = 0
+                sel.Font.Underline = 0
+                if opt_color_int is not None:
+                    try:
+                        sel.Font.Color = opt_color_int
+                    except Exception:
+                        pass
+                else:
+                    sel.Font.Color = 0
+
+                sel.TypeText(f"{opt_letter}. ")
+
+                sel.Font.Bold = 0
+                sel.Font.Color = 0
+
+                spans = parse_inline_spans(opt_body)
+                self.write_inline_spans(sel, spans)
+
+                if col_idx < num_cols - 1 and idx_opt < len(normalized_items) - 1:
+                    sel.TypeText("\t")
+
+            sel.TypeParagraph()
+        else:
+            # 1-column layout
+            for idx_opt, (opt_letter, opt_body) in enumerate(normalized_items):
+                if idx_opt > 0:
+                    if has_standalone_q_num:
+                        try:
+                            sel.Range.ListFormat.RemoveNumbers()
+                        except Exception:
+                            pass
+                        sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
+                        sel.ParagraphFormat.FirstLineIndent = 0
+
+                sel.Font.Name = self.font_name
+                sel.Font.Size = self.font_size
+                sel.Font.Bold = 1
+                sel.Font.Italic = 0
+                sel.Font.Underline = 0
+                if opt_color_int is not None:
+                    try:
+                        sel.Font.Color = opt_color_int
+                    except Exception:
+                        pass
+                else:
+                    sel.Font.Color = 0
+
+                sel.TypeText(f"{opt_letter}. ")
+
+                sel.Font.Bold = 0
+                sel.Font.Color = 0
+
+                spans = parse_inline_spans(opt_body)
+                self.write_inline_spans(sel, spans)
+                sel.TypeParagraph()
+
+        sel.ParagraphFormat.LeftIndent = 0
+        sel.ParagraphFormat.FirstLineIndent = 0
+        sel.ParagraphFormat.TabStops.ClearAll()
+        self.last_rendered_tag = "OPT"
+
+    def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
+        """
+        Renders Word Bank / Callout Box / Formula Box inside a MS Word Rounded Rectangle Shape TextFrame.
+        - If the content contains '|' (or tag is WORDBANK / BOX:bank): Treats it as a Word Bank and lays out items into balanced columns.
+        - If the content has NO '|': Treats it as a Formula / Rule / Callout Box, preserving complete lines/sentences without shredding words into columns.
+        """
+        printable_width_pt = cm_to_pt(printable_width_cm)
+        raw_content = block.content.strip() if block.content else ""
+        if not raw_content:
+            return
+
+        is_word_bank = ('|' in raw_content) or (block.tag == "WORDBANK") or (block.tag.endswith(":bank"))
+
+        p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
+        try:
+            p_anchor.ParagraphFormat.SpaceBefore = 14.0
+            p_anchor.ParagraphFormat.SpaceAfter = 14.0
+        except Exception:
+            pass
+
+        if not is_word_bank:
+            # PATHWAY A: FORMULA / CALLOUT / TEXT BOX
+            lines = [l.strip() for l in raw_content.split('\n') if l.strip()]
+            if not lines:
+                return
+
+            char_w_pt = max(5.0, self.font_size * 0.52)
+            pad_left_pt = cm_to_pt(0.3)
+            pad_right_pt = cm_to_pt(0.3)
+            pad_top_pt = cm_to_pt(0.12)
+            pad_bottom_pt = cm_to_pt(0.12)
+
+            max_len = max(len(l) for l in lines)
+            est_content_w = (max_len * char_w_pt) + pad_left_pt + pad_right_pt + 16.0
+
+            if est_content_w >= (printable_width_pt * 0.85):
+                box_width_pt = printable_width_pt
+                left_offset_pt = 0.0
+            else:
+                box_width_pt = min(printable_width_pt, max(120.0, est_content_w))
+                left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+
+            font_line_h = max(14.0, self.font_size * 1.35)
+            avail_text_w = max(1.0, box_width_pt - pad_left_pt - pad_right_pt)
+            est_total_lines = 0
+            for l in lines:
+                est_w = len(l) * char_w_pt
+                est_total_lines += max(1, math.ceil(est_w / avail_text_w))
+
+            num_display_lines = max(len(lines), est_total_lines)
+            box_height_pt = (num_display_lines * font_line_h) + pad_top_pt + pad_bottom_pt + 8.0
+
+            try:
+                shape = doc.Shapes.AddShape(
+                    5,  # msoShapeRoundedRectangle = 5
+                    0,
+                    0,
+                    box_width_pt,
+                    box_height_pt,
+                    Anchor=p_anchor
+                )
+                shape.RelativeHorizontalPosition = 0
+                shape.RelativeVerticalPosition = 2
+                shape.Left = left_offset_pt
+                shape.Top = 0
+                shape.WrapFormat.Type = 7
+                shape.WrapFormat.DistanceTop = 12.0
+                shape.WrapFormat.DistanceBottom = 12.0
+
+                tf = shape.TextFrame
+                tf.MarginTop = pad_top_pt
+                tf.MarginBottom = pad_bottom_pt
+                tf.MarginLeft = pad_left_pt
+                tf.MarginRight = pad_right_pt
+                try:
+                    tf.WordWrap = -1
+                except Exception:
+                    pass
+
+                try:
+                    tf.AutoSize = False
+                except Exception:
+                    pass
+
+                shape.Fill.Visible = False
+                shape.Line.Weight = 1.0
+                shape.Line.ForeColor.RGB = 0
+
+                tf.TextRange.Select()
+                box_sel = word.Selection
+                box_sel.Font.Name = self.font_name
+                box_sel.Font.Size = self.font_size
+                box_sel.Font.Bold = 1
+                box_sel.Font.Color = 0
+
+                box_sel.ParagraphFormat.SpaceBefore = 0
+                box_sel.ParagraphFormat.SpaceAfter = 0
+                box_sel.ParagraphFormat.LineSpacingRule = 0
+                box_sel.ParagraphFormat.Alignment = 1
+                box_sel.ParagraphFormat.TabStops.ClearAll()
+
+                for idx_line, line_str in enumerate(lines):
+                    if idx_line > 0:
+                        box_sel.ParagraphFormat.SpaceBefore = 2.0
+                    box_sel.ParagraphFormat.SpaceAfter = 0
+
+                    line_spans = parse_inline_spans(line_str, default_bold=True)
+                    self.write_inline_spans(box_sel, line_spans)
+                    box_sel.Font.Color = 0
+                    if idx_line < len(lines) - 1:
+                        box_sel.TypeParagraph()
+
+                try:
+                    shape.ConvertToInlineShape()
+                except Exception:
+                    pass
+
+            except Exception as e:
+                print(f"[ULNRenderer] Warning creating Formula/Callout TextFrame box shape: {e}")
+
+        else:
+            # PATHWAY B: WORD BANK
+            words = [w.strip() for w in raw_content.split('|') if w.strip()]
+            if not words:
+                return
+
+            N = len(words)
+            char_w_pt = max(5.0, self.font_size * 0.52)
+            margin_pt = 0.0
+
+            max_len_all = max(len(w) for w in words)
+            est_slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
+
+            if est_slot_w >= (printable_width_pt - (2 * margin_pt)):
+                cols = 1
+            else:
+                max_fit_cols = max(1, int((printable_width_pt - (2 * margin_pt)) / est_slot_w))
+                if N <= 5:
+                    cols = min(N, max_fit_cols)
+                elif N <= 8:
+                    cols = min(4, max_fit_cols)
+                elif N <= 10:
+                    cols = min(5, max_fit_cols)
+                else:
+                    cols = min(4, max_fit_cols)
+
+            slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
+            inner_w = slot_w * cols
+            margin_left_pt = cm_to_pt(0.2)
+            box_width_pt = min(printable_width_pt, inner_w + margin_left_pt)
+            left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+
+            num_rows = math.ceil(N / cols)
+            font_line_h = max(14.0, self.font_size * 1.35)
+            box_height_pt = (num_rows * font_line_h) + (2 * margin_pt) + 4.0
+
+            try:
+                shape = doc.Shapes.AddShape(
+                    5,
+                    0,
+                    0,
+                    box_width_pt,
+                    box_height_pt,
+                    Anchor=p_anchor
+                )
+                shape.RelativeHorizontalPosition = 0
+                shape.RelativeVerticalPosition = 2
+                shape.Left = left_offset_pt
+                shape.Top = 0
+                shape.WrapFormat.Type = 7
+                shape.WrapFormat.DistanceTop = 12.0
+                shape.WrapFormat.DistanceBottom = 12.0
+
+                tf = shape.TextFrame
+                tf.MarginTop = 0.0
+                tf.MarginBottom = 0.0
+                tf.MarginLeft = margin_left_pt
+                tf.MarginRight = 0.0
+                try:
+                    tf.AutoSize = False
+                except Exception:
+                    pass
+
+                shape.Fill.Visible = False
+                shape.Line.Weight = 1.0
+                shape.Line.ForeColor.RGB = 0
+
+                tf.TextRange.Select()
+                box_sel = word.Selection
+                box_sel.Font.Name = self.font_name
+                box_sel.Font.Size = self.font_size
+                box_sel.Font.Bold = 1
+                box_sel.Font.Color = 0
+
+                box_sel.ParagraphFormat.SpaceBefore = 0
+                box_sel.ParagraphFormat.SpaceAfter = 0
+                box_sel.ParagraphFormat.LineSpacingRule = 0
+                box_sel.ParagraphFormat.Alignment = 0
+                box_sel.ParagraphFormat.TabStops.ClearAll()
+
+                for c in range(1, cols):
+                    box_sel.ParagraphFormat.TabStops.Add(Position=slot_w * c, Alignment=0)
+
+                lines_bank = []
+                for i in range(0, N, cols):
+                    lines_bank.append(words[i:i + cols])
+
+                for idx_line, chunk in enumerate(lines_bank):
+                    if idx_line > 0:
+                        box_sel.ParagraphFormat.SpaceBefore = 1.5
+                    box_sel.ParagraphFormat.SpaceAfter = 0
+
+                    for idx_w, word_txt in enumerate(chunk):
+                        w_spans = parse_inline_spans(word_txt, default_bold=True)
+                        self.write_inline_spans(box_sel, w_spans)
+                        box_sel.Font.Color = 0
+                        if idx_w < len(chunk) - 1:
+                            box_sel.TypeText("\t")
+
+                    if idx_line < len(lines_bank) - 1:
+                        box_sel.TypeParagraph()
+
+                try:
+                    shape.ConvertToInlineShape()
+                except Exception:
+                    pass
+
+            except Exception as e:
+                print(f"[ULNRenderer] Warning creating Word Bank TextFrame box shape: {e}")
+
+        # Common epilogue
+        try:
+            end_range = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
+            end_range.Select()
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.RightIndent = 0
+            sel.ParagraphFormat.Alignment = 1
+            sel.ParagraphFormat.SpaceBefore = 14.0
+            sel.ParagraphFormat.SpaceAfter = 14.0
+            sel.TypeParagraph()
+            sel.ParagraphFormat.SpaceBefore = 0
+            sel.ParagraphFormat.SpaceAfter = 4
+            sel.ParagraphFormat.Alignment = 0
+        except Exception:
+            pass
+
+        self.last_rendered_tag = "BOX"
+
+    def render_table(self, sel, doc, tdata, printable_width_cm: float, idx_block: int = 0, blocks: List[ULNBlock] = None):
+        """
+        Renders [TABLE] block structure:
+        - If borderless: uses divided paragraph tab stop columns with custom spacing.
+        - If bordered: uses a native MS Word table with cell margins & 1.0pt gridlines.
+        - Empty/blank cells (______): ignores literal underscore text inside cell bodies so bottom border acts as answer line!
+        """
+        if not tdata.rows:
+            return
+
+        if self.last_rendered_tag == "BOX":
+            sel.ParagraphFormat.SpaceBefore = 14
+            sel.ParagraphFormat.SpaceAfter = 4
+        else:
+            sel.ParagraphFormat.SpaceBefore = 12
+            sel.ParagraphFormat.SpaceAfter = 4
+
+        num_rows = len(tdata.rows)
+        num_cols = max(len(r.cells) for r in tdata.rows)
+
+        if tdata.borderless:
+            has_pic = any(
+                "[PIC" in cell.content.upper() or parse_pic_tag(cell.content) is not None
+                for row in tdata.rows for cell in row.cells
+            )
+
+            pic_info_found = None
+            text_rows = []
+
+            for row in tdata.rows:
+                row_text_parts = []
+                for cell in row.cells:
+                    if "[PIC" in cell.content.upper() or parse_pic_tag(cell.content) is not None:
+                        if not pic_info_found:
+                            pic_info_found = parse_pic_tag(cell.content) or PicInfo(description="Activity Picture", pos="center", size="medium")
+                    else:
+                        if cell.content.strip() and not re.match(r'^\s*(?:_{2,}|<blank>|\[BLANK\])\s*$', cell.content, re.IGNORECASE):
+                            row_text_parts.append(cell.content.strip())
+                if row_text_parts:
+                    text_rows.append(" ".join(row_text_parts))
+
+            options_anchor_range = None
+            opt_start_top_pt = 0.0
+
+            for idx_r, txt_line in enumerate(text_rows):
+                txt_line = re.sub(r'#(\d+)', r'\1', txt_line)
+
+                if idx_r >= 1 and len(text_rows) >= 3:
+                    m_opt = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', txt_line)
+                    if m_opt:
+                        let_str = m_opt.group(1).upper().rstrip('.')
+                        body_str = m_opt.group(2).strip()
+                        txt_line = f"**{let_str}.** {body_str}"
+                    else:
+                        let_str = chr(65 + idx_r - 1)
+                        txt_line = f"**{let_str}.** {txt_line.strip()}"
+
+                is_opt_line = bool(re.match(r'^\s*\*?\*?[A-Da-d][\.\)]', txt_line)) or (idx_r >= 1 and len(text_rows) >= 3)
+                left_ind_cm = 0.5 if is_opt_line else 0.0
+
+                q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', txt_line, re.IGNORECASE) if idx_r == 0 else None
+
+                if q_match and q_match.group(4).strip():
+                    try:
+                        sel.Range.ListFormat.ApplyNumberDefault()
+                        sel.ParagraphFormat.LeftIndent = 0
+                        sel.ParagraphFormat.FirstLineIndent = 0
+                    except Exception:
+                        pass
+                    txt_line = q_match.group(4).strip()
+                else:
+                    try:
+                        sel.Range.ListFormat.RemoveNumbers()
+                    except Exception:
+                        pass
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(left_ind_cm)
+                    sel.ParagraphFormat.FirstLineIndent = 0
+
+                spans = parse_inline_spans(txt_line)
+
+                sel.ParagraphFormat.SpaceBefore = 14 if (idx_r == 0 and self.last_rendered_tag == "BOX") else 3
+                sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.LineSpacingRule = 0
+                sel.ParagraphFormat.Alignment = 0
+
+                if idx_r == 1 or (is_opt_line and options_anchor_range is None):
+                    try:
+                        options_anchor_range = sel.Range.Duplicate
+                        opt_start_top_pt = options_anchor_range.Information(6)
+                    except Exception:
+                        pass
+
+                self.write_inline_spans(sel, spans)
+                sel.TypeParagraph()
+
+            sel.ParagraphFormat.LeftIndent = 0
+
+            opt_end_top_pt = 0.0
+            try:
+                opt_end_top_pt = sel.Range.Information(6)
+            except Exception:
+                pass
+
+            if has_pic and pic_info_found:
+                pic_path = self.get_next_image_path(pic_info_found)
+                if pic_path and os.path.exists(pic_path):
+                    try:
+                        total_opt_height_pt = max(60.0, opt_end_top_pt - opt_start_top_pt)
+                        img_h_pt = max(60.0, min(140.0, total_opt_height_pt - 6.0))
+                        img_w_pt = max(75.0, min(160.0, cm_to_pt(5.5)))
+
+                        anchor_rng = options_anchor_range if options_anchor_range else sel.Range
+                        shp = doc.Shapes.AddPicture(
+                            FileName=os.path.abspath(pic_path),
+                            LinkToFile=False,
+                            SaveWithDocument=True,
+                            Anchor=anchor_rng
+                        )
+                        shp.RelativeHorizontalPosition = 0
+                        shp.RelativeVerticalPosition = 2
+                        shp.Left = cm_to_pt(printable_width_cm) - img_w_pt
+                        shp.Top = 0
+                        shp.Width = img_w_pt
+                        shp.Height = img_h_pt
+                        shp.WrapFormat.Type = 1
+                    except Exception as e:
+                        print(f"[ULNRenderer] Warning adding borderless diagram picture: {e}")
+
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+            self.last_rendered_tag = "TABLE"
+            return
+
+        # Bordered Table Layout
+        p_table_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
+        try:
+            p_table_anchor.ParagraphFormat.SpaceBefore = 14.0 if (self.last_rendered_tag == "BOX") else 8.0
+            p_table_anchor.ParagraphFormat.SpaceAfter = 14.0
+        except Exception:
+            pass
+
+        tbl = doc.Tables.Add(Range=p_table_anchor, NumRows=num_rows, NumColumns=num_cols)
+        tbl.AllowAutoFit = False
+
+        try:
+            tbl.Borders.InsideLineStyle = 1
+            tbl.Borders.InsideLineWidth = 8
+            tbl.Borders.InsideColor = 0
+            tbl.Borders.OutsideLineStyle = 1
+            tbl.Borders.OutsideLineWidth = 8
+            tbl.Borders.OutsideColor = 0
+        except Exception:
+            pass
+
+        col_w_pt = cm_to_pt(printable_width_cm) / max(1, num_cols)
+        for col_idx in range(1, num_cols + 1):
+            try:
+                tbl.Columns(col_idx).Width = col_w_pt
+            except Exception:
+                pass
+
+        try:
+            tbl.TopPadding = cm_to_pt(0.2)
+            tbl.BottomPadding = cm_to_pt(0.2)
+            tbl.LeftPadding = cm_to_pt(0.2)
+            tbl.RightPadding = cm_to_pt(0.2)
+        except Exception:
+            pass
+
+        for r_idx, row_obj in enumerate(tdata.rows, 1):
+            try:
+                tbl.Rows(r_idx).AllowBreakAcrossPages = False
+            except Exception:
+                pass
+
+            for c_idx, cell_obj in enumerate(row_obj.cells, 1):
+                cell = tbl.Cell(r_idx, c_idx)
+                cell_range = cell.Range
+                cell_range.Font.Name = self.font_name
+                cell_range.Font.Size = self.font_size
+                cell_range.ParagraphFormat.SpaceBefore = 0
+                cell_range.ParagraphFormat.SpaceAfter = 0
+                cell_range.ParagraphFormat.LineSpacingRule = 0
+                cell_range.ParagraphFormat.Alignment = 0
+
+                cell_txt = cell_obj.content.strip()
+                if re.match(r'^\s*(?:_{2,}|<blank>|\[BLANK\])\s*$', cell_txt, re.IGNORECASE):
+                    continue
+
+                if cell_obj.spans:
+                    cell_range.Select()
+                    cell_sel = doc.Application.Selection
+                    self.write_inline_spans(cell_sel, cell_obj.spans, default_bold=cell_obj.is_header)
+                else:
+                    cell_range.Bold = 1 if cell_obj.is_header else 0
+                    cell_range.Text = cell_txt
+
+        try:
+            end_range = doc.Range(tbl.Range.End + 1, tbl.Range.End + 1)
+            end_range.Select()
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.RightIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.ParagraphFormat.SpaceBefore = 8
+            sel.ParagraphFormat.SpaceAfter = 4
+            sel.ParagraphFormat.Alignment = 0
+        except Exception:
+            pass
+
+        self.last_rendered_tag = "TABLE"
+
+    def render_pic_grid(self, sel, doc, children: List[ULNBlock], printable_width_cm: float):
+        """Renders 4-column horizontal picture grid [PIC_GRID] with automatic captions below each picture."""
+        if not children:
+            return
+
+        N = len(children)
+        printable_width_pt = cm_to_pt(printable_width_cm)
+        cols = min(4, N)
+        rows = math.ceil(N / cols)
+
+        p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
+        tbl = doc.Tables.Add(Range=p_anchor, NumRows=rows * 2, NumColumns=cols)
+        tbl.AllowAutoFit = False
+
+        try:
+            tbl.Borders.InsideLineStyle = 0
+            tbl.Borders.OutsideLineStyle = 0
+        except Exception:
+            pass
+
+        col_w_pt = printable_width_pt / cols
+        for c in range(1, cols + 1):
+            try:
+                tbl.Columns(c).Width = col_w_pt
+            except Exception:
+                pass
+
+        for idx_item, child in enumerate(children):
+            r_idx = (idx_item // cols) * 2 + 1
+            c_idx = (idx_item % cols) + 1
+
+            cell_pic = tbl.Cell(r_idx, c_idx)
+            cell_pic.Range.Select()
+            pic_sel = doc.Application.Selection
+            pic_sel.ParagraphFormat.Alignment = 1
+            pic_sel.ParagraphFormat.SpaceBefore = 4
+            pic_sel.ParagraphFormat.SpaceAfter = 2
+
+            pic_info = child.pic or parse_pic_tag(child.content) or PicInfo(description=f"Picture {idx_item + 1}", pos="center", size="small")
+            target_path = self.get_next_image_path(pic_info)
+
+            if target_path and os.path.exists(target_path):
+                try:
+                    shp = pic_sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
+                    shp.Width = min(col_w_pt - 10.0, cm_to_pt(3.6))
+                    shp.Height = cm_to_pt(2.6)
+                except Exception as e:
+                    print(f"[ULNRenderer] Warning in pic_grid picture: {e}")
+            else:
+                pic_sel.Font.Name = self.font_name
+                pic_sel.Font.Size = 9.0
+                pic_sel.Font.Italic = True
+                pic_sel.Font.Bold = True
+                try:
+                    pic_sel.Font.Color = 8421504
+                except Exception:
+                    pass
+                pic_sel.TypeText(f"[ 🖼️ {idx_item + 1} ]")
+
+            cell_cap = tbl.Cell(r_idx + 1, c_idx)
+            cell_cap.Range.Select()
+            cap_sel = doc.Application.Selection
+            cap_sel.ParagraphFormat.Alignment = 1
+            cap_sel.ParagraphFormat.SpaceBefore = 2
+            cap_sel.ParagraphFormat.SpaceAfter = 6
+            cap_sel.Font.Name = self.font_name
+            cap_sel.Font.Size = self.font_size
+            cap_sel.Font.Bold = 0
+            cap_sel.Font.Italic = 0
+            cap_sel.Font.Color = 0
+
+            cap_text = f"{idx_item + 1}. ______"
+            m_cap = re.search(r'(\d+[\.\)]?\s*(?:<blank>|\[BLANK\]|_{2,}|[^\t\|]+))', child.content)
+            if m_cap:
+                raw_cap = m_cap.group(1).strip()
+                if "<blank>" in raw_cap or "[BLANK]" in raw_cap:
+                    cap_text = re.sub(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '______', raw_cap)
+                elif "_" in raw_cap:
+                    cap_text = raw_cap
+                else:
+                    cap_text = f"{idx_item + 1}. {raw_cap}"
+
+            cap_sel.TypeText(cap_text)
+
+        try:
+            end_range = doc.Range(tbl.Range.End + 1, tbl.Range.End + 1)
+            end_range.Select()
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.RightIndent = 0
+            sel.ParagraphFormat.SpaceBefore = 6
+            sel.ParagraphFormat.SpaceAfter = 4
+            sel.ParagraphFormat.Alignment = 0
+        except Exception:
+            pass
+
+        self.last_rendered_tag = "PIC_GRID"
