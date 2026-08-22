@@ -533,15 +533,32 @@ class RendererBlocksMixin:
                 else:
                     cols = min(4, max_fit_cols)
 
-            slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
-            inner_w = slot_w * cols
-            margin_left_pt = cm_to_pt(0.2)
-            box_width_pt = min(printable_width_pt, inner_w + margin_left_pt)
+            lines_bank = []
+            for i in range(0, N, cols):
+                lines_bank.append(words[i:i + cols])
+
+            # Calculate exact maximum character length for each column individually
+            col_max_lens = []
+            for c in range(cols):
+                col_w = [chunk[c] for chunk in lines_bank if c < len(chunk)]
+                col_max_lens.append(max(len(w) for w in col_w) if col_w else 10)
+
+            # Dynamic Tab Stops based on actual word widths + consistent column gap
+            gap_pt = cm_to_pt(0.8)  # 8mm gap between columns
+            tab_stops_pt = [0.0]
+            for c in range(cols - 1):
+                col_width_pt = col_max_lens[c] * char_w_pt
+                next_tab_pt = tab_stops_pt[-1] + col_width_pt + gap_pt
+                tab_stops_pt.append(next_tab_pt)
+
+            last_col_w_pt = col_max_lens[-1] * char_w_pt
+            pad_horiz_pt = cm_to_pt(0.35)
+            box_width_pt = min(printable_width_pt, tab_stops_pt[-1] + last_col_w_pt + (2 * pad_horiz_pt))
             left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
-            num_rows = math.ceil(N / cols)
+            num_rows = len(lines_bank)
             font_line_h = max(14.0, self.font_size * 1.35)
-            box_height_pt = (num_rows * font_line_h) + (2 * margin_pt) + 4.0
+            box_height_pt = (num_rows * font_line_h) + 10.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -561,10 +578,10 @@ class RendererBlocksMixin:
                 shape.WrapFormat.DistanceBottom = 12.0
 
                 tf = shape.TextFrame
-                tf.MarginTop = 0.0
-                tf.MarginBottom = 0.0
-                tf.MarginLeft = margin_left_pt
-                tf.MarginRight = 0.0
+                tf.MarginTop = cm_to_pt(0.12)
+                tf.MarginBottom = cm_to_pt(0.12)
+                tf.MarginLeft = pad_horiz_pt
+                tf.MarginRight = pad_horiz_pt
                 try:
                     tf.AutoSize = False
                 except Exception:
@@ -587,16 +604,12 @@ class RendererBlocksMixin:
                 box_sel.ParagraphFormat.Alignment = 0
                 box_sel.ParagraphFormat.TabStops.ClearAll()
 
-                for c in range(1, cols):
-                    box_sel.ParagraphFormat.TabStops.Add(Position=slot_w * c, Alignment=0)
-
-                lines_bank = []
-                for i in range(0, N, cols):
-                    lines_bank.append(words[i:i + cols])
+                for t_pt in tab_stops_pt[1:]:
+                    box_sel.ParagraphFormat.TabStops.Add(Position=t_pt, Alignment=0)
 
                 for idx_line, chunk in enumerate(lines_bank):
                     if idx_line > 0:
-                        box_sel.ParagraphFormat.SpaceBefore = 1.5
+                        box_sel.ParagraphFormat.SpaceBefore = 2.0
                     box_sel.ParagraphFormat.SpaceAfter = 0
 
                     for idx_w, word_txt in enumerate(chunk):
