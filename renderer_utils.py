@@ -119,29 +119,47 @@ def parse_color_to_rgb_int(color_str: str) -> Optional[int]:
 
 def extract_question_prefix_and_body(text: str) -> Tuple[Optional[str], Optional[str], Optional[str], str]:
     """
-    Extracts (full_prefix, delim_char, q_num, body_text) when formatted with '#' placeholder:
+    Extracts (full_prefix, delim_char, q_num, body_text) when formatted with '#' placeholder or standard number:
     - #1. -> ('', '.', '1', 'Mike...') -> Word list: '1.'
+    - 1. -> ('', '.', '1', 'Mike...') -> Word list: '1.'
     - Question #1. -> ('Question ', '.', '1', 'What...') -> Word list: 'Question 1.'
     - Question #1: -> ('Question ', ':', '1', 'What...') -> Word list: 'Question 1:'
     - Câu #1: -> ('Câu ', ':', '1', '...') -> Word list: 'Câu 1:'
     - Task #1. -> ('Task ', '.', '1', '...') -> Word list: 'Task 1.'
     Returns (full_prefix, delim_char, q_num, body_text) if matched, else (None, None, None, original_text).
     """
-    if not text or '#' not in text:
+    if not text:
         return None, None, None, text
 
-    pattern = r'^\s*(?:\*\*)?([A-Za-zÀ-ỹ\s]+?)?#(\d+)([\.\)\:\-]|\s*:\s*|\s*\.\s*)?\s*(?:\*\*)?[:\.\)]?\s*(.*)$'
-    m = re.match(pattern, text, re.IGNORECASE)
-    if m:
-        prefix_word = m.group(1).strip() if m.group(1) else ""
-        q_num = m.group(2)
-        delimiter = m.group(3).strip() if m.group(3) else "."
-        body = m.group(4).strip()
+    # Case 1: Explicit '#' placeholder (e.g. #1., Question #1:, Câu #1.)
+    if '#' in text:
+        pattern = r'^\s*(?:\*\*)?([A-Za-zÀ-ỹ\s]+?)?#(\d+)([\.\)\:\-]|\s*:\s*|\s*\.\s*)?\s*(?:\*\*)?[:\.\)]?\s*(.*)$'
+        m = re.match(pattern, text, re.IGNORECASE)
+        if m:
+            prefix_word = m.group(1).strip() if m.group(1) else ""
+            q_num = m.group(2)
+            delimiter = m.group(3).strip() if m.group(3) else "."
+            body = m.group(4).strip()
+            body = re.sub(r'^(?:\*\*|[:\.\-\)])\s*', '', body).strip()
+
+            full_prefix = f"{prefix_word} " if prefix_word else ""
+            delim_char = ":" if ":" in delimiter else ("." if "." in delimiter else (delimiter if delimiter else "."))
+            return full_prefix, delim_char, q_num, body
+
+    # Case 2: Standard question number prefix with delimiter (e.g. '1.', '2)', 'Question 1:', 'Câu 1:')
+    pattern2 = r'^\s*(?:\*\*)?((?:Question|Câu|Task|Activity|Ex|Exercise)\s+)?(\d+)([\.\)\:\-])\s*(?:\*\*)?[:\.\)]?\s*(.*)$'
+    m2 = re.match(pattern2, text, re.IGNORECASE)
+    if m2:
+        prefix_word = m2.group(1).strip() if m2.group(1) else ""
+        q_num = m2.group(2)
+        delimiter = m2.group(3).strip() if m2.group(3) else "."
+        body = m2.group(4).strip()
         body = re.sub(r'^(?:\*\*|[:\.\-\)])\s*', '', body).strip()
 
         full_prefix = f"{prefix_word} " if prefix_word else ""
         delim_char = ":" if ":" in delimiter else ("." if "." in delimiter else (delimiter if delimiter else "."))
         return full_prefix, delim_char, q_num, body
+
     return None, None, None, text
 
 def split_line_into_option_items(line_text: str) -> List[str]:

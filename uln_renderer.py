@@ -948,7 +948,28 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                         sel.TypeText("\t")
 
-                        if m_opt and not block.pic:
+                        pref2, delim2, q_num2, c2_body = extract_question_prefix_and_body(block.col2)
+                        if q_num2 is not None:
+                            delim_char2 = delim2 if delim2 else "."
+                            num_prefix_str2 = f"{q_num2}{delim_char2} "
+                            sel.Font.Name = self.font_name
+                            sel.Font.Size = self.font_size
+                            sel.Font.Bold = 1
+                            sel.Font.Italic = 0
+                            sel.Font.Underline = 0
+                            q_color_int = parse_color_to_rgb_int(self.question_color)
+                            if q_color_int is not None:
+                                sel.Font.Color = q_color_int
+                            else:
+                                sel.Font.Color = 0
+                            sel.TypeText(num_prefix_str2)
+                            sel.Font.Bold = 0
+                            sel.Font.Color = 0
+
+                            from uln_parser import parse_inline_spans as _pis
+                            c2_spans = _pis(c2_body.strip())
+                            self.write_inline_spans(sel, c2_spans)
+                        elif m_opt and not block.pic:
                             opt_let = f"{m_opt.group(1).upper()}."
                             opt_body = m_opt.group(2).strip()
 
