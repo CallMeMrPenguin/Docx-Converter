@@ -1196,6 +1196,7 @@ class RendererBlocksMixin:
         """
         Renders 3-column (TAB3), 4-column (TAB4), or N-column (TAB) side-by-side items
         using native Word paragraph tab stops with optimal gap calculations and aligned blanks.
+        Auto-determines blank length: 2mm separation from text, min 5mm gap to next column.
         """
         num_cols = len(block.cols) if block.cols else (3 if block.tag == "TAB3" else (4 if block.tag == "TAB4" else 3))
 
@@ -1225,6 +1226,7 @@ class RendererBlocksMixin:
 
         col_starts_cm = [base_indent_cm + (i * even_step_cm) for i in range(num_cols)]
         tab_stops_cm = []
+        col_blank_strs = []
 
         if has_blanks:
             # Measure max width of the word part (before blank) in each column
@@ -1243,7 +1245,15 @@ class RendererBlocksMixin:
             for c_idx in range(num_cols):
                 start_cm = col_starts_cm[c_idx]
                 next_start_cm = col_starts_cm[c_idx + 1] if (c_idx + 1 < num_cols) else printable_width_cm
-                blank_tab_cm = min(next_start_cm - 1.20, start_cm + col_word_max_w_cm[c_idx] + 0.40)
+
+                # Exactly 2.0 mm (0.20 cm) after the longest word
+                blank_tab_cm = min(next_start_cm - 1.00, start_cm + col_word_max_w_cm[c_idx] + 0.20)
+                # Exactly 5.0 mm (0.50 cm) before the next column start
+                blank_end_cm = next_start_cm - 0.50
+                blank_width_cm = max(0.60, blank_end_cm - blank_tab_cm)
+
+                num_u = max(4, int(round(blank_width_cm / 0.15)))
+                col_blank_strs.append('_' * num_u)
 
                 if c_idx > 0:
                     tab_stops_cm.append(start_cm)
@@ -1331,7 +1341,8 @@ class RendererBlocksMixin:
                 sel.Font.Italic = 0
                 sel.Font.Underline = 0
                 sel.Font.Color = 0
-                sel.TypeText("______")
+                blank_str = col_blank_strs[c_idx] if c_idx < len(col_blank_strs) else "______"
+                sel.TypeText(blank_str)
             else:
                 if num_prefix:
                     sel.Font.Name = self.font_name

@@ -87,12 +87,12 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
     [TAB2] [P0] 1. How many calories should I eat in a day? | a. A little better, but still feel tired.
     [TAB2] [P0] 2. Shall we go and play basketball? | b. Wash your face daily and use gentle skin care products.
   - [TAB3]: Used for 3-column exercises (e.g. Countable / Uncountable noun classification, short vocabulary lists with answer blanks):
-    [TAB3] #1. beef _____ | #7. spinach _____ | #13. turmeric _____
-    [TAB3] #2. apple _____ | #8. egg _____ | #14. pancake _____
-    [TAB3] #3. bread _____ | #9. butter _____ | #15. vegetable _____
-    [TAB3] #4. biscuit _____ | #10. lemonade _____ | #16. coffee _____
-    [TAB3] #5. rice _____ | #11. sandwich _____ | #17. sugar _____
-    [TAB3] #6. spring roll _____ | #12. ham _____ | #18. orange _____
+    [TAB3] #1. beef <blank> | #7. spinach <blank> | #13. turmeric <blank>
+    [TAB3] #2. apple <blank> | #8. egg <blank> | #14. pancake <blank>
+    [TAB3] #3. bread <blank> | #9. butter <blank> | #15. vegetable <blank>
+    [TAB3] #4. biscuit <blank> | #10. lemonade <blank> | #16. coffee <blank>
+    [TAB3] #5. rice <blank> | #11. sandwich <blank> | #17. sugar <blank>
+    [TAB3] #6. spring roll <blank> | #12. ham <blank> | #18. orange <blank>
   - [TAB4]: Used for 4-column short item layouts.
 
 - [TABLE] ... [/TABLE] : Multi-row visible bordered data table container.
@@ -209,12 +209,12 @@ F. STRICT RULE: WHEN TO USE [TAB2] / [TAB3] / [TAB4] VS STANDARD [P0]/[P1]:
           - Row 6: #6 | #12 | #18
         - STRICT ANTI-LOOP MANDATE: NEVER repeat the first row or loop identical items! Output every single item with its unique word and number exactly once:
         [NUM]
-        [TAB3] #1. beef _____ | #7. spinach _____ | #13. turmeric _____
-        [TAB3] #2. apple _____ | #8. egg _____ | #14. pancake _____
-        [TAB3] #3. bread _____ | #9. butter _____ | #15. vegetable _____
-        [TAB3] #4. biscuit _____ | #10. lemonade _____ | #16. coffee _____
-        [TAB3] #5. rice _____ | #11. sandwich _____ | #17. sugar _____
-        [TAB3] #6. spring roll _____ | #12. ham _____ | #18. orange _____
+        [TAB3] #1. beef <blank> | #7. spinach <blank> | #13. turmeric <blank>
+        [TAB3] #2. apple <blank> | #8. egg <blank> | #14. pancake <blank>
+        [TAB3] #3. bread <blank> | #9. butter <blank> | #15. vegetable <blank>
+        [TAB3] #4. biscuit <blank> | #10. lemonade <blank> | #16. coffee <blank>
+        [TAB3] #5. rice <blank> | #11. sandwich <blank> | #17. sugar <blank>
+        [TAB3] #6. spring roll <blank> | #12. ham <blank> | #18. orange <blank>
         [/NUM]
 
 G. DIALOGUE & CONVERSATION EXERCISES:
