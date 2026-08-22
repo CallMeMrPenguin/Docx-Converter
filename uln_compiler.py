@@ -46,6 +46,7 @@ class ULNCompiler:
         word = None
         doc = None
 
+        is_cancelled = False
         try:
             try:
                 pythoncom.CoInitialize()
@@ -147,23 +148,34 @@ class ULNCompiler:
             return abs_output_path
 
         except KeyboardInterrupt:
-            if doc:
-                try:
-                    doc.Close(False)
-                except Exception:
-                    pass
-                doc = None
-            if word:
+            is_cancelled = True
+            if word and doc:
                 try:
                     word.ScreenUpdating = True
-                    word.Quit()
+                    word.Visible = True
+                    try:
+                        word.Selection.Collapse(0)
+                    except Exception:
+                        pass
+                    try:
+                        word.ActiveWindow.View.Type = 3  # wdPrintView = 3
+                    except Exception:
+                        pass
+                    try:
+                        word.WindowState = 1  # wdWindowStateMaximize = 1
+                    except Exception:
+                        pass
+                    word.Activate()
+                    import ctypes
+                    hwnd = word.ActiveWindow.Hwnd
+                    ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                    ctypes.windll.user32.SetForegroundWindow(hwnd)
                 except Exception:
                     pass
-                word = None
-            raise KeyboardInterrupt("Đã hủy tạo DOCX theo yêu cầu (Phím ESC).")
+            raise KeyboardInterrupt("Đã tạm dừng tạo DOCX theo yêu cầu (Phím ESC). File Word hiện tại vẫn được giữ nguyên.")
 
         finally:
-            if not keep_open:
+            if not keep_open and not is_cancelled:
                 if doc:
                     try:
                         doc.Close(False)
@@ -174,11 +186,11 @@ class ULNCompiler:
                         word.Quit()
                     except Exception:
                         pass
-
             else:
                 # Fully detach COM object references so Word operates as a standalone user window
                 try:
-                    doc.Saved = True
+                    if doc:
+                        doc.Saved = True
                 except Exception:
                     pass
                 doc = None

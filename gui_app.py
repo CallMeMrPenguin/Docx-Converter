@@ -924,7 +924,7 @@ class ULNFormatterApp:
                 self.root.focus_force()
             except Exception:
                 pass
-            messagebox.showwarning("Đã hủy", "Đã hủy tác vụ tạo DOCX theo yêu cầu (Phím ESC).")
+            messagebox.showinfo("Đã tạm dừng", "Đã tạm dừng quá trình biên dịch (Phím ESC).\nFile Word hiện tại vẫn được giữ nguyên để bạn xem và chỉnh sửa tiếp.")
 
         except Exception as e:
             try:
