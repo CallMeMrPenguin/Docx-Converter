@@ -295,6 +295,7 @@ class RendererBlocksMixin:
         sel.ParagraphFormat.SpaceAfter = 3
         sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0
+        sel.ParagraphFormat.KeepWithNext = False
 
         opt_color_int = parse_color_to_rgb_int(getattr(self, 'opt_color', '#000000'))
 
@@ -867,6 +868,7 @@ class RendererBlocksMixin:
             sel.ParagraphFormat.SpaceBefore = 8 if idx_row == 0 else 4
             sel.ParagraphFormat.SpaceAfter = 2
             sel.ParagraphFormat.LineSpacingRule = 0
+            sel.ParagraphFormat.KeepWithNext = True
 
             for c_idx, child in enumerate(chunk):
                 global_idx = idx_chunk + c_idx
@@ -909,6 +911,7 @@ class RendererBlocksMixin:
             sel.ParagraphFormat.SpaceBefore = 2
             sel.ParagraphFormat.SpaceAfter = 6
             sel.ParagraphFormat.LineSpacingRule = 0
+            sel.ParagraphFormat.KeepWithNext = False
 
             for c_idx, child in enumerate(chunk):
                 global_idx = idx_chunk + c_idx

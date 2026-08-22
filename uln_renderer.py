@@ -383,7 +383,13 @@ class ULNWordRenderer(RendererBlocksMixin):
                 sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.PageBreakBefore = False
                 is_ins_block = block.is_instruction or any(s.is_instruction for s in block.spans)
-                if is_ins_block:
+                
+                # Check if this P0 is a numbered question stem followed by an OPT block
+                has_next_opt = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag == "OPT")
+                pref_chk, delim_chk, q_num_chk, _ = extract_question_prefix_and_body(block.content)
+                is_numbered_q = (q_num_chk is not None)
+
+                if is_ins_block or (is_numbered_q and has_next_opt):
                     sel.ParagraphFormat.SpaceBefore = 14 if self.last_rendered_tag == "BOX" else 8
                     sel.ParagraphFormat.SpaceAfter = 4
                     sel.ParagraphFormat.KeepWithNext = True
