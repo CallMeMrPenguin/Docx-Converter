@@ -88,8 +88,8 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
     [TAB2] [P0] 1. How many calories should I eat in a day? | a. A little better, but still feel tired.
     [TAB2] [P0] 2. Shall we go and play basketball? | b. Wash your face daily and use gentle skin care products.
 
-- [TABLE] ... [/TABLE] or [TABLE: borderless] ... [/TABLE] : Multi-row data table container.
-  - Options: Use `[TABLE]` for native bordered grid tables, or `[TABLE: borderless]` for borderless multi-column word lists / layouts.
+- [TABLE] ... [/TABLE] : Multi-row visible bordered data table container.
+  - STRICT MANDATE: [TABLE] is strictly and exclusively reserved for visible bordered grid tables.
   - Inside `[TABLE]`, use `[TH]` for header rows and `[TR]` for standard data rows.
   - Separate cell columns using the pipe `|` symbol.
   - Example Bordered Table:
@@ -97,13 +97,6 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
     [TH] /f/ | /v/
     [TR] ______ | ______
     [TR] ______ | ______
-    [/TABLE]
-  - Example Borderless Table (Word Grid with NO visible border box in original):
-    [TABLE: borderless]
-    [TR] fun | fine | coffee | over | graph
-    [TR] phone | brave | verb | stuff | clever
-    [TR] enough | laughing | leaf | leave | vitamin
-    [TR] view | few | valley | save | valve
     [/TABLE]
 
 - [BOX] ... [/BOX] : Framing container for Grammar Formulas, Rule Callouts, Notes, or FRAMED Word Banks.
@@ -179,17 +172,11 @@ D. HORIZONTAL PICTURE CHOICE GRIDS:
      5. [PIC] | 6. [PIC] | 7. [PIC] | 8. [PIC]
      [/PIC_GRID]
 
-E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES (TABLE: BORDERLESS MANDATE):
-   - MANDATE: For exercises featuring a sign or diagram image alongside a question + 4 choices (A, B, C, D), ALWAYS use `[TABLE: borderless]`!
-   - Put the question on row 1 in Column 1, and the picture tag `[PIC]` in Column 2, separated by the pipe `|` symbol.
-   - Put choice options on separate `[TR]` rows below. Option letters (A., B., C., D.) are AUTOMATICALLY added and formatted in bold by the compiler:
-     [TABLE: borderless]
-     [TR] 11. What does the sign (A) say? | [PIC]
-     [TR] Maximum 40 vehicles are allowed on this road. |
-     [TR] You shouldn't exceed this maximum speed. |
-     [TR] Minimum 40 vehicles are allowed on this road. |
-     [TR] You shouldn't move below this speed. |
-     [/TABLE]
+E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES:
+   - For exercises featuring a sign or diagram image alongside a question + 4 choices (A, B, C, D):
+   - Place the question and picture on row 1 using `[TAB2]`, and list choices below using `[OPT]`:
+     [TAB2] 11. What does the sign say? | [PIC]
+     [OPT] Maximum 40 vehicles are allowed on this road. | You shouldn't exceed this maximum speed. | Minimum 40 vehicles are allowed on this road. | You shouldn't move below this speed. [/OPT]
 
 F. STRICT RULE: WHEN TO USE [TAB2] VS STANDARD [P0]/[P1]:
    - DO NOT use [TAB2] for regular sentences, sentence transformations, or inline fill-in-the-blanks.
@@ -204,6 +191,7 @@ F. STRICT RULE: WHEN TO USE [TAB2] VS STANDARD [P0]/[P1]:
         [TAB2] [P0] #1. flu | a. a common illness that affects the nose and throat...
         [TAB2] [P0] #2. acne | b. a skin condition that causes small red spots...
         [/NUM]
+     3. 2-Column Picture Vocabulary & Word Completion grids (see section I below).
 
 G. DIALOGUE & CONVERSATION EXERCISES:
    - CASE 1: Numbered Speaking Q&A Pairs (Numbered questions with Speaker A blank line):
@@ -244,19 +232,17 @@ H. EXERCISES WITH HANDWRITING ANSWER LINES BELOW QUESTIONS:
    - The compiler automatically converts `[P1] <blank>` into a clean, full-width answer writing line matching textbook standards!
 
 I. PICTURE VOCABULARY & WORD COMPLETION GRIDS (2-COLUMN PICTURE EXERCISES):
-   - MANDATE: For exercises presenting a 2-column (or multi-column) grid of numbered pictures with incomplete words / letter blanks (e.g. `1. [PIC] o__e__e__t___`, `2. [PIC] f___`):
-   - ALWAYS use `[TABLE: borderless]`!
-   - On each `[TR]` row, place the left item in Column 1 and the right item in Column 2, separated by the pipe `|` symbol:
+   - MANDATE: For exercises presenting a 2-column grid of numbered pictures with incomplete words / letter blanks (e.g. `1. [PIC] o__e__e__t___`, `2. [PIC] f___`):
+   - ALWAYS use `[TAB2]`!
+   - On each line, place the left item in Column 1 and the right item in Column 2, separated by the pipe `|` symbol:
      [P0] [ins]**I. Look at the pictures and complete the words. Then put them in the correct column.**
-     [TABLE: borderless]
-     [TR] 1. [PIC: omelette] o__e__e__t___ | 2. [PIC: fox] f___
-     [TR] 3. [PIC: sauce] s__u__e | 4. [PIC: rod] r___
-     [TR] 5. [PIC: sausage] s___s_g___ | 6. [PIC: water] w_t___
-     [TR] 7. [PIC: coffee] c__ff___ | 8. [PIC: pot] p___
-     [TR] 9. [PIC: pork] p__r___ | 10. [PIC: storm] s__o__m
-     [TR] 11. [PIC: salt] s__l___ | 12. [PIC: bottle] b__t__l___
-     [TR] 13. [PIC: fork] f__r___ | 14. [PIC: horse] h__r__e
-     [/TABLE]
+     [TAB2] 1. [PIC: omelette] o__e__e__t___ | 2. [PIC: fox] f___
+     [TAB2] 3. [PIC: sauce] s__u__e | 4. [PIC: rod] r___
+     [TAB2] 5. [PIC: sausage] s___s_g___ | 6. [PIC: water] w_t___
+     [TAB2] 7. [PIC: coffee] c__ff___ | 8. [PIC: pot] p___
+     [TAB2] 9. [PIC: pork] p__r___ | 10. [PIC: storm] s__o__m
+     [TAB2] 11. [PIC: salt] s__l___ | 12. [PIC: bottle] b__t__l___
+     [TAB2] 13. [PIC: fork] f__r___ | 14. [PIC: horse] h__r__e
    - If there is a phonetic or category classification table below it, follow immediately with a standard bordered `[TABLE]`:
      [TABLE]
      [TH] /ɒ/ | /ɔː/

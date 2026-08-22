@@ -717,6 +717,11 @@ class ULNWordRenderer(RendererBlocksMixin):
                     max_c1_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in c1_clean_texts) if c1_clean_texts else 100.0
                     c1_word_w_cm = pt_to_cm(max_c1_w_pt) * 1.15
 
+                    # Check if columns contain inline picture tags and add physical picture width
+                    c1_has_pic = any("[PIC" in b.col1.upper() or parse_pic_tag(b.col1) is not None for b in tab2_group)
+                    if c1_has_pic:
+                        c1_word_w_cm += 3.4
+
                     # Measure Column 2 width to ensure both columns fit cleanly on the page
                     c2_clean_texts = []
                     for b in tab2_group:
@@ -724,6 +729,10 @@ class ULNWordRenderer(RendererBlocksMixin):
                         c2_clean_texts.append(clean_c2)
                     max_c2_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in c2_clean_texts) if c2_clean_texts else 50.0
                     c2_word_w_cm = pt_to_cm(max_c2_w_pt) * 1.15
+
+                    c2_has_pic = any("[PIC" in b.col2.upper() or parse_pic_tag(b.col2) is not None for b in tab2_group)
+                    if c2_has_pic:
+                        c2_word_w_cm += 3.4
 
                     min_gap_cm = 0.50  # MINIMUM DISTANCE BETWEEN 2 COLUMNS: STRICTLY >= 5.0 MM (0.50 cm)
 
@@ -733,9 +742,12 @@ class ULNWordRenderer(RendererBlocksMixin):
                     # 2. Minimum Tab Stop position to maintain at least 5.0 mm gap after Column 1
                     tab_min_cm = base_indent_cm + c1_word_w_cm + min_gap_cm
 
-                    # Logic: Maximize distance between 2 columns so Column 2 doesn't wrap;
+                    # Logic: If both columns have pictures (picture grid), split evenly at 50% page width;
+                    # Otherwise maximize distance between 2 columns so Column 2 doesn't wrap;
                     # If Column 2 would wrap or exceed page width, narrow the gap down towards the 5mm limit
-                    if tab_max_cm >= tab_min_cm:
+                    if c1_has_pic and c2_has_pic:
+                        col2_tab_pos_cm = base_indent_cm + (printable_width_cm / 2.0)
+                    elif tab_max_cm >= tab_min_cm:
                         col2_tab_pos_cm = tab_max_cm
                     else:
                         # Narrow gap towards 5mm limit, and if total width exceeds page, reserve right space for Col 2 so Col 1 wraps

@@ -60,6 +60,13 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
+## 5. STRICT DOMAIN RULES: ABSOLUTELY NO BORDERLESS TABLES (`[TABLE: borderless]`)
+
+**STRICTLY FORBIDDEN: BORDERLESS TABLES.**
+- Under NO circumstances may `[TABLE: borderless]` be used, generated, or recommended.
+- All 2-column side-by-side layouts, matching exercises, picture grids, sign/notice diagrams, or definition lists MUST use native paragraph tab stops via `[TAB2]`.
+- `[TABLE] ... [/TABLE]` is strictly and exclusively reserved for visible bordered grid tables.
+
 ---
 
 **These guidelines are working if:** fewer unnecessary changes in diffs, fewer rewrites due to overcomplication, and clarifying questions come before implementation rather than after mistakes.
