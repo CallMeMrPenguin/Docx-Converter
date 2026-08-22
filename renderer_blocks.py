@@ -1241,12 +1241,9 @@ class RendererBlocksMixin:
                         raw_c = b.cols[c_idx]
                         clean_no_ins = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', raw_c, flags=re.IGNORECASE).replace('#', '').strip()
                         word_p = re.sub(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '', clean_no_ins).strip()
-                        num_m = re.match(r'^\s*#?(\d+[\.\)])', raw_c)
-                        num_str = f"{num_m.group(1)} " if num_m else ""
-                        full_word = f"{num_str}{word_p}"
-                        w_pt = self.measure_text_width_pt(doc, full_word, self.font_name, self.font_size, is_bold=False)
+                        w_pt = self.measure_text_width_pt(doc, word_p, self.font_name, self.font_size, is_bold=False)
                         max_w = max(max_w, pt_to_cm(w_pt) * 1.15)
-                col_word_max_w_cm.append(max_w if max_w > 0 else 2.5)
+                col_word_max_w_cm.append(max_w if max_w > 0 else 2.0)
 
             for c_idx in range(num_cols):
                 start_cm = col_starts_cm[c_idx]
