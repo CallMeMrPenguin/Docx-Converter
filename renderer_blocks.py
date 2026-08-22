@@ -29,9 +29,15 @@ class RendererBlocksMixin:
         if target_path and os.path.exists(target_path):
             try:
                 shape = sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
-                if pic.size == "small":
-                    shape.Width = cm_to_pt(3.5)
-                    shape.Height = cm_to_pt(2.5)
+                is_in_table = False
+                try:
+                    is_in_table = bool(sel.Information(12))  # wdWithInTable = 12
+                except Exception:
+                    pass
+
+                if is_in_table or pic.size == "small":
+                    shape.Width = cm_to_pt(3.2)
+                    shape.Height = cm_to_pt(2.4)
                 elif pic.size == "large":
                     shape.Width = cm_to_pt(10.0)
                     shape.Height = cm_to_pt(6.5)
@@ -791,12 +797,21 @@ class RendererBlocksMixin:
         num_rows = len(tdata.rows)
         num_cols = max(len(r.cells) for r in tdata.rows)
 
-        has_pic = any(
-            "[PIC" in cell.content.upper() or parse_pic_tag(cell.content) is not None
-            for row in tdata.rows for cell in row.cells
+        total_pics = sum(
+            1 for row in tdata.rows for cell in row.cells
+            if ("[PIC" in cell.content.upper() or parse_pic_tag(cell.content) is not None)
+        )
+        has_pic = (total_pics > 0)
+
+        # Only use floating side-diagram layout if it is a single MCQ question with a side diagram
+        is_single_diagram_mcq = (
+            tdata.borderless
+            and total_pics == 1
+            and len(tdata.rows) >= 3
+            and any(re.match(r'^\s*\*?\*?[A-Da-d][\.\)]', cell.content) for row in tdata.rows for cell in row.cells)
         )
 
-        if tdata.borderless and has_pic:
+        if is_single_diagram_mcq:
             pic_info_found = None
             text_rows = []
 
@@ -992,6 +1007,10 @@ class RendererBlocksMixin:
 
             for c_idx, cell_obj in enumerate(row_obj.cells, 1):
                 cell = tbl.Cell(r_idx, c_idx)
+                try:
+                    cell.VerticalAlignment = 1  # wdCellAlignVerticalCenter = 1
+                except Exception:
+                    pass
                 cell_range = cell.Range
                 try:
                     cell_range.ListFormat.RemoveNumbers()
@@ -1022,8 +1041,7 @@ class RendererBlocksMixin:
                     cell_range.Text = cell_txt
 
         try:
-            rng_after = tbl.Range
-            rng_after.Collapse(0)  # wdCollapseEnd = 0
+            rng_after = doc.Range(tbl.Range.End, tbl.Range.End)
             rng_after.Select()
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.RightIndent = 0
@@ -1031,6 +1049,7 @@ class RendererBlocksMixin:
             sel.ParagraphFormat.SpaceBefore = 8
             sel.ParagraphFormat.SpaceAfter = 4
             sel.ParagraphFormat.Alignment = 0
+            sel.TypeParagraph()
         except Exception:
             pass
 

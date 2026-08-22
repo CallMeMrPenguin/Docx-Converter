@@ -243,6 +243,27 @@ H. EXERCISES WITH HANDWRITING ANSWER LINES BELOW QUESTIONS:
      [/NUM]
    - The compiler automatically converts `[P1] <blank>` into a clean, full-width answer writing line matching textbook standards!
 
+I. PICTURE VOCABULARY & WORD COMPLETION GRIDS (2-COLUMN PICTURE EXERCISES):
+   - MANDATE: For exercises presenting a 2-column (or multi-column) grid of numbered pictures with incomplete words / letter blanks (e.g. `1. [PIC] o__e__e__t___`, `2. [PIC] f___`):
+   - ALWAYS use `[TABLE: borderless]`!
+   - On each `[TR]` row, place the left item in Column 1 and the right item in Column 2, separated by the pipe `|` symbol:
+     [P0] [ins]**I. Look at the pictures and complete the words. Then put them in the correct column.**
+     [TABLE: borderless]
+     [TR] 1. [PIC: omelette] o__e__e__t___ | 2. [PIC: fox] f___
+     [TR] 3. [PIC: sauce] s__u__e | 4. [PIC: rod] r___
+     [TR] 5. [PIC: sausage] s___s_g___ | 6. [PIC: water] w_t___
+     [TR] 7. [PIC: coffee] c__ff___ | 8. [PIC: pot] p___
+     [TR] 9. [PIC: pork] p__r___ | 10. [PIC: storm] s__o__m
+     [TR] 11. [PIC: salt] s__l___ | 12. [PIC: bottle] b__t__l___
+     [TR] 13. [PIC: fork] f__r___ | 14. [PIC: horse] h__r__e
+     [/TABLE]
+   - If there is a phonetic or category classification table below it, follow immediately with a standard bordered `[TABLE]`:
+     [TABLE]
+     [TH] /ɒ/ | /ɔː/
+     [TR] ______ | ______
+     [TR] ______ | ______
+     [/TABLE]
+
 ---
 
 ### EXPLICIT COMPILATION EXAMPLE
