@@ -522,22 +522,40 @@ class RendererBlocksMixin:
                 print(f"[ULNRenderer] Warning creating Formula/Callout TextFrame box shape: {e}")
 
         else:
-            # PATHWAY B: WORD BANK
+            # PATHWAY B: WORD BANK / PIPE-SEPARATED CHOICES
             words = [w.strip() for w in raw_content.split('|') if w.strip()]
             if not words:
                 return
 
             N = len(words)
-            char_w_pt = max(5.0, self.font_size * 0.52)
-            margin_pt = 0.0
 
-            max_len_all = max(len(w) for w in words)
-            est_slot_w = max(45.0, (max_len_all * char_w_pt) + 16.0)
+            # Measure exact physical width of all items in Word COM
+            item_widths_pt = []
+            try:
+                left_m_pt = doc.PageSetup.LeftMargin
+                for w in words:
+                    sel.SetRange(doc.Content.End - 1, doc.Content.End - 1)
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 1
+                    sel.TypeText(w)
+                    pos = sel.Information(5)
+                    sel.Delete(1, -len(w))
+                    item_widths_pt.append(pos - left_m_pt)
+            except Exception:
+                char_w_pt = max(4.0, self.font_size * 0.41)
+                item_widths_pt = [len(w) * char_w_pt for w in words]
 
-            if est_slot_w >= (printable_width_pt - (2 * margin_pt)):
+            max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
+            pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
+            pad_vert_pt = cm_to_pt(0.10)   # Exactly 1.0 mm padding
+
+            # If items are long sentences/dialogue turns (>35% page width), format as 1 column
+            if max_item_w_pt >= (printable_width_pt * 0.35):
                 cols = 1
             else:
-                max_fit_cols = max(1, int((printable_width_pt - (2 * margin_pt)) / est_slot_w))
+                est_slot_w = max_item_w_pt + cm_to_pt(0.8)
+                max_fit_cols = max(1, int(printable_width_pt / est_slot_w))
                 if N <= 5:
                     cols = min(N, max_fit_cols)
                 elif N <= 8:
@@ -551,28 +569,30 @@ class RendererBlocksMixin:
             for i in range(0, N, cols):
                 lines_bank.append(words[i:i + cols])
 
-            # Calculate exact maximum character length for each column individually
-            col_max_lens = []
-            for c in range(cols):
-                col_w = [chunk[c] for chunk in lines_bank if c < len(chunk)]
-                col_max_lens.append(max(len(w) for w in col_w) if col_w else 10)
+            if cols == 1:
+                box_width_pt = min(printable_width_pt, max_item_w_pt + (2 * pad_horiz_pt))
+                tab_stops_pt = [0.0]
+            else:
+                # Dynamic Tab Stops based on actual physical word widths per column
+                col_max_widths_pt = []
+                for c in range(cols):
+                    col_widths = [item_widths_pt[i] for i in range(N) if i % cols == c]
+                    col_max_widths_pt.append(max(col_widths) if col_widths else 45.0)
 
-            # Dynamic Tab Stops based on actual word widths + consistent column gap
-            gap_pt = cm_to_pt(0.8)  # 8mm gap between columns
-            tab_stops_pt = [0.0]
-            for c in range(cols - 1):
-                col_width_pt = col_max_lens[c] * char_w_pt
-                next_tab_pt = tab_stops_pt[-1] + col_width_pt + gap_pt
-                tab_stops_pt.append(next_tab_pt)
+                gap_pt = cm_to_pt(0.8)  # 8mm gap between columns
+                tab_stops_pt = [0.0]
+                for c in range(cols - 1):
+                    next_tab_pt = tab_stops_pt[-1] + col_max_widths_pt[c] + gap_pt
+                    tab_stops_pt.append(next_tab_pt)
 
-            last_col_w_pt = col_max_lens[-1] * char_w_pt
-            pad_horiz_pt = cm_to_pt(0.35)
-            box_width_pt = min(printable_width_pt, tab_stops_pt[-1] + last_col_w_pt + (2 * pad_horiz_pt))
+                box_width_pt = min(printable_width_pt, tab_stops_pt[-1] + col_max_widths_pt[-1] + (2 * pad_horiz_pt))
+
             left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             num_rows = len(lines_bank)
-            font_line_h = max(14.0, self.font_size * 1.35)
-            box_height_pt = (num_rows * font_line_h) + 10.0
+            exact_line_h_pt = self.font_size * 1.25
+            space_between_pt = 2.0
+            box_height_pt = (num_rows * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + (2 * pad_vert_pt) + 2.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -592,8 +612,8 @@ class RendererBlocksMixin:
                 shape.WrapFormat.DistanceBottom = 12.0
 
                 tf = shape.TextFrame
-                tf.MarginTop = cm_to_pt(0.12)
-                tf.MarginBottom = cm_to_pt(0.12)
+                tf.MarginTop = pad_vert_pt
+                tf.MarginBottom = pad_vert_pt
                 tf.MarginLeft = pad_horiz_pt
                 tf.MarginRight = pad_horiz_pt
                 try:
