@@ -392,9 +392,11 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                 # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct
                 blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', block.content, re.IGNORECASE)
+                # Check if paragraph has trailing picture [PIC] or [PIC: ...]
+                trailing_pic_match = re.search(r'\s*(\[PIC(?::[^\]]+)?\])\s*$', block.content, re.IGNORECASE)
                 # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank)
                 is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', block.content)) or bool(re.search(r'_{15,}', block.content)) or is_dialogue_line
-                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and is_transform_or_long) else None
+                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and not trailing_pic_match and is_transform_or_long) else None
 
                 if blank_symbol_match:
                     trailing_sym = blank_symbol_match.group(1).strip()
@@ -412,6 +414,46 @@ class ULNWordRenderer(RendererBlocksMixin):
                         sel.TypeText(f"\t{trailing_sym}")
                     else:
                         sel.TypeText("\t")
+                    sel.TypeParagraph()
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                elif trailing_pic_match:
+                    text_part = block.content[:trailing_pic_match.start()].strip()
+                    pic_str = trailing_pic_match.group(1).strip()
+                    pic_info = parse_pic_tag(pic_str) or PicInfo(description="Activity Picture", pos="right", size="small")
+                    pic_w_cm = 3.6
+                    pic_h_cm = 2.5
+                    col_pic_pos_cm = printable_width_cm - pic_w_cm
+
+                    sel.ParagraphFormat.LeftIndent = 0
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col_pic_pos_cm), Alignment=0)
+                    sel.ParagraphFormat.SpaceBefore = 4
+                    sel.ParagraphFormat.SpaceAfter = 4
+                    sel.ParagraphFormat.KeepWithNext = False
+
+                    pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
+                    if q_num is not None and c_body.strip():
+                        num_fmt = self.get_effective_number_format(pref, delim)
+                        self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
+                        from uln_parser import parse_inline_spans as _pis
+                        text_spans = _pis(c_body.strip())
+                        self.write_inline_spans(sel, text_spans)
+                    else:
+                        try:
+                            sel.Range.ListFormat.RemoveNumbers()
+                        except Exception:
+                            pass
+                        from uln_parser import parse_inline_spans as _pis
+                        text_spans = _pis(text_part)
+                        self.write_inline_spans(sel, text_spans)
+
+                    sel.TypeText("\t")
+                    self.current_tab2_pic_width_cm = pic_w_cm
+                    self.current_tab2_pic_height_cm = pic_h_cm
+                    self.render_pic(sel, doc, pic_info)
+                    self.current_tab2_pic_width_cm = None
+                    self.current_tab2_pic_height_cm = None
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 elif trailing_blank_symbol_match:
@@ -602,9 +644,11 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                 # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct
                 blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', content_to_render, re.IGNORECASE)
+                # Check if paragraph has trailing picture [PIC] or [PIC: ...]
+                trailing_pic_match = re.search(r'\s*(\[PIC(?::[^\]]+)?\])\s*$', content_to_render, re.IGNORECASE)
                 # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank)
                 is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', content_to_render)) or bool(re.search(r'_{15,}', content_to_render)) or is_dlg_speaker
-                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', content_to_render, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and is_transform_or_long) else None
+                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', content_to_render, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and not trailing_pic_match and is_transform_or_long) else None
 
                 if blank_symbol_match:
                     trailing_sym = blank_symbol_match.group(1).strip()
@@ -623,24 +667,29 @@ class ULNWordRenderer(RendererBlocksMixin):
                         sel.TypeText("\t")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
-                elif trailing_blank_symbol_match:
-                    # Option B: text before <blank> rendered inline, blank filled dynamically to right margin via Leader=4
-                    text_part = trailing_blank_symbol_match.group(1)
-                    trailing_sym = trailing_blank_symbol_match.group(2).strip()
-                    from uln_parser import parse_inline_spans as _pis
-                    text_spans = _pis(text_part)
+                elif trailing_pic_match:
+                    text_part = content_to_render[:trailing_pic_match.start()].strip()
+                    pic_str = trailing_pic_match.group(1).strip()
+                    pic_info = parse_pic_tag(pic_str) or PicInfo(description="Activity Picture", pos="right", size="small")
+                    pic_w_cm = 3.6
+                    pic_h_cm = 2.5
+                    col_pic_pos_cm = printable_width_cm - pic_w_cm
+
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
                     sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col_pic_pos_cm), Alignment=0)
+
+                    from uln_parser import parse_inline_spans as _pis
+                    text_spans = _pis(text_part)
                     self.write_inline_spans(sel, text_spans)
-                    sel.Font.Color = 0  # Enforce black for trailing answer blank
-                    sel.Font.Underline = 0
-                    sel.Font.Bold = 0
-                    if trailing_sym:
-                        sel.TypeText(f"\t{trailing_sym}")
-                    else:
-                        sel.TypeText("\t")
+
+                    sel.TypeText("\t")
+                    self.current_tab2_pic_width_cm = pic_w_cm
+                    self.current_tab2_pic_height_cm = pic_h_cm
+                    self.render_pic(sel, doc, pic_info)
+                    self.current_tab2_pic_width_cm = None
+                    self.current_tab2_pic_height_cm = None
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:

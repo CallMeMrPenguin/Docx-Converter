@@ -446,6 +446,34 @@ class RendererBlocksMixin:
         t = re.sub(r'\*(.*?)\*', r'\1', t)
         return t.strip()
 
+    def calculate_item_visual_lines(self, doc, text: str, avail_width_pt: float, is_bold: bool = True) -> int:
+        """
+        Calculates the exact visual wrapped line count of a text string when rendered
+        within a bounded horizontal width in MS Word.
+        """
+        clean = self.strip_markup_for_measurement(text)
+        if not clean:
+            return 1
+        words = clean.split()
+        if not words:
+            return 1
+        
+        space_w = self.measure_text_width_pt(doc, " ", self.font_name, self.font_size, is_bold=is_bold)
+        curr_line_w = 0.0
+        lines_count = 1
+        
+        for w in words:
+            w_pt = self.measure_text_width_pt(doc, w, self.font_name, self.font_size, is_bold=is_bold) * 1.15
+            if curr_line_w == 0.0:
+                curr_line_w = w_pt
+            elif curr_line_w + space_w + w_pt <= avail_width_pt:
+                curr_line_w += space_w + w_pt
+            else:
+                lines_count += 1
+                curr_line_w = w_pt
+                
+        return max(1, lines_count)
+
     def optimize_word_bank_layout(self, doc, words: List[str], printable_width_pt: float) -> Tuple[int, List[List[str]], float, List[float]]:
         """
         Optimally arranges Word Bank items across columns and rows to produce the most
@@ -611,14 +639,14 @@ class RendererBlocksMixin:
                 left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
                 is_full_width = False
 
-            # Vertical Height: (Num lines * Font Line Height) + Space Between Lines + Descender clearance buffer for y, g, p
+            # Vertical Height: (Total Visual Lines * Font Line Height) + Space Between Lines + Descender clearance buffer
             num_lines = len(lines)
             exact_line_h_pt = self.font_size * 1.28  # Standard single line height
             space_between_pt = 2.0
-            descender_clearance_pt = max(5.0, self.font_size * 0.38)  # Prevents descenders (y, g, p, q, j) from touching bottom border
+            descender_clearance_pt = max(6.0, self.font_size * 0.40)  # Prevents descenders (y, g, p, q, j) from touching bottom border
             avail_inner_w = box_width_pt - pad_left_pt - pad_right_pt - extra_buffer_pt
-            total_visual_lines = sum(max(1, math.ceil(lw / max(10.0, avail_inner_w))) for lw in line_widths_pt) if is_full_width else num_lines
-            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + descender_clearance_pt + 2.0
+            total_visual_lines = sum(self.calculate_item_visual_lines(doc, l, avail_inner_w, is_bold=True) for l in lines)
+            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + descender_clearance_pt + 4.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -643,7 +671,7 @@ class RendererBlocksMixin:
                 tf.MarginLeft = pad_left_pt
                 tf.MarginRight = pad_right_pt
                 try:
-                    tf.WordWrap = -1 if is_full_width else 0
+                    tf.WordWrap = -1 if (is_full_width or total_visual_lines > num_lines) else 0
                 except Exception:
                     pass
 
@@ -696,13 +724,40 @@ class RendererBlocksMixin:
 
             cols, lines_bank, box_width_pt, tab_stops_pt = self.optimize_word_bank_layout(doc, words, printable_width_pt)
             pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
+            extra_buffer_pt = cm_to_pt(0.20)
             left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+
+            # Calculate total visual lines accounting for wrapped text lines in every row
+            avail_inner_w = box_width_pt - (2 * pad_horiz_pt) - extra_buffer_pt
+            total_visual_lines = 0
+            if cols == 1:
+                for chunk in lines_bank:
+                    item_text = chunk[0] if chunk else ""
+                    v_lines = self.calculate_item_visual_lines(doc, item_text, avail_inner_w, is_bold=True)
+                    total_visual_lines += v_lines
+            else:
+                # Multi-column: determine column widths from tab_stops
+                num_cols = len(tab_stops_pt)
+                col_widths = []
+                for ci in range(num_cols):
+                    if ci + 1 < num_cols:
+                        col_widths.append(tab_stops_pt[ci + 1] - tab_stops_pt[ci] - cm_to_pt(0.40))
+                    else:
+                        col_widths.append(box_width_pt - tab_stops_pt[ci] - (2 * pad_horiz_pt))
+                for chunk in lines_bank:
+                    row_v_lines = 1
+                    for ci, item_text in enumerate(chunk):
+                        c_w = col_widths[ci] if ci < len(col_widths) else avail_inner_w
+                        v_l = self.calculate_item_visual_lines(doc, item_text, c_w, is_bold=True)
+                        if v_l > row_v_lines:
+                            row_v_lines = v_l
+                    total_visual_lines += row_v_lines
 
             num_rows = len(lines_bank)
             exact_line_h_pt = self.font_size * 1.28
             space_between_pt = 2.0
-            descender_clearance_pt = max(5.0, self.font_size * 0.38)  # Prevents descenders (y, g, p, q, j) from touching bottom border
-            box_height_pt = (num_rows * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + descender_clearance_pt + 2.0
+            descender_clearance_pt = max(6.0, self.font_size * 0.40)  # Prevents descenders (y, g, p, q, j) from touching bottom border
+            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + descender_clearance_pt + 4.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -727,7 +782,7 @@ class RendererBlocksMixin:
                 tf.MarginLeft = pad_horiz_pt
                 tf.MarginRight = pad_horiz_pt
                 try:
-                    tf.WordWrap = 0  # False: prevent unwanted wrapping of tabbed columns
+                    tf.WordWrap = -1 if (cols == 1 or total_visual_lines > num_rows) else 0
                 except Exception:
                     pass
                 try:
