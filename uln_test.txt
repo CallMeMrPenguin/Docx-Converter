@@ -1,18 +1,27 @@
-[H1] SECTION A: PHONETICS
-[P0] Choose the word whose underlined part is pronounced differently:
-[P1] 1. A. [c]{u}at \t B. [c]{u}ity \t C. [c]{u}ar \t D. [c]{u}up
+[H1] **UNIT 1: HOBBIES**
 
-[BOX] **Word Bank:** [ photosynthesis | chlorophyll | sunlight ] [/BOX]
+[H2] **A. PHONETICS**
+[P0] [ins]**I. Choose the word whose underlined part is pronounced differently.**
+[NUM]
+[OPT] #1. [c]{u}at | [c]{u}ity | [c]{u}ar | [c]{u}up [/OPT]
+[OPT] #2. listen[ed]{u} | tutor[ed]{u} | enjoy[ed]{u} | decid[ed]{u} [/OPT]
+[/NUM]
 
-[P0] 2. Look at the diagram and answer:
-[TAB2] [P1] a) Identify the labeled organ: ____ \t [PIC: "Labeled diagram of a plant leaf" | pos:right | size:medium]
-[P2] i) What gas is released? ____
+[H2] **B. VOCABULARY & GRAMMAR**
+[P0] [ins]**II. Look at the pictures and complete the words. Then put them in the correct column.**
+[NUM]
+[TAB2] #1. [PIC: omelette] o _ _ e _ _ e _ _ t _ _ _ | #2. [PIC: fox] f _ _
+[TAB2] #3. [PIC: sauce] s _ _ u _ _ e | #4. [PIC: rod] r _ _
+[TAB2] #5. [PIC: sausage] s _ _ _ s _ g _ _ | #6. [PIC: water] w _ t _ _
+[TAB2] #7. [PIC: coffee] c _ ff _ _ | #8. [PIC: pot] p _ _
+[/NUM]
 
-[QUOTE]
-*Reading Passage:*
-Photosynthesis is the chemical process by which plants use **sunlight** to synthesize nutrients from *carbon dioxide* and water.
-[/QUOTE]
+[BOX] photosynthesis | chlorophyll | sunlight | oxygen | carbon dioxide | water [/BOX]
 
-[H2] SECTION B: MULTIPLE CHOICE
-[P0] 3. Water boils at ____ degrees Celsius under standard atmospheric pressure.
-[P1] A. 90°C \t B. 100°C \t C. 110°C \t D. 120°C
+[P0] [ins]**III. Choose the best answer A, B, C, or D.**
+[NUM]
+[P0] #9. She is looking forward to <blank> her old friends at the party.
+[OPT] see | seeing | saw | seen [/OPT]
+[P0] #10. Nam is the <blank> student in our class.
+[OPT] tall | taller | tallest | most tall [/OPT]
+[/NUM]

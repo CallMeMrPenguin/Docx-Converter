@@ -84,8 +84,10 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
 
 - [TAB2], [TAB3], [TAB4] : Multi-Column Side-by-Side Paragraph Split Layout (Column 1 | Column 2 | Column 3...)
   - [TAB2]: Used for 2-column matching, error correction with answer blanks on the right, or 2-column picture vocabulary grids.
-    [TAB2] [P0] 1. How many calories should I eat in a day? | a. A little better, but still feel tired.
-    [TAB2] [P0] 2. Shall we go and play basketball? | b. Wash your face daily and use gentle skin care products.
+    [NUM]
+    [TAB2] [P0] #1. How many calories should I eat in a day? | a. A little better, but still feel tired.
+    [TAB2] [P0] #2. Shall we go and play basketball? | b. Wash your face daily and use gentle skin care products.
+    [/NUM]
   - [TAB3]: Used for 3-column exercises (e.g. Countable / Uncountable noun classification, short vocabulary lists with answer blanks):
     [TAB3] #1. beef <blank> | #7. spinach <blank> | #13. turmeric <blank>
     [TAB3] #2. apple <blank> | #8. egg <blank> | #14. pancake <blank>
@@ -151,38 +153,52 @@ IMPORTANT: Do NOT manually wrap option letters (A., B., C., D.) in bold `**...**
 
 A. FILL-IN-THE-BLANK, SENTENCE TRANSFORMATION & COMPLETION:
    - ALWAYS use '<blank>' for empty student answer blanks.
-   - Sentence transformation lines (e.g. "Complete the second sentence so that it has the same meaning") MUST use standard [P0] or [P1] tags with <blank>:
-     [P0] 1. What is your hobby?
+   - Sentence transformation lines (e.g. "Complete the second sentence so that it has the same meaning") MUST use standard [P0] or [P1] tags with <blank> inside [NUM]:
+     [NUM]
+     [P0] #1. What is your hobby?
      [P1] → What hobby <blank>
-   - Fill-in-the-blank sentences MUST use standard [P0] or [P1] tags with <blank>:
-     [P0] 1. My father can make beautiful pieces of art <blank> empty eggshells.
+     [/NUM]
+   - Fill-in-the-blank sentences MUST use standard [P0] or [P1] tags with <blank> inside [NUM]:
+     [NUM]
+     [P0] #1. My father can make beautiful pieces of art <blank> empty eggshells.
+     [/NUM]
    - CRITICAL MANDATE: NEVER use [TAB2] for sentence transformation or fill-in-the-blank lines!
 
 B. ERROR CORRECTION & FLUSH RIGHT ANSWER COLUMNS:
    - Use [TAB2] ONLY for error correction exercises where an explicit separate answer column exists at the far right of the line:
-     [TAB2] [P0] 1. Nam is my classmates. He watches TV every night. | <blank>
+     [NUM]
+     [TAB2] [P0] #1. Nam is my classmates. He watches TV every night. | <blank>
+     [/NUM]
 
 C. CHOICE OPTION LINES — THE GOLDEN RULE:
    - ALL A./B./C./D. multiple-choice options MUST use [OPT] ... [/OPT]. NEVER use [P1] for choice options.
    - List only the option body text (without option letters) separated by pipes `|`:
-     [P0] 1. She is looking forward to <blank> her old friends at the party.
+     [NUM]
+     [P0] #1. She is looking forward to <blank> her old friends at the party.
      [OPT] see | seeing | saw | seen [/OPT]
+     [/NUM]
    - For pronunciation / stress underline questions, include underline markup inside the option body:
-     [P0] 3. Choose the word whose underlined part is pronounced differently:
+     [NUM]
+     [P0] #3. Choose the word whose underlined part is pronounced differently:
      [OPT] [c]{u}at | [c]{u}ity | [c]{u}ar | [c]{u}up [/OPT]
+     [/NUM]
 
 D. HORIZONTAL PICTURE CHOICE GRIDS:
    - For picture activities with multiple items, output picture choices in 4-column horizontal rows:
+     [NUM]
      [PIC_GRID]
-     1. [PIC] | 2. [PIC] | 3. [PIC] | 4. [PIC]
-     5. [PIC] | 6. [PIC] | 7. [PIC] | 8. [PIC]
+     #1. [PIC] | #2. [PIC] | #3. [PIC] | #4. [PIC]
+     #5. [PIC] | #6. [PIC] | #7. [PIC] | #8. [PIC]
      [/PIC_GRID]
+     [/NUM]
 
 E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES:
    - For exercises featuring a sign or diagram image alongside a question + 4 choices (A, B, C, D):
    - Place the question and picture on row 1 using `[TAB2]`, and list choices below using `[OPT]`:
-     [TAB2] 11. What does the sign say? | [PIC]
+     [NUM]
+     [TAB2] #11. What does the sign say? | [PIC]
      [OPT] Maximum 40 vehicles are allowed on this road. | You shouldn't exceed this maximum speed. | Minimum 40 vehicles are allowed on this road. | You shouldn't move below this speed. [/OPT]
+     [/NUM]
 
 F. STRICT RULE: WHEN TO USE [TAB2] / [TAB3] / [TAB4] VS STANDARD [P0]/[P1]:
    - DO NOT use [TAB2]/[TAB3] for regular sentences, sentence transformations, or inline fill-in-the-blanks.
@@ -275,15 +291,18 @@ I. PICTURE VOCABULARY & WORD COMPLETION GRIDS (2-COLUMN PICTURE EXERCISES):
      3. NO EXTRANEOUS INFORMATION / NO NOTES MANDATE: Strictly output only the original text from the document. Do NOT add external notes, hints, translations, answers, or conversational commentary.
    - MANDATE FOR 2-COLUMN LAYOUT:
      - ALWAYS use `[TAB2]` (NEVER use tables).
-     - On each line, place the left item in Column 1 and the right item in Column 2, separated by the pipe `|` symbol:
+     - ALWAYS wrap the whole exercise in `[NUM] ... [/NUM]` and use `#N` for all numbered items (`#1.`, `#2.`, `#3.` ... `#16.`):
      [P0] [ins]**I. Look at the pictures and complete the words. Then put them in the correct column.**
-     [TAB2] 1. [PIC: omelette] o _ _ e _ _ e _ _ t _ _ _ | 2. [PIC: fox] f _ _
-     [TAB2] 3. [PIC: sauce] s _ _ u _ _ e | 4. [PIC: rod] r _ _
-     [TAB2] 5. [PIC: sausage] s _ _ _ s _ g _ _ | 6. [PIC: water] w _ t _ _
-     [TAB2] 7. [PIC: coffee] c _ ff _ _ | 8. [PIC: pot] p _ _
-     [TAB2] 9. [PIC: pork] p _ r _ | 10. [PIC: storm] s _ o _ m
-     [TAB2] 11. [PIC: salt] s _ l _ | 12. [PIC: bottle] b _ t _ l _
-     [TAB2] 13. [PIC: fork] f _ r _ | 14. [PIC: horse] h _ r _ e
+     [NUM]
+     [TAB2] #1. [PIC: omelette] o _ _ e _ _ e _ _ t _ _ _ | #2. [PIC: fox] f _ _
+     [TAB2] #3. [PIC: sauce] s _ _ u _ _ e | #4. [PIC: rod] r _ _
+     [TAB2] #5. [PIC: sausage] s _ _ _ s _ g _ _ | #6. [PIC: water] w _ t _ _
+     [TAB2] #7. [PIC: coffee] c _ ff _ _ | #8. [PIC: pot] p _ _
+     [TAB2] #9. [PIC: pork] p _ r _ | #10. [PIC: storm] s _ o _ m
+     [TAB2] #11. [PIC: salt] s _ l _ | #12. [PIC: bottle] b _ t _ l _
+     [TAB2] #13. [PIC: fork] f _ r _ | #14. [PIC: horse] h _ r _ e
+     [TAB2] #15. [PIC: orange] _ _ r _ n _ _ e | #16. [PIC: daughter] d _ _ _ gh _ _ er
+     [/NUM]
    - If there is a phonetic or category classification table below it, follow immediately with a standard bordered `[TABLE]`:
      [TABLE]
      [TH] /ɒ/ | /ɔː/
@@ -314,11 +333,13 @@ Target ULN Output:
 [H1] **SECTION A: MULTIPLE CHOICE**
 [P0] [ins]**I. Choose the best answer A, B, C, or D.**
 
-[P0] 1. She is looking forward to <blank> her old friends.
+[NUM]
+[P0] #1. She is looking forward to <blank> her old friends.
 [OPT] see | seeing | saw | seen [/OPT]
 
-[P0] 2. Choose the word whose underlined part is pronounced differently:
+[P0] #2. Choose the word whose underlined part is pronounced differently:
 [OPT] [c]{u}at | [c]{u}ity | [c]{u}ar | [c]{u}up [/OPT]
+[/NUM]
 
 [BOX] photosynthesis | chlorophyll | sunlight [/BOX]
 ```
