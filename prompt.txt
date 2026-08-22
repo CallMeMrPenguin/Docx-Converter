@@ -205,16 +205,26 @@ F. STRICT RULE: WHEN TO USE [TAB2] VS STANDARD [P0]/[P1]:
         [TAB2] [P0] #2. acne | b. a skin condition that causes small red spots...
         [/NUM]
 
-G. DIALOGUE & SPEAKING Q&A EXERCISES:
-   - For dialogue exercises where Speaker A asks a question with an answer blank line and Speaker B provides a response:
-   - Write Speaker A on line 1 with question number using [P0] #num. A: <blank>, and Speaker B on line 2 using [P1] B: ...:
+G. DIALOGUE & CONVERSATION EXERCISES:
+   - CASE 1: Numbered Speaking Q&A Pairs (Numbered questions with Speaker A blank line):
+     Write Speaker A on line 1 with question number using `[P0] #num. A: <blank>`, and Speaker B on line 2 using `[P1] B: ...`:
      [NUM]
      [P0] #1. A: <blank>
      [P1] B: My hobby is [photography]{u}.
      [P0] #2. A: <blank>
      [P1] B: I started my hobby [five years ago]{u}.
      [/NUM]
-   - The compiler automatically renders Speaker A with a full-width answer line running to the right margin, and perfectly indents Speaker B underneath Speaker A!
+     The compiler automatically renders Speaker A with a full-width answer line running to the right margin, and aligns Speaker B directly underneath Speaker A.
+
+   - CASE 2: Extended Conversation / Dialogue between Named Speakers (Tom, Doctor, Lan, Mai...):
+     When a conversation or reading dialogue has named character turns WITHOUT question numbers:
+     ALL speaker turns MUST use `[P0]` (or be wrapped inside `[QUOTE]`) so all speakers start flush at the left margin with zero awkward indentations:
+     [P0] Tom: Can you give me some suggestions on (1) <blank>
+     [P0] Doctor: Well, first of all, you need to make sure that you eat the right foods.
+     [P0] Tom: (2) <blank>
+     [P0] Doctor: You should eat fresh fruits, vegetables, and whole grains.
+     [P0] Tom: (3) <blank>
+     [P0] Doctor: You need to avoid highly fatty and greasy foods.
 
 H. EXERCISES WITH HANDWRITING ANSWER LINES BELOW QUESTIONS:
    - When an exercise in the original textbook leaves a blank space or empty line under each question for students to write answers (e.g. "Underline and write S, V, O, Adv", Sentence Rewriting, or Open-ended Q&A):

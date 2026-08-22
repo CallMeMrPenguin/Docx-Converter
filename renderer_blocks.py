@@ -768,7 +768,43 @@ class RendererBlocksMixin:
             self.last_rendered_tag = "TABLE"
             return
 
-        # Native Table Layout (Bordered or Borderless Grid)
+        if tdata.borderless and not has_pic:
+            # Render borderless multi-column items using native Paragraph Tab Stops (NO Word Table object)
+            col_w_cm = printable_width_cm / max(1, num_cols)
+            
+            for row in tdata.rows:
+                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.SpaceBefore = 2
+                sel.ParagraphFormat.SpaceAfter = 2
+                sel.ParagraphFormat.LineSpacingRule = 0
+                sel.ParagraphFormat.Alignment = 0
+                sel.ParagraphFormat.TabStops.ClearAll()
+
+                for c in range(1, num_cols):
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col_w_cm * c), Alignment=0)
+
+                try:
+                    sel.Range.ListFormat.RemoveNumbers()
+                except Exception:
+                    pass
+
+                for idx_cell, cell in enumerate(row.cells):
+                    if idx_cell > 0:
+                        sel.TypeText("\t")
+                    if cell.spans:
+                        self.write_inline_spans(sel, cell.spans, default_bold=cell.is_header)
+                    else:
+                        sel.Font.Bold = 1 if cell.is_header else 0
+                        sel.TypeText(cell.content.strip())
+
+                sel.TypeParagraph()
+                sel.ParagraphFormat.TabStops.ClearAll()
+
+            self.last_rendered_tag = "TABLE"
+            return
+
+        # Native Table Layout (Bordered Grid)
         p_table_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
         try:
             p_table_anchor.ParagraphFormat.SpaceBefore = 14.0 if (self.last_rendered_tag == "BOX") else 8.0

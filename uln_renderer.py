@@ -580,11 +580,14 @@ class ULNWordRenderer(RendererBlocksMixin):
             elif tag in ["P1", "P2"]:
                 pref, delim, q_num, content_to_render = extract_question_prefix_and_body(block.content)
                 is_dlg_speaker = bool(re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', content_to_render, re.IGNORECASE))
-                
+                is_prev_numbered_dlg = (idx_block > 0 and blocks[idx_block - 1].tag == "P0" and extract_question_prefix_and_body(blocks[idx_block - 1].content)[2] is not None)
+
                 if q_num is not None:
                     left_indent_cm = 0.0
+                elif is_dlg_speaker and is_prev_numbered_dlg:
+                    left_indent_cm = 0.63  # Matches Word's native numbered list tab stop (18 pt) under "1. A:"
                 elif is_dlg_speaker:
-                    left_indent_cm = 0.63  # Matches Word's native numbered list tab stop (18 pt)
+                    left_indent_cm = 0.0   # Standard conversation dialogue (Tom / Doctor) flush left
                 else:
                     left_indent_cm = 0.5 if tag == "P1" else 1.0
 
@@ -694,9 +697,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                             self.write_inline_spans(sel, c_spans)
                             sel.TypeParagraph()
 
-
             elif tag == "TAB2":
-                # Find the TRUE start of this consecutive TAB2 run (scan backward)
                 group_start = idx_block
                 while group_start > 0 and blocks[group_start - 1].tag == "TAB2":
                     group_start -= 1
@@ -731,9 +732,17 @@ class ULNWordRenderer(RendererBlocksMixin):
                     col2_tab_pos_cm = max(base_indent_cm + 10.0, est_c1_w)
                     col2_tab_pos_cm = min(col2_tab_pos_cm, printable_width_cm - 2.5)
                 else:
-                    # Balanced 2-Column Matching / Definition Layout:
-                    # Sets Column 2 at ~8.0 cm so both columns have ample balanced space
-                    col2_tab_pos_cm = min(8.2, max(7.0, printable_width_cm * 0.48))
+                    # Smart 2-Column Matching / Definition Layout:
+                    # 1. Minimum start position for Column 2 is Column 1 actual text width + 0.5 cm (5mm minimum gap)
+                    c1_w_needed = base_indent_cm + (max_c1_clean_len * 0.185) + 0.8
+                    min_col2_with_gap = c1_w_needed + 0.5  # 5mm minimum gap between col 1 and col 2
+
+                    # 2. Maximum start position for Column 2 (cap at 48% of printable width so Col 2 always has at least 52% width)
+                    max_col2_pos = min(8.2, max(6.5, printable_width_cm * 0.48))
+
+                    # If Column 1 is short (e.g. word matching), start Column 2 immediately at min_col2_with_gap (~3.8cm - 5.5cm)
+                    # If Column 1 is long (e.g. question matching), cap Column 2 at max_col2_pos (~7.8cm - 8.2cm) and allow Col 1 to wrap
+                    col2_tab_pos_cm = min(min_col2_with_gap, max_col2_pos)
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
