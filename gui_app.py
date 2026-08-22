@@ -546,8 +546,9 @@ class ULNFormatterApp:
             except Exception:
                 pass
 
-            msg = f"Successfully generated DOCX file:\n{compiled_file}"
-            messagebox.showinfo("Success", msg)
+            if not keep_open_val:
+                msg = f"Successfully generated DOCX file:\n{compiled_file}"
+                messagebox.showinfo("Success", msg)
 
         except KeyboardInterrupt:
             try:

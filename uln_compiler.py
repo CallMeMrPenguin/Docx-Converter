@@ -101,7 +101,20 @@ class ULNCompiler:
                         word.ActiveWindow.View.Type = 3  # wdPrintView = 3
                     except Exception:
                         pass
+                    try:
+                        word.WindowState = 1  # wdWindowStateMaximize = 1
+                    except Exception:
+                        pass
                     word.Activate()
+
+                    # Ensure Word window is raised to foreground
+                    try:
+                        import ctypes
+                        hwnd = word.ActiveWindow.Hwnd
+                        ctypes.windll.user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                        ctypes.windll.user32.SetForegroundWindow(hwnd)
+                    except Exception:
+                        pass
                 except Exception:
                     pass
 
