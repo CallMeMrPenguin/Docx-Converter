@@ -125,10 +125,6 @@ class ULNCompiler:
                         word.Quit()
                     except Exception:
                         pass
-                try:
-                    embed_raw_uln_zip(abs_output_path, uln_text)
-                except Exception:
-                    pass
 
             else:
                 # Fully detach COM object references so Word operates as a standalone user window
@@ -226,31 +222,49 @@ def has_embedded_uln(docx_path: str) -> bool:
     return raw is not None and len(raw.strip()) > 0
 
 
-def embed_raw_uln_zip(docx_path: str, raw_uln_text: str) -> bool:
-    """Directly appends/updates customXml/uln_raw_source.txt and CustomXML parts in the docx zip archive."""
+def embed_raw_uln_docx(docx_path: str, raw_uln_text: str) -> bool:
+    """Natively embeds raw ULN into a DOCX file using Word COM CustomXMLParts (100% valid OpenXML)."""
     if not os.path.exists(docx_path):
         return False
-    temp_docx = docx_path + ".tmp_uln"
+    word = None
+    doc = None
     try:
-        with zipfile.ZipFile(docx_path, 'r') as zin:
-            with zipfile.ZipFile(temp_docx, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
-                for item in zin.infolist():
-                    if item.filename not in ['customXml/uln_raw_source.txt', 'customXml/item99.xml']:
-                        zout.writestr(item, zin.read(item.filename))
-                zout.writestr('customXml/uln_raw_source.txt', raw_uln_text.encode('utf-8'))
-                safe_uln = raw_uln_text.replace(']]>', ']]]]><![CDATA[>')
-                xml_content = '<uln_raw_data><![CDATA[' + safe_uln + ']]></uln_raw_data>'
-                zout.writestr('customXml/item99.xml', xml_content.encode('utf-8'))
-        os.replace(temp_docx, docx_path)
+        pythoncom.CoInitialize()
+        word = win32com.client.Dispatch("Word.Application")
+        try:
+            word.DisplayAlerts = 0
+        except Exception:
+            pass
+        doc = word.Documents.Open(os.path.abspath(docx_path))
+        for part in doc.CustomXMLParts:
+            if 'uln_raw_data' in part.XML:
+                try:
+                    part.Delete()
+                except Exception:
+                    pass
+        safe_uln = raw_uln_text.replace("]]>", "]]]]><![CDATA[>")
+        xml_part = f"<uln_raw_data><![CDATA[{safe_uln}]]></uln_raw_data>"
+        doc.CustomXMLParts.Add(xml_part)
+        doc.Save()
         return True
     except Exception as e:
-        print(f"[ULNCompiler] Warning injecting zip uln_raw_source: {e}")
-        if os.path.exists(temp_docx):
+        print(f"[ULNCompiler] Error embedding raw ULN via COM: {e}")
+        return False
+    finally:
+        if doc:
             try:
-                os.remove(temp_docx)
+                doc.Close(False)
             except Exception:
                 pass
-        return False
+        if word:
+            try:
+                word.Quit()
+            except Exception:
+                pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
 
 
 def scan_folder_for_uln_docx(folder_path: str) -> List[Dict[str, Any]]:

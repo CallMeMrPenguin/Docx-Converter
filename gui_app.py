@@ -444,8 +444,8 @@ class ULNFormatterApp:
             filetypes=[("Word Document", "*.docx"), ("All Files", "*.*")]
         )
         if fpath and os.path.exists(fpath):
-            from uln_compiler import embed_raw_uln_zip
-            ok = embed_raw_uln_zip(fpath, uln_text)
+            from uln_compiler import embed_raw_uln_docx
+            ok = embed_raw_uln_docx(fpath, uln_text)
             if ok:
                 messagebox.showinfo("Thành công", f"Đã chèn/nhúng thành công mã Raw ULN vào file:\n{os.path.basename(fpath)}")
             else:

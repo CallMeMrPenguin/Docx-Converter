@@ -218,8 +218,8 @@ def open_docx_picker_dialog(parent_app):
             return
 
         fpath = f_data["filepath"]
-        from uln_compiler import embed_raw_uln_zip
-        ok = embed_raw_uln_zip(fpath, current_uln)
+        from uln_compiler import embed_raw_uln_docx
+        ok = embed_raw_uln_docx(fpath, current_uln)
         if ok:
             messagebox.showinfo("Thành công", f"Đã nhúng thành công mã Raw ULN vào file:\n{f_data['filename']}")
             refresh_list()
