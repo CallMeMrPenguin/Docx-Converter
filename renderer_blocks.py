@@ -404,7 +404,7 @@ class RendererBlocksMixin:
         self.last_rendered_tag = "OPT"
 
     def measure_text_width_pt(self, doc, text: str, font_name: str = "Times New Roman", font_size: float = 12.0, is_bold: bool = False) -> float:
-        """Accurately measures physical text width in Word COM with cached memoization for 0ms lookup."""
+        """Accurately measures physical text width in Word COM without any line wrapping or margin interference."""
         if not text:
             return 0.0
         if not hasattr(self, '_text_width_cache'):
@@ -419,6 +419,7 @@ class RendererBlocksMixin:
             rng.ParagraphFormat.Reset()
             rng.ParagraphFormat.LeftIndent = 0
             rng.ParagraphFormat.FirstLineIndent = 0
+            rng.ParagraphFormat.RightIndent = -1584.0  # Max Word negative indent (-55.88 cm) so text NEVER wraps across lines!
             rng.ParagraphFormat.TabStops.ClearAll()
             rng.Font.Name = font_name
             rng.Font.Size = font_size
@@ -438,7 +439,7 @@ class RendererBlocksMixin:
         except Exception:
             pass
 
-        char_w = font_size * (0.42 if is_bold else 0.38)
+        char_w = font_size * (0.44 if is_bold else 0.40)
         calc_w = len(text) * char_w
         self._text_width_cache[cache_key] = calc_w
         return calc_w
@@ -484,14 +485,9 @@ class RendererBlocksMixin:
 
             pad_left_pt = cm_to_pt(0.20)   # Exactly 2.0 mm padding
             pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
-            pad_top_pt = cm_to_pt(0.10)    # 1.0 mm padding
-
-            # Set MarginBottom = 0 when last line contains descenders (y, g, p, q, j)
-            last_line_clean = clean_lines[-1] if clean_lines else ""
-            last_line_has_descenders = any(c in 'ygpqj_ýỳỵỷỹ' for c in last_line_clean.lower())
-            pad_bottom_pt = 0.0 if last_line_has_descenders else cm_to_pt(0.10)
-
-            extra_buffer_pt = cm_to_pt(0.40) # +4.0 mm extra right margin buffer
+            pad_top_pt = cm_to_pt(0.12)    # 1.2 mm padding
+            pad_bottom_pt = cm_to_pt(0.12) # 1.2 mm padding
+            extra_buffer_pt = cm_to_pt(0.50) # +5.0 mm extra right margin buffer for corner serifs (y, t, w)
 
             est_content_w = max_line_w_pt + pad_left_pt + pad_right_pt + extra_buffer_pt
 
@@ -502,11 +498,11 @@ class RendererBlocksMixin:
                 box_width_pt = min(printable_width_pt, max(80.0, est_content_w))
                 left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
-            # Vertical Height: (Num lines * Font Line Height) + Space Between Lines + Top/Bottom Margins
+            # Vertical Height: (Num lines * Font Line Height) + Space Between Lines + Top/Bottom Margins + bottom descender clearance
             num_lines = len(lines)
             exact_line_h_pt = self.font_size * 1.25  # Standard single line height
             space_between_pt = 2.0
-            box_height_pt = (num_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + pad_top_pt + pad_bottom_pt + 2.0
+            box_height_pt = (num_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + pad_top_pt + pad_bottom_pt + 3.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -588,7 +584,7 @@ class RendererBlocksMixin:
             item_widths_pt = [self.measure_text_width_pt(doc, cw, self.font_name, self.font_size, is_bold=True) for cw in clean_words]
             max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
             pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
-            pad_vert_pt = cm_to_pt(0.10)   # Exactly 1.0 mm padding
+            pad_vert_pt = cm_to_pt(0.12)   # Exactly 1.2 mm padding
 
             # If items are long sentences/dialogue turns (>22% page width or >20 chars), format as 1 column
             if max_item_w_pt >= (printable_width_pt * 0.22):
@@ -609,13 +605,7 @@ class RendererBlocksMixin:
             for i in range(0, N, cols):
                 lines_bank.append(words[i:i + cols])
 
-            # Set MarginBottom = 0 when last row contains descenders (y, g, p, q, j)
-            last_row_words = lines_bank[-1] if lines_bank else []
-            last_row_text = " ".join(self.strip_markup_for_measurement(w) for w in last_row_words)
-            last_row_has_descenders = any(c in 'ygpqj_ýỳỵỷỹ' for c in last_row_text.lower())
-            pad_bottom_pt = 0.0 if last_row_has_descenders else pad_vert_pt
-
-            extra_buffer_pt = cm_to_pt(0.40)  # +4.0 mm extra right margin buffer
+            extra_buffer_pt = cm_to_pt(0.50)  # +5.0 mm extra right margin buffer for corner serifs (y, t, w)
 
             if cols == 1:
                 box_width_pt = min(printable_width_pt, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt)
@@ -640,7 +630,7 @@ class RendererBlocksMixin:
             num_rows = len(lines_bank)
             exact_line_h_pt = self.font_size * 1.25
             space_between_pt = 2.0
-            box_height_pt = (num_rows * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + pad_vert_pt + pad_bottom_pt + 2.0
+            box_height_pt = (num_rows * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + (2 * pad_vert_pt) + 3.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -661,7 +651,7 @@ class RendererBlocksMixin:
 
                 tf = shape.TextFrame
                 tf.MarginTop = pad_vert_pt
-                tf.MarginBottom = pad_bottom_pt
+                tf.MarginBottom = pad_vert_pt
                 tf.MarginLeft = pad_horiz_pt
                 tf.MarginRight = pad_horiz_pt
                 try:
