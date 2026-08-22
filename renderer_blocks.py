@@ -194,24 +194,25 @@ class RendererBlocksMixin:
 
         remaining_width_cm = max(5.0, printable_width_cm - left_indent_cm)
         max_len = max(len(item) for item in items) if items else 0
-        
-        # Estimated option width in cm (0.165cm per char for 12pt Times New Roman + 0.4cm safety buffer for option letter)
-        est_item_w_cm = (max_len * 0.165) + 0.4
 
+        # In Times New Roman 12pt (remaining width ~16.0cm):
+        # 4 columns (4.0cm/col): max 18 chars (including option letter like 'A. ')
+        # 2 columns (8.0cm/col): max 38 chars
+        # 1 column: > 38 chars (full sentences)
         if N >= 4:
-            if max_len <= 24 or (est_item_w_cm * 4) <= (remaining_width_cm + 0.5):
+            if max_len <= 18:
                 return 4
-            elif (est_item_w_cm * 2) <= (remaining_width_cm + 0.5):
+            elif max_len <= 38:
                 return 2
             else:
                 return 1
         elif N == 3:
-            if (est_item_w_cm * 3) <= remaining_width_cm:
+            if max_len <= 26:
                 return 3
             else:
                 return 1
         elif N == 2:
-            if (est_item_w_cm * 2) <= remaining_width_cm:
+            if max_len <= 38:
                 return 2
             else:
                 return 1
@@ -276,17 +277,9 @@ class RendererBlocksMixin:
         local_cols = self.calculate_optimal_option_cols(formatted_item_strings, left_indent_cm, printable_width_cm)
         local_max_len = max(len(s) for s in formatted_item_strings) if formatted_item_strings else 0
 
-        if self.current_group_opt_cols is not None:
-            # If current question's options are short and fit in 4 columns, preserve 4 columns
-            if local_cols > self.current_group_opt_cols:
-                num_cols = local_cols
-                max_item_len = local_max_len
-            else:
-                num_cols = self.current_group_opt_cols
-                max_item_len = self.current_group_max_item_len or local_max_len
-        else:
-            num_cols = local_cols
-            max_item_len = local_max_len
+        # Each question independently uses its own optimal column count based on its actual option lengths
+        num_cols = local_cols
+        max_item_len = local_max_len
 
         if has_standalone_q_num:
             num_fmt = self.get_effective_number_format(extracted_pref, extracted_delim)
