@@ -652,12 +652,24 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                 elif col2_is_blank:
                     # Dynamic 2-Column Error Correction Layout:
-                    # Column 2 starts right after longest Column 1 sentence (max_c1_len) with max 3.5cm answer blank
-                    col2_tab_pos_cm = base_indent_cm + (max_c1_len * 0.18) + 0.8
-                    col2_tab_pos_cm = min(col2_tab_pos_cm, printable_width_cm - 1.5)
-                    avail_w_cm = max(1.5, printable_width_cm - col2_tab_pos_cm)
-                    blank_w_cm = min(3.5, avail_w_cm)
-                    num_underscores = int(blank_w_cm * 5.5)
+                    # 1. Optimal col2 start position based on longest Column 1 sentence (avg 0.155cm per char for 12pt Times New Roman)
+                    est_c1_w = base_indent_cm + (max_c1_len * 0.155) + 0.4
+                    col2_tab_pos_cm = max(base_indent_cm + 8.0, est_c1_w)
+                    col2_tab_pos_cm = min(col2_tab_pos_cm, printable_width_cm - 2.5)
+
+                    # 2. Safe blank width: strictly bounded within printable width with 0.4cm buffer to guarantee 0 line wraps
+                    avail_w_cm = max(1.5, printable_width_cm - col2_tab_pos_cm - 0.4)
+                    blank_w_cm = min(3.2, avail_w_cm)
+                    char_under_w_cm = max(0.18, (self.font_size * 0.44) / 28.3465)
+                    num_underscores = max(6, int(blank_w_cm / char_under_w_cm))
+
+                    # Configure paragraph & tab stop before writing text
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
+                    sel.ParagraphFormat.KeepWithNext = False
+                    sel.ParagraphFormat.PageBreakBefore = False
 
                     pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
                     if q_num is not None and c1_body.strip():
@@ -672,13 +684,6 @@ class ULNWordRenderer(RendererBlocksMixin):
                         except Exception:
                             pass
                         self.write_inline_spans(sel, block.col1_spans)
-
-                    sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
-                    sel.ParagraphFormat.KeepWithNext = False
-                    sel.ParagraphFormat.PageBreakBefore = False
 
                     sel.Font.Color = 0
                     sel.Font.Bold = 0
