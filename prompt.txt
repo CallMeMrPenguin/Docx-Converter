@@ -10,9 +10,42 @@ You are an expert OCR, document layout analysis, and structure extraction engine
 ### 1. BLOCK-LEVEL LAYOUT TAGS & INDENTATION LEVELS
 Place these tags at the very beginning of the line:
 
-- [H1] : Primary Document / Section Heading (Formatted as ALL BOLD, ALL CAPITALIZED for easy Ctrl+F bulk reformatting)
-- [H2] : Sub-heading / Sub-section Title (Formatted as ALL BOLD, ALL CAPITALIZED)
-- [H3] : Minor Heading or Category Title (Formatted as ALL BOLD, ALL CAPITALIZED)
+#### 📌 HEADING HIERARCHY & TYPOGRAPHY STANDARDS ([H1] - [H6]):
+All headings automatically have `KeepWithNext = True` in MS Word so they never get separated from the text below them. Choose the correct heading level based on the document structure:
+
+- `[H1]` : **Level 1 — Primary Document / Unit Title**
+  - *Formatting in Word:* MS Word `Heading 1` style, **Centered**, **ALL UPPERCASE**, **Bold**, font size = `Base + 1.0pt` (13pt), `SpaceBefore = 14pt`, `SpaceAfter = 6pt`, `PageBreakBefore = True` (Starts on a fresh page).
+  - *When to use:* Main Unit titles, Exam titles, Test paper headings.
+  - *Example:* `[H1] **UNIT 1: HOBBIES**` or `[H1] **MID-TERM TEST - ENGLISH 7**`
+
+- `[H2]` : **Level 2 — Major Section Title (Phần lớn / Kỹ năng)**
+  - *Formatting in Word:* MS Word `Heading 2` style, **Left-aligned**, **ALL UPPERCASE**, **Bold**, `Base font size` (12pt), `SpaceBefore = 12pt`, `SpaceAfter = 4pt`.
+  - *When to use:* Major skill sections (Phonetics, Vocabulary, Grammar, Reading, Speaking, Writing).
+  - *Example:* `[H2] **A. PHONETICS**` or `[H2] **B. VOCABULARY & GRAMMAR**` or `[H2] **C. SPEAKING**`
+
+- `[H3]` : **Level 3 — Sub-section / Focus Category Title**
+  - *Formatting in Word:* MS Word `Heading 3` style, **Left-aligned**, **Title Case** (Capitalize Each Main Word), **Bold**, `Base font size` (12pt), `SpaceBefore = 10pt`, `SpaceAfter = 4pt`.
+  - *When to use:* Distinct subject categories or focal parts within a major section.
+  - *Example:* `[H3] **Grammar Review**` or `[H3] **Vocabulary in Action**`
+
+- `[H4]` : **Level 4 — Minor Topic / Lesson Topic Heading**
+  - *Formatting in Word:* MS Word `Heading 4` style, **Left-aligned**, **Sentence case**, **Bold**, `Base font size` (12pt), `SpaceBefore = 8pt`, `SpaceAfter = 4pt`.
+  - *When to use:* Specific sub-topics or rules under a category.
+  - *Example:* `[H4] **Pronunciation of sounds /ə/ and /ɜː/**`
+
+- `[H5]` : **Level 5 — Sub-topic / Grammar Note Heading**
+  - *Formatting in Word:* MS Word `Heading 5` style, **Left-aligned**, **Sentence case**, **Regular weight** (Not bold), `SpaceBefore = 6pt`, `SpaceAfter = 4pt`.
+  - *When to use:* Minor explanatory headers, notes, or tips.
+  - *Example:* `[H5] Usage notes for regular verbs`
+
+- `[H6]` : **Level 6 — Minor Italicized / Peripheral Heading**
+  - *Formatting in Word:* MS Word `Heading 6` style, **Left-aligned**, **Sentence case**, *Italic*, `SpaceBefore = 6pt`, `SpaceAfter = 4pt`.
+  - *When to use:* Small italicized sub-captions or contextual hints.
+  - *Example:* `[H6] *Special exceptions to remember*`
+
+*CRITICAL DISTINCTION:* Do NOT use `[H1]`-`[H6]` for exercise task instructions (e.g. "I. Choose the best answer..."). Exercise instructions MUST use `[P0] [ins]**...**`!
+
+---
 
 - [P0] : Base Paragraph / Main Instruction / Level 0 Question (Left Indent: 0 cm, e.g., "[ins]**I. Choose the correct answer.**", "1. Question text...")
   - EXERCISE INSTRUCTION CLASS MANDATE ([ins]): All exercise instruction headings and task directives (Roman numerals I., II., III., IV., sub-section letters A., B., C., or standalone exercise directives) MUST be prefixed with `[ins]` and bolded: `[P0] [ins]**I. Choose the best answer A, B, C, or D.**` (or `[P0] [ins]**II. Match the pictures with the volunteer activities.**`). This applies the dedicated instruction class for custom color theming and typography.
