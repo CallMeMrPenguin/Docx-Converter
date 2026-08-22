@@ -522,9 +522,21 @@ class ULNFormatterApp:
             if not getattr(sys, 'frozen', False):
                 try:
                     import importlib
+                    import renderer_utils
+                    import renderer_blocks
+                    import renderer_options
+                    import renderer_table
+                    import renderer_numbering
+                    import renderer_prefix
                     import uln_parser
                     import uln_renderer
                     import uln_compiler
+                    importlib.reload(renderer_utils)
+                    importlib.reload(renderer_blocks)
+                    importlib.reload(renderer_options)
+                    importlib.reload(renderer_table)
+                    importlib.reload(renderer_numbering)
+                    importlib.reload(renderer_prefix)
                     importlib.reload(uln_parser)
                     importlib.reload(uln_renderer)
                     importlib.reload(uln_compiler)
