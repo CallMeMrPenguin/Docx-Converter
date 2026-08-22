@@ -719,12 +719,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                     max_c1_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in c1_clean_texts) if c1_clean_texts else 100.0
                     c1_word_w_cm = pt_to_cm(max_c1_w_pt) * 1.15
 
-                    # Check if columns contain inline picture tags and add physical picture width
-                    c1_has_pic = any("[PIC" in b.col1.upper() or parse_pic_tag(b.col1) is not None for b in tab2_group)
-                    if c1_has_pic:
-                        c1_word_w_cm += 4.0
-
-                    # Measure Column 2 width to ensure both columns fit cleanly on the page
+                    # Measure Column 2 text width to ensure both columns fit cleanly on the page
                     c2_clean_texts = []
                     for b in tab2_group:
                         clean_c2 = self.strip_markup_for_measurement(b.col2.strip())
@@ -732,28 +727,65 @@ class ULNWordRenderer(RendererBlocksMixin):
                     max_c2_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in c2_clean_texts) if c2_clean_texts else 50.0
                     c2_word_w_cm = pt_to_cm(max_c2_w_pt) * 1.15
 
+                    # Check if columns contain inline picture tags
+                    c1_has_pic = any("[PIC" in b.col1.upper() or parse_pic_tag(b.col1) is not None for b in tab2_group)
                     c2_has_pic = any("[PIC" in b.col2.upper() or parse_pic_tag(b.col2) is not None for b in tab2_group)
-                    if c2_has_pic:
-                        c2_word_w_cm += 4.0
 
                     min_gap_cm = 0.50  # MINIMUM DISTANCE BETWEEN 2 COLUMNS: STRICTLY >= 5.0 MM (0.50 cm)
+                    spacing_around_img_cm = 0.20
 
-                    # 1. Maximum Tab Stop position where Column 2 still does NOT wrap before page right margin
-                    tab_max_cm = printable_width_cm - c2_word_w_cm - 0.10  # 1.0 mm safety margin before page right edge
-
-                    # 2. Minimum Tab Stop position to maintain at least 5.0 mm gap after Column 1
-                    tab_min_cm = base_indent_cm + c1_word_w_cm + min_gap_cm
-
-                    # Logic: If both columns have pictures (picture grid), split evenly at 50% page width;
-                    # Otherwise maximize distance between 2 columns so Column 2 doesn't wrap;
-                    # If Column 2 would wrap or exceed page width, narrow the gap down towards the 5mm limit
                     if c1_has_pic and c2_has_pic:
-                        col2_tab_pos_cm = base_indent_cm + (printable_width_cm / 2.0)
-                    elif tab_max_cm >= tab_min_cm:
-                        col2_tab_pos_cm = tab_max_cm
+                        # DYNAMICALLY DETERMINE OPTIMAL UNIFORM IMAGE SIZE ACROSS ALL PICTURES
+                        # Available horizontal width for the 2 images:
+                        avail_w_for_imgs = printable_width_cm - base_indent_cm - c1_word_w_cm - c2_word_w_cm - (2 * spacing_around_img_cm) - min_gap_cm
+                        opt_pic_w_cm = min(4.5, max(2.8, avail_w_for_imgs / 2.0))
+                        opt_pic_h_cm = opt_pic_w_cm * 0.72
+                        self.current_tab2_pic_width_cm = opt_pic_w_cm
+                        self.current_tab2_pic_height_cm = opt_pic_h_cm
+
+                        # Total physical column widths:
+                        c1_total_w_cm = c1_word_w_cm + opt_pic_w_cm + spacing_around_img_cm
+                        c2_total_w_cm = c2_word_w_cm + opt_pic_w_cm + spacing_around_img_cm
+
+                        tab_min_cm = base_indent_cm + c1_total_w_cm + min_gap_cm
+                        tab_max_cm = printable_width_cm - c2_total_w_cm - 0.10
+
+                        if tab_max_cm >= tab_min_cm:
+                            col2_tab_pos_cm = tab_max_cm
+                        else:
+                            col2_tab_pos_cm = max(base_indent_cm + 4.0, tab_min_cm)
+
+                    elif c1_has_pic or c2_has_pic:
+                        # Single column with picture
+                        avail_w_for_img = printable_width_cm - base_indent_cm - c1_word_w_cm - c2_word_w_cm - spacing_around_img_cm - min_gap_cm
+                        opt_pic_w_cm = min(5.0, max(3.0, avail_w_for_img))
+                        opt_pic_h_cm = opt_pic_w_cm * 0.72
+                        self.current_tab2_pic_width_cm = opt_pic_w_cm
+                        self.current_tab2_pic_height_cm = opt_pic_h_cm
+
+                        c1_total_w_cm = c1_word_w_cm + (opt_pic_w_cm + spacing_around_img_cm if c1_has_pic else 0.0)
+                        c2_total_w_cm = c2_word_w_cm + (opt_pic_w_cm + spacing_around_img_cm if c2_has_pic else 0.0)
+
+                        tab_min_cm = base_indent_cm + c1_total_w_cm + min_gap_cm
+                        tab_max_cm = printable_width_cm - c2_total_w_cm - 0.10
+
+                        if tab_max_cm >= tab_min_cm:
+                            col2_tab_pos_cm = tab_max_cm
+                        else:
+                            col2_tab_pos_cm = max(base_indent_cm + 4.0, tab_min_cm)
+
                     else:
-                        # Narrow gap towards 5mm limit, and if total width exceeds page, reserve right space for Col 2 so Col 1 wraps
-                        col2_tab_pos_cm = max(base_indent_cm + 4.0, printable_width_cm - max(3.5, c2_word_w_cm) - 0.10)
+                        # Standard text matching layout
+                        self.current_tab2_pic_width_cm = None
+                        self.current_tab2_pic_height_cm = None
+
+                        tab_max_cm = printable_width_cm - c2_word_w_cm - 0.10
+                        tab_min_cm = base_indent_cm + c1_word_w_cm + min_gap_cm
+
+                        if tab_max_cm >= tab_min_cm:
+                            col2_tab_pos_cm = tab_max_cm
+                        else:
+                            col2_tab_pos_cm = max(base_indent_cm + 4.0, printable_width_cm - max(3.5, c2_word_w_cm) - 0.10)
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
@@ -890,6 +922,10 @@ class ULNWordRenderer(RendererBlocksMixin):
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.TabStops.ClearAll()
+
+                if idx_block + 1 >= len(blocks) or blocks[idx_block + 1].tag != "TAB2":
+                    self.current_tab2_pic_width_cm = None
+                    self.current_tab2_pic_height_cm = None
 
             elif tag == "TABLE":
                 if block.table_data:

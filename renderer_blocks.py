@@ -29,8 +29,9 @@ class RendererBlocksMixin:
         if target_path and os.path.exists(target_path):
             try:
                 shape = sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
+                # Enforce UNIFORM identical width and height across all pictures in the exercise
                 try:
-                    shape.LockAspectRatio = -1
+                    shape.LockAspectRatio = 0
                 except Exception:
                     pass
 
@@ -40,22 +41,21 @@ class RendererBlocksMixin:
                 except Exception:
                     pass
 
-                # When inside TAB2 (2-column layout), table cell, or small size: INCREASED OPTIMAL SIZE (~3.7cm x 2.7cm)
-                is_in_tab2 = (getattr(self, 'current_block_tag', None) == "TAB2" or getattr(self, 'last_rendered_tag', None) == "TAB2")
-
-                if is_in_tab2 or is_in_table or pic.size == "small":
-                    shape.Width = cm_to_pt(3.7)
-                    if shape.Height > cm_to_pt(2.7):
-                        shape.Height = cm_to_pt(2.7)
+                if getattr(self, 'current_tab2_pic_width_cm', None):
+                    w_cm = self.current_tab2_pic_width_cm
+                    h_cm = getattr(self, 'current_tab2_pic_height_cm', w_cm * 0.72)
+                    shape.Width = cm_to_pt(w_cm)
+                    shape.Height = cm_to_pt(h_cm)
+                elif is_in_table or pic.size == "small":
+                    shape.Width = cm_to_pt(3.8)
+                    shape.Height = cm_to_pt(2.7)
                 elif pic.size == "large":
                     shape.Width = cm_to_pt(9.0)
-                    if shape.Height > cm_to_pt(6.0):
-                        shape.Height = cm_to_pt(6.0)
+                    shape.Height = cm_to_pt(6.0)
                 else:
                     # Standalone medium picture
                     shape.Width = cm_to_pt(5.0)
-                    if shape.Height > cm_to_pt(3.5):
-                        shape.Height = cm_to_pt(3.5)
+                    shape.Height = cm_to_pt(3.5)
                 return
             except Exception as e:
                 print(f"[ULNRenderer] Warning adding picture {target_path}: {e}")
@@ -432,8 +432,9 @@ class RendererBlocksMixin:
         t = re.sub(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '___________', text)
         # 2. Extract inner text from [text]{tag}
         t = re.sub(r'\[(.*?)\]\{(?:u|b|i|[a-zA-Z0-9#:,]+)\}', r'\1', text)
-        # 3. Strip [ins], [/ins]
+        # 3. Strip [ins], [/ins] and [PIC: ...]
         t = re.sub(r'\[\/?(?:ins|INS)\]', '', t)
+        t = re.sub(r'\[PIC(?::.*?)?\]', '', t, flags=re.IGNORECASE)
         # 4. Strip markdown bold/italic asterisks while preserving inner text
         t = re.sub(r'\*\*(.*?)\*\*', r'\1', t)
         t = re.sub(r'\*(.*?)\*', r'\1', t)
