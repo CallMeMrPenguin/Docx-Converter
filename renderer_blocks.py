@@ -919,16 +919,26 @@ class RendererBlocksMixin:
                 sel.Font.Italic = 0
                 sel.Font.Color = 0
 
-                cap_text = f"{global_idx + 1}. ______"
+                col_w_pt = cm_to_pt(slot_w_cm)
+                img_w_pt = min(col_w_pt - 10.0, cm_to_pt(3.6))
+
                 clean_content = re.sub(r'\[PIC(?::[^\]]*)?\]', '', child.content, flags=re.IGNORECASE).strip()
                 m_num = re.match(r'^(?:#?(\d+)[\.\)]\s*)?(.*)$', clean_content)
                 if m_num:
                     num_part = m_num.group(1) or str(global_idx + 1)
                     body_part = m_num.group(2).strip()
                     if not body_part or "<blank>" in body_part.lower() or "[blank]" in body_part.lower() or "_" in body_part:
-                        cap_text = f"{num_part}. ______"
+                        prefix_w_pt = len(f"{num_part}. ") * (self.font_size * 0.48)
+                        char_under_w_pt = max(4.0, self.font_size * 0.44)
+                        num_underscores = max(10, int((img_w_pt - prefix_w_pt) / char_under_w_pt))
+                        cap_text = f"{num_part}. {'_' * num_underscores}"
                     else:
                         cap_text = f"{num_part}. {body_part}"
+                else:
+                    prefix_w_pt = len(f"{global_idx + 1}. ") * (self.font_size * 0.48)
+                    char_under_w_pt = max(4.0, self.font_size * 0.44)
+                    num_underscores = max(10, int((img_w_pt - prefix_w_pt) / char_under_w_pt))
+                    cap_text = f"{global_idx + 1}. {'_' * num_underscores}"
 
                 sel.TypeText(cap_text)
 
