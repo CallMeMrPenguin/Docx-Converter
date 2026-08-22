@@ -208,14 +208,13 @@ F. STRICT RULE: WHEN TO USE [TAB2] / [TAB3] / [TAB4] VS STANDARD [P0]/[P1]:
           - Row 5: #5 | #11 | #17
           - Row 6: #6 | #12 | #18
         - STRICT ANTI-LOOP MANDATE: NEVER repeat the first row or loop identical items! Output every single item with its unique word and number exactly once:
-        [NUM]
+        [P0] [ins]**V. Write C for countable and U for uncountable.**
         [TAB3] #1. beef <blank> | #7. spinach <blank> | #13. turmeric <blank>
         [TAB3] #2. apple <blank> | #8. egg <blank> | #14. pancake <blank>
         [TAB3] #3. bread <blank> | #9. butter <blank> | #15. vegetable <blank>
         [TAB3] #4. biscuit <blank> | #10. lemonade <blank> | #16. coffee <blank>
         [TAB3] #5. rice <blank> | #11. sandwich <blank> | #17. sugar <blank>
         [TAB3] #6. spring roll <blank> | #12. ham <blank> | #18. orange <blank>
-        [/NUM]
 
 G. DIALOGUE & CONVERSATION EXERCISES:
    - CASE 1: Numbered Speaking Q&A Pairs (Numbered questions with Speaker A blank line):
