@@ -420,6 +420,7 @@ class RendererBlocksMixin:
         try:
             p_anchor.ParagraphFormat.SpaceBefore = 14.0
             p_anchor.ParagraphFormat.SpaceAfter = 14.0
+            p_anchor.ParagraphFormat.KeepWithNext = True
         except Exception:
             pass
 
@@ -430,9 +431,24 @@ class RendererBlocksMixin:
                 return
 
             # Measure exact physical rendered width of longest line in Word COM for 100.0% precision
-            char_w_pt = max(4.0, self.font_size * 0.44)
-            max_len = max(len(l) for l in lines) if lines else 0
-            max_line_w_pt = max_len * char_w_pt
+            max_line_w_pt = 0.0
+            try:
+                left_m_pt = doc.PageSetup.LeftMargin
+                for l in lines:
+                    sel.SetRange(doc.Content.End - 1, doc.Content.End - 1)
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 0
+                    sel.TypeText(l)
+                    pos = sel.Information(5)
+                    sel.Delete(1, -len(l))
+                    w_pt = pos - left_m_pt
+                    if w_pt > max_line_w_pt:
+                        max_line_w_pt = w_pt
+            except Exception:
+                char_w_pt = max(4.0, self.font_size * 0.33)
+                max_len = max(len(l) for l in lines) if lines else 0
+                max_line_w_pt = max_len * char_w_pt
 
             pad_left_pt = cm_to_pt(0.20)   # Exactly 2.0 mm padding
             pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
@@ -531,14 +547,28 @@ class RendererBlocksMixin:
 
             N = len(words)
 
-            char_w_pt = max(4.0, self.font_size * 0.44)
-            item_widths_pt = [len(w) * char_w_pt for w in words]
+            item_widths_pt = []
+            try:
+                left_m_pt = doc.PageSetup.LeftMargin
+                for w in words:
+                    sel.SetRange(doc.Content.End - 1, doc.Content.End - 1)
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 0
+                    sel.TypeText(w)
+                    pos = sel.Information(5)
+                    sel.Delete(1, -len(w))
+                    item_widths_pt.append(pos - left_m_pt)
+            except Exception:
+                char_w_pt = max(4.0, self.font_size * 0.33)
+                item_widths_pt = [len(w) * char_w_pt for w in words]
+
             max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
             pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
             pad_vert_pt = cm_to_pt(0.10)   # Exactly 1.0 mm padding
 
-            # If items are long sentences/dialogue turns (>35% page width), format as 1 column
-            if max_item_w_pt >= (printable_width_pt * 0.35):
+            # If items are long sentences/dialogue turns (>22% page width or >20 chars), format as 1 column
+            if max_item_w_pt >= (printable_width_pt * 0.22):
                 cols = 1
             else:
                 est_slot_w = max_item_w_pt + cm_to_pt(0.8)

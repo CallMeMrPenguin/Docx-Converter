@@ -366,14 +366,18 @@ class ULNWordRenderer(RendererBlocksMixin):
                 sel.ParagraphFormat.PageBreakBefore = False
                 is_ins_block = block.is_instruction or any(s.is_instruction for s in block.spans)
                 
-                # Check if this P0 is a numbered question stem followed by an OPT block or Dialogue continuation
+                # Check if this P0 is followed by an OPT block, Dialogue continuation, BOX, or Sentence Rewrite blank line
                 has_next_opt = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag == "OPT")
+                has_next_box = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag == "BOX")
                 has_next_dlg = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P0"] and bool(re.search(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', blocks[idx_block + 1].content, re.IGNORECASE)))
+                has_next_rewrite_blank = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P2"] and (
+                    bool(re.search(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,}|(?:→|->)', blocks[idx_block + 1].content))
+                ))
                 pref_chk, delim_chk, q_num_chk, body_chk = extract_question_prefix_and_body(block.content)
                 is_numbered_q = (q_num_chk is not None)
                 is_dialogue_line = bool(re.search(r'(?:^|#\d+[\.\)]\s*)(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', block.content, re.IGNORECASE))
 
-                if is_ins_block or (is_numbered_q and (has_next_opt or has_next_dlg)):
+                if is_ins_block or (is_numbered_q and (has_next_opt or has_next_dlg or has_next_rewrite_blank)) or has_next_box:
                     sel.ParagraphFormat.SpaceBefore = 14 if self.last_rendered_tag == "BOX" else (8 if is_ins_block else 6)
                     sel.ParagraphFormat.SpaceAfter = 4 if is_ins_block else 2
                     sel.ParagraphFormat.KeepWithNext = True
