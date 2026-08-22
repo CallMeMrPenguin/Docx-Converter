@@ -1,7 +1,7 @@
 import os
 import re
 import math
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from uln_parser import ULNBlock, InlineSpan, PicInfo, parse_pic_tag, parse_inline_spans
 from renderer_utils import (
     cm_to_pt,
@@ -421,11 +421,118 @@ class RendererBlocksMixin:
         t = re.sub(r'\*(.*?)\*', r'\1', t)
         return t.strip()
 
-    def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
+    def optimize_word_bank_layout(self, doc, words: List[str], printable_width_pt: float) -> Tuple[int, List[List[str]], float, List[float]]:
+        """
+        Optimally arranges Word Bank items across columns and rows to produce the most
+        compact, balanced, and aesthetically pleasing box width and height.
+        Evaluates column-major alphabetical, length-balanced bin-packing, and row-major permutations.
+        """
+        N = len(words)
+        if N == 0:
+            return 1, [[]], 50.0, [0.0]
+
+        clean_words = [self.strip_markup_for_measurement(w) for w in words]
+        item_widths_pt = [self.measure_text_width_pt(doc, cw, self.font_name, self.font_size, is_bold=True) * 1.15 for cw in clean_words]
+        max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
+
+        pad_horiz_pt = cm_to_pt(0.20)      # 2.0 mm padding
+        extra_buffer_pt = cm_to_pt(0.20)   # 2.0 mm corner buffer
+        gap_pt = cm_to_pt(0.80)            # 8.0 mm inter-column gap
+
+        # If items are long sentences (>28% page width), use single column
+        if max_item_w_pt >= (printable_width_pt * 0.28):
+            return 1, [[w] for w in words], min(printable_width_pt, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt), [0.0]
+
+        items_with_w = list(zip(words, item_widths_pt))
+
+        best_c = 1
+        best_grid = [[w] for w in words]
+        best_box_w = min(printable_width_pt, max(item_widths_pt) + (2 * pad_horiz_pt) + extra_buffer_pt)
+        best_tabs = [0.0]
+        best_score = float('inf')
+
+        max_c = min(N, 6)
+        for c in range(max_c, 0, -1):
+            num_rows = math.ceil(N / c)
+
+            arrangements = []
+
+            # 1. Alphabetical Column-Major (standard dictionary flow: Col 1 top-to-bottom, then Col 2...)
+            alpha_items = sorted(items_with_w, key=lambda x: self.strip_markup_for_measurement(x[0]).lower())
+            grid_col_major = [[] for _ in range(num_rows)]
+            for i, item in enumerate(alpha_items):
+                col_idx = i // num_rows
+                row_idx = i % num_rows
+                if row_idx < num_rows and col_idx < c:
+                    grid_col_major[row_idx].append(item)
+            grid_col_major = [r for r in grid_col_major if r]
+            arrangements.append(grid_col_major)
+
+            # 2. Length-Balanced (Greedy Bin-Packing into lowest-width columns)
+            by_len = sorted(items_with_w, key=lambda x: x[1], reverse=True)
+            col_buckets = [[] for _ in range(c)]
+            for it in by_len:
+                valid_buckets = [b_idx for b_idx in range(c) if len(col_buckets[b_idx]) < num_rows]
+                if not valid_buckets:
+                    break
+                chosen_b = min(valid_buckets, key=lambda b_idx: sum(x[1] for x in col_buckets[b_idx]))
+                col_buckets[chosen_b].append(it)
+            grid_balanced = [[] for _ in range(num_rows)]
+            for b_idx in range(c):
+                for r_idx, it in enumerate(col_buckets[b_idx]):
+                    grid_balanced[r_idx].append(it)
+            grid_balanced = [r for r in grid_balanced if r]
+            arrangements.append(grid_balanced)
+
+            # 3. Alphabetical Row-Major (A, B, C, D left-to-right)
+            grid_row_major = []
+            for r in range(num_rows):
+                chunk = alpha_items[r*c : (r+1)*c]
+                if chunk:
+                    grid_row_major.append(chunk)
+            arrangements.append(grid_row_major)
+
+            # 4. Original input order
+            grid_orig = []
+            for r in range(num_rows):
+                chunk = items_with_w[r*c : (r+1)*c]
+                if chunk:
+                    grid_orig.append(chunk)
+            arrangements.append(grid_orig)
+
+            for grid in arrangements:
+                if not grid or not grid[0]:
+                    continue
+                actual_c = max(len(row) for row in grid)
+                if actual_c == 0:
+                    continue
+                col_max_w = []
+                for col_idx in range(actual_c):
+                    col_items = [row[col_idx][1] for row in grid if col_idx < len(row)]
+                    col_max_w.append(max(col_items) if col_items else 40.0)
+
+                needed_w = sum(col_max_w) + ((actual_c - 1) * gap_pt) + (2 * pad_horiz_pt) + extra_buffer_pt
+                if needed_w <= printable_width_pt:
+                    # Score: heavily favor fewer rows (R), then favor compact balanced width
+                    score = num_rows * 1000 + needed_w
+                    if score < best_score:
+                        best_score = score
+                        best_c = actual_c
+                        best_grid = [[x[0] for x in row] for row in grid]
+
+                        tabs = [0.0]
+                        for ci in range(actual_c - 1):
+                            tabs.append(tabs[-1] + col_max_w[ci] + gap_pt)
+                        best_tabs = tabs
+                        best_box_w = min(printable_width_pt, tabs[-1] + col_max_w[-1] + (2 * pad_horiz_pt) + extra_buffer_pt)
+
+        return best_c, best_grid, best_box_w, best_tabs
+
+    def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float, idx_block: int = 0, blocks: List[ULNBlock] = None):
         """
         Renders Word Bank / Callout Box / Formula Box inside a MS Word Rounded Rectangle Shape TextFrame.
-        - If the content contains '|' (or tag is WORDBANK / BOX:bank): Treats it as a Word Bank and lays out items into balanced columns.
-        - If the content has NO '|': Treats it as a Formula / Rule / Callout Box, preserving complete lines/sentences without shredding words into columns.
+        - Sets KeepWithNext ONLY if immediately adjacent to an [INS] block.
+        - Word Bank automatically optimizes item layout and column assignments for minimal height and balanced width.
         """
         printable_width_pt = cm_to_pt(printable_width_cm)
         raw_content = block.content.strip() if block.content else ""
@@ -434,11 +541,20 @@ class RendererBlocksMixin:
 
         is_word_bank = ('|' in raw_content) or (block.tag == "WORDBANK") or (block.tag.endswith(":bank"))
 
+        is_adjacent_to_ins = False
+        if blocks and 0 <= idx_block < len(blocks):
+            if idx_block > 0 and blocks[idx_block - 1].tag == "INS":
+                is_adjacent_to_ins = True
+            elif idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag == "INS":
+                is_adjacent_to_ins = True
+        elif self.last_rendered_tag == "INS":
+            is_adjacent_to_ins = True
+
         p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
         try:
             p_anchor.ParagraphFormat.SpaceBefore = 14.0
             p_anchor.ParagraphFormat.SpaceAfter = 14.0
-            p_anchor.ParagraphFormat.KeepWithNext = True
+            p_anchor.ParagraphFormat.KeepWithNext = is_adjacent_to_ins
         except Exception:
             pass
 
@@ -548,67 +664,13 @@ class RendererBlocksMixin:
                 print(f"[ULNRenderer] Warning creating Formula/Callout TextFrame box shape: {e}")
 
         else:
-            # PATHWAY B: WORD BANK / PIPE-SEPARATED CHOICES
+            # PATHWAY B: WORD BANK / PIPE-SEPARATED CHOICES (OPTIMAL COLUMN & ARRANGEMENT SIZING)
             words = [w.strip() for w in raw_content.split('|') if w.strip()]
             if not words:
                 return
 
-            N = len(words)
-
-            clean_words = [self.strip_markup_for_measurement(w) for w in words]
-            item_widths_pt = [self.measure_text_width_pt(doc, cw, self.font_name, self.font_size, is_bold=True) for cw in clean_words]
-            max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
+            cols, lines_bank, box_width_pt, tab_stops_pt = self.optimize_word_bank_layout(doc, words, printable_width_pt)
             pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
-            pad_vert_pt = 0.0              # 0.0 mm top/bottom margin
-            extra_buffer_pt = cm_to_pt(0.20)  # 2.0 mm buffer for corner curves
-            gap_pt = cm_to_pt(0.8)  # 8mm gap between columns
-
-            # If items are long sentences/dialogue turns (>22% page width or >20 chars), format as 1 column
-            if max_item_w_pt >= (printable_width_pt * 0.22):
-                cols = 1
-            else:
-                est_slot_w = max_item_w_pt + cm_to_pt(0.8)
-                max_fit_cols = max(1, int(printable_width_pt / est_slot_w))
-                if N <= 5:
-                    cols = min(N, max_fit_cols)
-                elif N <= 8:
-                    cols = min(4, max_fit_cols)
-                elif N <= 10:
-                    cols = min(5, max_fit_cols)
-                else:
-                    cols = min(4, max_fit_cols)
-
-            # Ensure calculated columns actually fit printable page width
-            while cols > 1:
-                col_max_widths_pt = []
-                for c in range(cols):
-                    col_widths = [item_widths_pt[i] for i in range(N) if i % cols == c]
-                    col_max_widths_pt.append(max(col_widths) if col_widths else 45.0)
-                needed_w = sum(col_max_widths_pt) + ((cols - 1) * gap_pt) + (2 * pad_horiz_pt) + extra_buffer_pt
-                if needed_w <= printable_width_pt:
-                    break
-                cols -= 1
-
-            lines_bank = []
-            for i in range(0, N, cols):
-                lines_bank.append(words[i:i + cols])
-
-            if cols == 1:
-                box_width_pt = min(printable_width_pt, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt)
-                tab_stops_pt = [0.0]
-            else:
-                col_max_widths_pt = []
-                for c in range(cols):
-                    col_widths = [item_widths_pt[i] for i in range(N) if i % cols == c]
-                    col_max_widths_pt.append(max(col_widths) if col_widths else 45.0)
-
-                tab_stops_pt = [0.0]
-                for c in range(cols - 1):
-                    next_tab_pt = tab_stops_pt[-1] + col_max_widths_pt[c] + gap_pt
-                    tab_stops_pt.append(next_tab_pt)
-
-                box_width_pt = min(printable_width_pt, tab_stops_pt[-1] + col_max_widths_pt[-1] + (2 * pad_horiz_pt) + extra_buffer_pt)
-
             left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             num_rows = len(lines_bank)

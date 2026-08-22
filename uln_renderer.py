@@ -881,7 +881,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                 self.render_pic_grid(sel, doc, block.children, printable_width_cm)
 
             elif tag == "BOX":
-                self.render_box_shape(sel, doc, word, block, printable_width_cm)
+                self.render_box_shape(sel, doc, word, block, printable_width_cm, idx_block=idx_block, blocks=blocks)
 
             elif tag == "NUM":
                 self.render_num_container(sel, doc, word, block, printable_width_cm)
