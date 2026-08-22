@@ -557,9 +557,20 @@ class ULNFormatterApp:
             msg = f"Successfully generated DOCX file:\n{compiled_file}"
             messagebox.showinfo("Success", msg)
 
+        except KeyboardInterrupt:
+            try:
+                self.root.deiconify()
+                self.root.lift()
+                self.root.focus_force()
+            except Exception:
+                pass
+            messagebox.showwarning("Đã hủy", "Đã hủy tác vụ tạo DOCX theo yêu cầu (Phím ESC).")
+
         except Exception as e:
             try:
                 self.root.deiconify()
+                self.root.lift()
+                self.root.focus_force()
             except Exception:
                 pass
             messagebox.showerror("Compilation Error", f"Failed to generate Word document:\n{e}")

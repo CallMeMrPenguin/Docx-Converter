@@ -108,8 +108,21 @@ class ULNWordRenderer(RendererBlocksMixin):
 
         return None
 
+    def check_cancellation(self):
+        """Checks if user pressed the ESC key anywhere on the system to instantly cancel generation."""
+        try:
+            import ctypes
+            # VK_ESCAPE = 0x1B
+            if bool(ctypes.windll.user32.GetAsyncKeyState(0x1B) & 0x8000):
+                raise KeyboardInterrupt("Tác vụ tạo DOCX đã bị người dùng hủy bằng phím ESC.")
+        except KeyboardInterrupt:
+            raise
+        except Exception:
+            pass
+
     def configure_document(self, doc):
         """Applies page setup margins and optional page numbering."""
+        self.check_cancellation()
         ps = doc.PageSetup
         ps.PageWidth = cm_to_pt(21.0)
         ps.PageHeight = cm_to_pt(29.7)
@@ -144,6 +157,7 @@ class ULNWordRenderer(RendererBlocksMixin):
     def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False, default_uppercase: bool = False, custom_font_size: Optional[float] = None, force_color: Optional[int] = None):
         """Writes formatted text runs strictly according to span AST properties."""
         for idx, span in enumerate(spans):
+            self.check_cancellation()
             text = span.text
 
             # Check if span is an inline [PIC...] tag
@@ -265,6 +279,7 @@ class ULNWordRenderer(RendererBlocksMixin):
 
         idx_block = 0
         while idx_block < len(blocks):
+            self.check_cancellation()
             block = blocks[idx_block]
             tag = block.tag
 

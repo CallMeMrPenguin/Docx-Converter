@@ -113,6 +113,22 @@ class ULNCompiler:
 
             return abs_output_path
 
+        except KeyboardInterrupt:
+            if doc:
+                try:
+                    doc.Close(False)
+                except Exception:
+                    pass
+                doc = None
+            if word:
+                try:
+                    word.ScreenUpdating = True
+                    word.Quit()
+                except Exception:
+                    pass
+                word = None
+            raise KeyboardInterrupt("Đã hủy tạo DOCX theo yêu cầu (Phím ESC).")
+
         finally:
             if not keep_open:
                 if doc:
