@@ -652,14 +652,16 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                 elif col2_is_blank:
                     # Dynamic 2-Column Error Correction Layout:
-                    # 1. Optimal col2 start position based on longest Column 1 sentence (avg 0.155cm per char for 12pt Times New Roman)
-                    est_c1_w = base_indent_cm + (max_c1_len * 0.155) + 0.4
-                    col2_tab_pos_cm = max(base_indent_cm + 8.0, est_c1_w)
+                    # 1. Optimal col2 start position based on longest Column 1 sentence (0.185cm per char + prefix/space buffer)
+                    c1_char_lens = [len(extract_question_prefix_and_body(b.col1)[3].strip()) for b in tab2_group]
+                    max_c1_body_len = max(c1_char_lens) if c1_char_lens else max_c1_len
+                    est_c1_w = base_indent_cm + (max_c1_body_len * 0.185) + 0.8 + 0.5
+                    col2_tab_pos_cm = max(base_indent_cm + 10.0, est_c1_w)
                     col2_tab_pos_cm = min(col2_tab_pos_cm, printable_width_cm - 2.5)
 
                     # 2. Safe blank width: strictly bounded within printable width with 0.4cm buffer to guarantee 0 line wraps
                     avail_w_cm = max(1.5, printable_width_cm - col2_tab_pos_cm - 0.4)
-                    blank_w_cm = min(3.2, avail_w_cm)
+                    blank_w_cm = min(3.5, avail_w_cm)
                     char_under_w_cm = max(0.18, (self.font_size * 0.44) / 28.3465)
                     num_underscores = max(6, int(blank_w_cm / char_under_w_cm))
 
