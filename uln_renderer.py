@@ -731,31 +731,12 @@ class ULNWordRenderer(RendererBlocksMixin):
                     blank_w_cm = 2.8
                     col2_tab_pos_cm = printable_width_cm - blank_w_cm
                 else:
-                    # Smart Adaptive Column Layout (2mm minimum gap with optimal expansion before wrap):
-                    min_gap_cm = 0.2  # 2mm minimum gap
-                    c1_w = base_indent_cm + (max_c1_clean_len * 0.185) + 0.8
-                    c2_w = (max_c2_len * 0.185) + 0.6
-                    total_needed = c1_w + min_gap_cm + c2_w
-
-                    if total_needed <= printable_width_cm:
-                        # Case 1: Both columns fit on 1 line at 2mm gap without wrapping!
-                        # Expand gap to optimal distance right before wrap occurs:
-                        col2_tab_pos_cm = printable_width_cm - c2_w
-                    else:
-                        # Case 2: Text is too long for 1 line at 2mm gap -> wrap occurs:
-                        if c1_w <= (printable_width_cm * 0.35):
-                            # Col 1 is short (e.g. word matching): preserve Col 1 unwrapped, Col 2 wraps with 2mm gap
-                            col2_tab_pos_cm = c1_w + min_gap_cm
-                        elif c2_w <= (printable_width_cm * 0.25):
-                            # Col 2 is short: preserve Col 2 unwrapped at right, Col 1 wraps
-                            col2_tab_pos_cm = printable_width_cm - c2_w
-                        else:
-                            # Both columns are long: proportional balanced split with 2mm gap
-                            avail_for_cols = printable_width_cm - min_gap_cm
-                            ratio = c1_w / max(0.1, c1_w + c2_w)
-                            ratio = max(0.40, min(0.55, ratio))
-                            c1_alloc = avail_for_cols * ratio
-                            col2_tab_pos_cm = c1_alloc + min_gap_cm
+                    # Robust Column 2 Alignment Rule for Word Tab Stops:
+                    # In Word, the tab stop MUST ALWAYS be placed after the longest Column 1 text
+                    # so that Column 1 never exceeds the tab stop on the first line.
+                    min_gap_cm = 0.3  # 3mm safety gap
+                    c1_w = base_indent_cm + (max_c1_clean_len * 0.19) + 0.6
+                    col2_tab_pos_cm = min(printable_width_cm - 3.5, c1_w + min_gap_cm)
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
