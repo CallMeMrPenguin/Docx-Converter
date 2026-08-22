@@ -168,7 +168,9 @@ class ULNWordRenderer(RendererBlocksMixin):
             if text.startswith("[PIC:") or text.strip().upper() == "[PIC]":
                 pic_info = parse_pic_tag(text) or PicInfo(description="Activity Picture", pos="center", size="small")
                 self.render_pic(sel, None, pic_info)
-                sel.TypeText(" ")
+                # Only add trailing space if followed by more non-whitespace text in this span list
+                if idx + 1 < len(spans) and spans[idx + 1].text.strip():
+                    sel.TypeText(" ")
                 continue
 
             is_bold = 1 if (span.bold or default_bold) else 0
@@ -862,7 +864,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                                 opt_pic_h_cm = 1.4
                                 self.current_tab2_pic_width_cm = opt_pic_w_cm
                                 self.current_tab2_pic_height_cm = opt_pic_h_cm
-                                col2_tab_pos_cm = printable_width_cm - opt_pic_w_cm
+                                col2_tab_pos_cm = printable_width_cm - opt_pic_w_cm - 0.20
                             else:
                                 # Standard picture matching layout (picture is the main exercise content)
                                 avail_w_for_img = printable_width_cm - base_indent_cm - c1_word_w_cm - c2_word_w_cm - spacing_around_img_cm - min_gap_cm
