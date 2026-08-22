@@ -722,7 +722,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                     # Check if columns contain inline picture tags and add physical picture width
                     c1_has_pic = any("[PIC" in b.col1.upper() or parse_pic_tag(b.col1) is not None for b in tab2_group)
                     if c1_has_pic:
-                        c1_word_w_cm += 3.4
+                        c1_word_w_cm += 4.0
 
                     # Measure Column 2 width to ensure both columns fit cleanly on the page
                     c2_clean_texts = []
@@ -734,7 +734,7 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                     c2_has_pic = any("[PIC" in b.col2.upper() or parse_pic_tag(b.col2) is not None for b in tab2_group)
                     if c2_has_pic:
-                        c2_word_w_cm += 3.4
+                        c2_word_w_cm += 4.0
 
                     min_gap_cm = 0.50  # MINIMUM DISTANCE BETWEEN 2 COLUMNS: STRICTLY >= 5.0 MM (0.50 cm)
 

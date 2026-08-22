@@ -40,22 +40,22 @@ class RendererBlocksMixin:
                 except Exception:
                     pass
 
-                # When inside TAB2 (2-column layout), table cell, or small size: REDUCE TO HALF SIZE (~3.0cm x 2.0cm)
+                # When inside TAB2 (2-column layout), table cell, or small size: INCREASED OPTIMAL SIZE (~3.7cm x 2.7cm)
                 is_in_tab2 = (getattr(self, 'current_block_tag', None) == "TAB2" or getattr(self, 'last_rendered_tag', None) == "TAB2")
 
                 if is_in_tab2 or is_in_table or pic.size == "small":
-                    shape.Width = cm_to_pt(3.0)
-                    if shape.Height > cm_to_pt(2.2):
-                        shape.Height = cm_to_pt(2.2)
+                    shape.Width = cm_to_pt(3.7)
+                    if shape.Height > cm_to_pt(2.7):
+                        shape.Height = cm_to_pt(2.7)
                 elif pic.size == "large":
                     shape.Width = cm_to_pt(9.0)
                     if shape.Height > cm_to_pt(6.0):
                         shape.Height = cm_to_pt(6.0)
                 else:
                     # Standalone medium picture
-                    shape.Width = cm_to_pt(4.5)
-                    if shape.Height > cm_to_pt(3.2):
-                        shape.Height = cm_to_pt(3.2)
+                    shape.Width = cm_to_pt(5.0)
+                    if shape.Height > cm_to_pt(3.5):
+                        shape.Height = cm_to_pt(3.5)
                 return
             except Exception as e:
                 print(f"[ULNRenderer] Warning adding picture {target_path}: {e}")
