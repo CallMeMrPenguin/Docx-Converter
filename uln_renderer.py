@@ -432,19 +432,68 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                     pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
                     if q_num is not None and c_body.strip():
-                        num_fmt = self.get_effective_number_format(pref, delim)
-                        self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                        if self.last_rendered_tag == "BOX":
-                            sel.ParagraphFormat.SpaceBefore = 14
-                        text_part = c_body.strip()
+                        if is_dialogue_line:
+                            try:
+                                sel.Range.ListFormat.RemoveNumbers()
+                            except Exception:
+                                pass
+                            sel.ParagraphFormat.TabStops.ClearAll()
+                            sel.ParagraphFormat.LeftIndent = 0
+                            sel.ParagraphFormat.FirstLineIndent = 0
+                            sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(0.63), Alignment=0)
+                            sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
+                            
+                            sel.Font.Name = self.font_name
+                            sel.Font.Size = self.font_size
+                            sel.Font.Bold = 1
+                            q_col = parse_color_to_rgb_int(self.question_color)
+                            sel.Font.Color = q_col if q_col is not None else 0
+                            num_fmt = self.get_effective_number_format(pref, delim)
+                            num_str = num_fmt.replace("%1", str(q_num)) if "%1" in num_fmt else f"{q_num}."
+                            sel.TypeText(num_str)
+                            sel.TypeText("\t")
+                            sel.Font.Bold = 0
+                            sel.Font.Color = 0
+                            text_part = c_body.strip()
+                        else:
+                            num_fmt = self.get_effective_number_format(pref, delim)
+                            self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
+                            if self.last_rendered_tag == "BOX":
+                                sel.ParagraphFormat.SpaceBefore = 14
+                            text_part = c_body.strip()
+                            sel.ParagraphFormat.TabStops.ClearAll()
+                            sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                     else:
                         q_num_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', text_part, re.IGNORECASE)
                         if q_num_match and q_num_match.group(4).strip():
                             q_num_val = q_num_match.group(1) or q_num_match.group(2) or q_num_match.group(3)
-                            self.apply_native_numbered_list(word, sel, q_num=q_num_val)
-                            if self.last_rendered_tag == "BOX":
-                                sel.ParagraphFormat.SpaceBefore = 14
-                            text_part = q_num_match.group(4).strip()
+                            if is_dialogue_line:
+                                try:
+                                    sel.Range.ListFormat.RemoveNumbers()
+                                except Exception:
+                                    pass
+                                sel.ParagraphFormat.TabStops.ClearAll()
+                                sel.ParagraphFormat.LeftIndent = 0
+                                sel.ParagraphFormat.FirstLineIndent = 0
+                                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(0.63), Alignment=0)
+                                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
+                                sel.Font.Name = self.font_name
+                                sel.Font.Size = self.font_size
+                                sel.Font.Bold = 1
+                                q_col = parse_color_to_rgb_int(self.question_color)
+                                sel.Font.Color = q_col if q_col is not None else 0
+                                sel.TypeText(f"{q_num_val}.")
+                                sel.TypeText("\t")
+                                sel.Font.Bold = 0
+                                sel.Font.Color = 0
+                                text_part = q_num_match.group(4).strip()
+                            else:
+                                self.apply_native_numbered_list(word, sel, q_num=q_num_val)
+                                if self.last_rendered_tag == "BOX":
+                                    sel.ParagraphFormat.SpaceBefore = 14
+                                text_part = q_num_match.group(4).strip()
+                                sel.ParagraphFormat.TabStops.ClearAll()
+                                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                         else:
                             try:
                                 sel.Range.ListFormat.RemoveNumbers()
@@ -452,11 +501,11 @@ class ULNWordRenderer(RendererBlocksMixin):
                                 pass
                             if self.last_rendered_tag == "BOX":
                                 sel.ParagraphFormat.SpaceBefore = 14
+                            sel.ParagraphFormat.TabStops.ClearAll()
+                            sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
 
                     from uln_parser import parse_inline_spans as _pis
                     text_spans = _pis(text_part)
-                    sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
                     self.write_inline_spans(sel, text_spans)
                     sel.Font.Color = 0  # Enforce black for trailing answer blank
                     sel.Font.Underline = 0
@@ -470,8 +519,29 @@ class ULNWordRenderer(RendererBlocksMixin):
                 else:
                     pref, delim, q_num, body_text = extract_question_prefix_and_body(block.content)
                     if q_num is not None:
-                        num_fmt = self.get_effective_number_format(pref, delim)
-                        self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
+                        if is_dialogue_line:
+                            try:
+                                sel.Range.ListFormat.RemoveNumbers()
+                            except Exception:
+                                pass
+                            sel.ParagraphFormat.TabStops.ClearAll()
+                            sel.ParagraphFormat.LeftIndent = 0
+                            sel.ParagraphFormat.FirstLineIndent = 0
+                            sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(0.63), Alignment=0)
+                            sel.Font.Name = self.font_name
+                            sel.Font.Size = self.font_size
+                            sel.Font.Bold = 1
+                            q_col = parse_color_to_rgb_int(self.question_color)
+                            sel.Font.Color = q_col if q_col is not None else 0
+                            num_fmt = self.get_effective_number_format(pref, delim)
+                            num_str = num_fmt.replace("%1", str(q_num)) if "%1" in num_fmt else f"{q_num}."
+                            sel.TypeText(num_str)
+                            sel.TypeText("\t")
+                            sel.Font.Bold = 0
+                            sel.Font.Color = 0
+                        else:
+                            num_fmt = self.get_effective_number_format(pref, delim)
+                            self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
                     else:
                         try:
                             sel.Range.ListFormat.RemoveNumbers()
