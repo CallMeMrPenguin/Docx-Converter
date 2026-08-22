@@ -727,22 +727,35 @@ class ULNWordRenderer(RendererBlocksMixin):
                 col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?(?:_{2,}|<blank>|\[BLANK\])\s*$', block.col2, re.IGNORECASE))
 
                 if col2_is_blank:
-                    # Dynamic 2-Column Error Correction Layout
-                    est_c1_w = base_indent_cm + (max_c1_clean_len * 0.185) + 1.3
-                    col2_tab_pos_cm = max(base_indent_cm + 10.0, est_c1_w)
-                    col2_tab_pos_cm = min(col2_tab_pos_cm, printable_width_cm - 2.5)
+                    # Blank Column Layout: Fixed right-aligned blank (2.8 cm), only Column 1 wraps if needed
+                    blank_w_cm = 2.8
+                    col2_tab_pos_cm = printable_width_cm - blank_w_cm
                 else:
-                    # Adaptive 2-Column Matching / Definition Layout:
-                    # 1. Primary rule: Do NOT wrap Column 1 unless necessary. Start Column 2 after longest Col 1 + 0.5cm (5mm gap)
-                    c1_w_needed = base_indent_cm + (max_c1_clean_len * 0.188) + 0.8
-                    ideal_col2_pos = c1_w_needed + 0.5  # 5mm minimum gap after Col 1
+                    # Smart Adaptive Column Layout (2mm minimum gap with optimal expansion before wrap):
+                    min_gap_cm = 0.2  # 2mm minimum gap
+                    c1_w = base_indent_cm + (max_c1_clean_len * 0.185) + 0.8
+                    c2_w = (max_c2_len * 0.185) + 0.6
+                    total_needed = c1_w + min_gap_cm + c2_w
 
-                    # 2. Secondary rule: If BOTH columns are excessively long (Col 1 leaves Col 2 with < 5.5cm room AND Col 2 is long):
-                    # Balance the page into a 50/50 split (~7.92 cm) and allow both columns to wrap cleanly
-                    if ideal_col2_pos > (printable_width_cm - 5.5) and max_c2_len > 30:
-                        col2_tab_pos_cm = printable_width_cm * 0.48  # ~7.92 cm balanced split
+                    if total_needed <= printable_width_cm:
+                        # Case 1: Both columns fit on 1 line at 2mm gap without wrapping!
+                        # Expand gap to optimal distance right before wrap occurs:
+                        col2_tab_pos_cm = printable_width_cm - c2_w
                     else:
-                        col2_tab_pos_cm = min(ideal_col2_pos, printable_width_cm - 3.5)
+                        # Case 2: Text is too long for 1 line at 2mm gap -> wrap occurs:
+                        if c1_w <= (printable_width_cm * 0.35):
+                            # Col 1 is short (e.g. word matching): preserve Col 1 unwrapped, Col 2 wraps with 2mm gap
+                            col2_tab_pos_cm = c1_w + min_gap_cm
+                        elif c2_w <= (printable_width_cm * 0.25):
+                            # Col 2 is short: preserve Col 2 unwrapped at right, Col 1 wraps
+                            col2_tab_pos_cm = printable_width_cm - c2_w
+                        else:
+                            # Both columns are long: proportional balanced split with 2mm gap
+                            avail_for_cols = printable_width_cm - min_gap_cm
+                            ratio = c1_w / max(0.1, c1_w + c2_w)
+                            ratio = max(0.40, min(0.55, ratio))
+                            c1_alloc = avail_for_cols * ratio
+                            col2_tab_pos_cm = c1_alloc + min_gap_cm
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
