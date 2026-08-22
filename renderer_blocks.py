@@ -413,20 +413,21 @@ class RendererBlocksMixin:
             if not lines:
                 return
 
-            char_w_pt = max(5.0, self.font_size * 0.52)
-            pad_left_pt = cm_to_pt(0.3)
-            pad_right_pt = cm_to_pt(0.3)
+            # Accurate character width multiplier for Times New Roman / Segoe UI (0.41 * fontSize)
+            char_w_pt = max(4.0, self.font_size * 0.41)
+            pad_left_pt = cm_to_pt(0.35)
+            pad_right_pt = cm_to_pt(0.35)
             pad_top_pt = cm_to_pt(0.12)
             pad_bottom_pt = cm_to_pt(0.12)
 
             max_len = max(len(l) for l in lines)
-            est_content_w = (max_len * char_w_pt) + pad_left_pt + pad_right_pt + 16.0
+            est_content_w = (max_len * char_w_pt) + pad_left_pt + pad_right_pt
 
             if est_content_w >= (printable_width_pt * 0.85):
                 box_width_pt = printable_width_pt
                 left_offset_pt = 0.0
             else:
-                box_width_pt = min(printable_width_pt, max(120.0, est_content_w))
+                box_width_pt = min(printable_width_pt, max(100.0, est_content_w))
                 left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             font_line_h = max(14.0, self.font_size * 1.35)
@@ -437,7 +438,7 @@ class RendererBlocksMixin:
                 est_total_lines += max(1, math.ceil(est_w / avail_text_w))
 
             num_display_lines = max(len(lines), est_total_lines)
-            box_height_pt = (num_display_lines * font_line_h) + pad_top_pt + pad_bottom_pt + 8.0
+            box_height_pt = (num_display_lines * font_line_h) + pad_top_pt + pad_bottom_pt + 4.0
 
             try:
                 shape = doc.Shapes.AddShape(
