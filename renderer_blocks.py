@@ -404,9 +404,16 @@ class RendererBlocksMixin:
         self.last_rendered_tag = "OPT"
 
     def measure_text_width_pt(self, doc, text: str, font_name: str = "Times New Roman", font_size: float = 12.0, is_bold: bool = False) -> float:
-        """Accurately measures physical text width in Word COM without any paragraph indent interference."""
+        """Accurately measures physical text width in Word COM with cached memoization for 0ms lookup."""
         if not text:
             return 0.0
+        if not hasattr(self, '_text_width_cache'):
+            self._text_width_cache = {}
+
+        cache_key = (text, font_name, font_size, is_bold)
+        if cache_key in self._text_width_cache:
+            return self._text_width_cache[cache_key]
+
         try:
             rng = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
             rng.ParagraphFormat.Reset()
@@ -426,12 +433,15 @@ class RendererBlocksMixin:
 
             width_pt = end_pos - start_pos
             if width_pt > 0:
+                self._text_width_cache[cache_key] = width_pt
                 return width_pt
         except Exception:
             pass
 
         char_w = font_size * (0.42 if is_bold else 0.38)
-        return len(text) * char_w
+        calc_w = len(text) * char_w
+        self._text_width_cache[cache_key] = calc_w
+        return calc_w
 
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """

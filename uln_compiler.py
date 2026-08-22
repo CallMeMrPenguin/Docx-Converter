@@ -62,7 +62,23 @@ class ULNCompiler:
             except Exception:
                 pass
 
+            # Disable background spelling, grammar, and pagination checking for consistent 0-lag speed throughout entire document
+            try:
+                word.Options.CheckSpellingAsYouType = False
+                word.Options.CheckGrammarAsYouType = False
+                word.Options.Pagination = False
+            except Exception:
+                pass
+
             doc = word.Documents.Add()
+            try:
+                doc.SpellingChecked = True
+                doc.GrammarChecked = True
+                doc.ShowGrammaticalErrors = False
+                doc.ShowSpellingErrors = False
+            except Exception:
+                pass
+
             if is_live_view:
                 try:
                     word.Activate()
