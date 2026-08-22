@@ -150,7 +150,10 @@ class RendererBlocksMixin:
             for idx_i, item in enumerate(items):
                 pref, delim, q_num, clean_item = extract_question_prefix_and_body(item) if idx_i == 0 else (None, None, None, item)
                 m_let = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', clean_item)
-                item_str = f"{m_let.group(1)} {m_let.group(2)}" if m_let else f"A. {clean_item}"
+                body_t = m_let.group(2) if m_let else clean_item
+                clean_body = re.sub(r'\[(.*?)\]\{(?:u|b|i|[a-zA-Z0-9#]+)\}', r'\1', body_t)
+                clean_body = re.sub(r'\[.*?\]|\{.*?\}|\*|_', '', clean_body).strip()
+                item_str = f"{m_let.group(1)} {clean_body}" if m_let else f"A. {clean_body}"
                 all_items.append(item_str)
 
         if all_items:
@@ -273,7 +276,11 @@ class RendererBlocksMixin:
 
         left_indent_cm = 0.0 if has_standalone_q_num else 0.5
 
-        formatted_item_strings = [f"{let}. {body}" for let, body in normalized_items]
+        def clean_opt_for_measurement(text: str) -> str:
+            t = re.sub(r'\[(.*?)\]\{(?:u|b|i|[a-zA-Z0-9#]+)\}', r'\1', text)
+            return re.sub(r'\[.*?\]|\{.*?\}|\*|_', '', t).strip()
+
+        formatted_item_strings = [f"{let}. {clean_opt_for_measurement(body)}" for let, body in normalized_items]
         local_cols = self.calculate_optimal_option_cols(formatted_item_strings, left_indent_cm, printable_width_cm)
         local_max_len = max(len(s) for s in formatted_item_strings) if formatted_item_strings else 0
 
@@ -336,10 +343,22 @@ class RendererBlocksMixin:
 
                 spans = parse_inline_spans(opt_body)
                 self.write_inline_spans(sel, spans)
+                try:
+                    sel.Font.Underline = 0
+                except Exception:
+                    pass
 
                 if col_idx < num_cols - 1 and idx_opt < len(normalized_items) - 1:
+                    try:
+                        sel.Font.Underline = 0
+                    except Exception:
+                        pass
                     sel.TypeText("\t")
 
+            try:
+                sel.Font.Underline = 0
+            except Exception:
+                pass
             sel.TypeParagraph()
         else:
             # 1-column layout
@@ -373,6 +392,10 @@ class RendererBlocksMixin:
 
                 spans = parse_inline_spans(opt_body)
                 self.write_inline_spans(sel, spans)
+                try:
+                    sel.Font.Underline = 0
+                except Exception:
+                    pass
                 sel.TypeParagraph()
 
         sel.ParagraphFormat.LeftIndent = 0

@@ -213,6 +213,11 @@ class ULNWordRenderer(RendererBlocksMixin):
             else:
                 sel.TypeText(text.upper() if is_upper else text)
 
+        try:
+            f.Underline = 0
+        except Exception:
+            pass
+
     def setup_tab_stops(self, sel, num_cols: int, left_indent_cm: float, printable_width_cm: float, max_item_len: int = 0) -> float:
         """Calculates exact equal column division for tab stops so option columns ALWAYS align vertically across all questions."""
         remaining_width_cm = printable_width_cm - left_indent_cm
