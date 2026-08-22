@@ -8,7 +8,8 @@ from renderer_utils import (
     pt_to_cm,
     parse_color_to_rgb_int,
     extract_question_prefix_and_body,
-    split_line_into_option_items
+    split_line_into_option_items,
+    get_gdi_text_measurer
 )
 
 class RendererBlocksMixin:
@@ -403,53 +404,25 @@ class RendererBlocksMixin:
         sel.ParagraphFormat.TabStops.ClearAll()
         self.last_rendered_tag = "OPT"
 
-    def measure_text_width_pt(self, doc, text: str, font_name: str = "Times New Roman", font_size: float = 12.0, is_bold: bool = False) -> float:
-        """Accurately measures physical text width in Word COM without any line wrapping or margin interference."""
+    def measure_text_width_pt(self, doc, text: str, font_name: str = "Times New Roman", font_size: float = 12.0, is_bold: bool = False, is_italic: bool = False) -> float:
+        """Accurately measures physical text width in points using Windows GDI typography engine with caching."""
         if not text:
             return 0.0
-        if not hasattr(self, '_text_width_cache'):
-            self._text_width_cache = {}
-
-        cache_key = (text, font_name, font_size, is_bold)
-        if cache_key in self._text_width_cache:
-            return self._text_width_cache[cache_key]
-
-        try:
-            rng = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
-            rng.ParagraphFormat.Reset()
-            rng.ParagraphFormat.LeftIndent = 0
-            rng.ParagraphFormat.FirstLineIndent = 0
-            rng.ParagraphFormat.RightIndent = -1584.0  # Max Word negative indent (-55.88 cm) so text NEVER wraps across lines!
-            rng.ParagraphFormat.TabStops.ClearAll()
-            rng.Font.Name = font_name
-            rng.Font.Size = font_size
-            rng.Font.Bold = 1 if is_bold else 0
-            rng.Font.Italic = 0
-
-            start_pos = rng.Information(5)
-            rng.Text = text
-            end_rng = doc.Range(rng.End, rng.End)
-            end_pos = end_rng.Information(5)
-            rng.Delete()
-
-            width_pt = end_pos - start_pos
-            if width_pt > 0:
-                self._text_width_cache[cache_key] = width_pt
-                return width_pt
-        except Exception:
-            pass
-
-        char_w = font_size * (0.44 if is_bold else 0.40)
-        calc_w = len(text) * char_w
-        self._text_width_cache[cache_key] = calc_w
-        return calc_w
+        return get_gdi_text_measurer().measure_text_pt(text, font_name=font_name, font_size_pt=font_size, is_bold=is_bold, is_italic=is_italic)
 
     def strip_markup_for_measurement(self, text: str) -> str:
         """Strips inline ULN tags, bold/italic markers, and answer blanks for clean physical text width measurement."""
         if not text:
             return ""
+        # 1. Replace <blank> / [BLANK] with 11 underscores matching write_inline_spans
+        t = re.sub(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '___________', text)
+        # 2. Extract inner text from [text]{tag}
         t = re.sub(r'\[(.*?)\]\{(?:u|b|i|[a-zA-Z0-9#:,]+)\}', r'\1', text)
-        t = re.sub(r'\[\/?ins\]|\*\*|\*|__|_|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '', t)
+        # 3. Strip [ins], [/ins]
+        t = re.sub(r'\[\/?(?:ins|INS)\]', '', t)
+        # 4. Strip markdown bold/italic asterisks while preserving inner text
+        t = re.sub(r'\*\*(.*?)\*\*', r'\1', t)
+        t = re.sub(r'\*(.*?)\*', r'\1', t)
         return t.strip()
 
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
@@ -481,28 +454,33 @@ class RendererBlocksMixin:
 
             # Measure exact physical rendered width of clean lines without markup noise
             clean_lines = [self.strip_markup_for_measurement(l) for l in lines]
-            max_line_w_pt = max(self.measure_text_width_pt(doc, cl, self.font_name, self.font_size, is_bold=True) for cl in clean_lines) if clean_lines else 50.0
+            line_widths_pt = [self.measure_text_width_pt(doc, cl, self.font_name, self.font_size, is_bold=True) for cl in clean_lines]
+            max_line_w_pt = max(line_widths_pt) if line_widths_pt else 50.0
 
-            pad_left_pt = cm_to_pt(0.20)   # Exactly 2.0 mm padding
-            pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
-            pad_top_pt = cm_to_pt(0.12)    # 1.2 mm padding
-            pad_bottom_pt = cm_to_pt(0.12) # 1.2 mm padding
-            extra_buffer_pt = cm_to_pt(0.50) # +5.0 mm extra right margin buffer for corner serifs (y, t, w)
+            pad_left_pt = cm_to_pt(0.25)   # 2.5 mm padding
+            pad_right_pt = cm_to_pt(0.25)  # 2.5 mm padding
+            pad_top_pt = cm_to_pt(0.15)    # 1.5 mm padding
+            pad_bottom_pt = cm_to_pt(0.15) # 1.5 mm padding
+            extra_buffer_pt = cm_to_pt(0.25) # 2.5 mm buffer for italic overhang & corner curve clearance
 
             est_content_w = max_line_w_pt + pad_left_pt + pad_right_pt + extra_buffer_pt
 
             if est_content_w >= (printable_width_pt * 0.85):
                 box_width_pt = printable_width_pt
                 left_offset_pt = 0.0
+                is_full_width = True
             else:
                 box_width_pt = min(printable_width_pt, max(80.0, est_content_w))
                 left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+                is_full_width = False
 
             # Vertical Height: (Num lines * Font Line Height) + Space Between Lines + Top/Bottom Margins + bottom descender clearance
             num_lines = len(lines)
             exact_line_h_pt = self.font_size * 1.25  # Standard single line height
             space_between_pt = 2.0
-            box_height_pt = (num_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + pad_top_pt + pad_bottom_pt + 3.0
+            avail_inner_w = box_width_pt - pad_left_pt - pad_right_pt - extra_buffer_pt
+            total_visual_lines = sum(max(1, math.ceil(lw / max(10.0, avail_inner_w))) for lw in line_widths_pt) if is_full_width else num_lines
+            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + pad_top_pt + pad_bottom_pt + 3.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -527,7 +505,7 @@ class RendererBlocksMixin:
                 tf.MarginLeft = pad_left_pt
                 tf.MarginRight = pad_right_pt
                 try:
-                    tf.WordWrap = -1
+                    tf.WordWrap = -1 if is_full_width else 0
                 except Exception:
                     pass
 
@@ -550,7 +528,7 @@ class RendererBlocksMixin:
                 box_sel.ParagraphFormat.SpaceBefore = 0
                 box_sel.ParagraphFormat.SpaceAfter = 0
                 box_sel.ParagraphFormat.LineSpacingRule = 0
-                box_sel.ParagraphFormat.Alignment = 0  # Left-aligned so longest line reaches exact 2.0 mm right margin
+                box_sel.ParagraphFormat.Alignment = 0  # Left-aligned so longest line reaches exact right margin
                 box_sel.ParagraphFormat.TabStops.ClearAll()
 
                 for idx_line, line_str in enumerate(lines):
@@ -583,59 +561,58 @@ class RendererBlocksMixin:
             clean_words = [self.strip_markup_for_measurement(w) for w in words]
             item_widths_pt = [self.measure_text_width_pt(doc, cw, self.font_name, self.font_size, is_bold=True) for cw in clean_words]
             max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
-            pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
-            pad_vert_pt = cm_to_pt(0.12)   # Exactly 1.2 mm padding
+            pad_horiz_pt = cm_to_pt(0.25)  # 2.5 mm padding
+            pad_vert_pt = cm_to_pt(0.15)   # 1.5 mm padding
+            extra_buffer_pt = cm_to_pt(0.25)  # 2.5 mm buffer for italic overhang & corner curves
+            gap_pt = cm_to_pt(0.8)  # 8mm gap between columns
 
-            # Calculate optimal column count based on physical feasibility (4 -> 3 -> 2 -> 1)
-            cols = 1
-            for test_cols in [4, 3, 2]:
-                if N >= test_cols:
-                    col_maxes = []
-                    for c in range(test_cols):
-                        c_widths = [item_widths_pt[i] for i in range(N) if i % test_cols == c]
-                        col_maxes.append(max(c_widths) if c_widths else 45.0)
-                    gap_pt = cm_to_pt(0.60)  # 6mm gap
-                    pad_pt = cm_to_pt(0.40)  # 4mm pad
-                    needed_w_pt = sum(col_maxes) + ((test_cols - 1) * gap_pt) + pad_pt
-                    if needed_w_pt <= printable_width_pt:
-                        cols = test_cols
-                        break
+            # If items are long sentences/dialogue turns (>22% page width or >20 chars), format as 1 column
+            if max_item_w_pt >= (printable_width_pt * 0.22):
+                cols = 1
+            else:
+                est_slot_w = max_item_w_pt + cm_to_pt(0.8)
+                max_fit_cols = max(1, int(printable_width_pt / est_slot_w))
+                if N <= 5:
+                    cols = min(N, max_fit_cols)
+                elif N <= 8:
+                    cols = min(4, max_fit_cols)
+                elif N <= 10:
+                    cols = min(5, max_fit_cols)
+                else:
+                    cols = min(4, max_fit_cols)
+
+            # Ensure calculated columns actually fit printable page width
+            while cols > 1:
+                col_max_widths_pt = []
+                for c in range(cols):
+                    col_widths = [item_widths_pt[i] for i in range(N) if i % cols == c]
+                    col_max_widths_pt.append(max(col_widths) if col_widths else 45.0)
+                needed_w = sum(col_max_widths_pt) + ((cols - 1) * gap_pt) + (2 * pad_horiz_pt) + extra_buffer_pt
+                if needed_w <= printable_width_pt:
+                    break
+                cols -= 1
 
             lines_bank = []
             for i in range(0, N, cols):
                 lines_bank.append(words[i:i + cols])
 
-            extra_buffer_pt = cm_to_pt(0.50)  # +5.0 mm extra right margin buffer for corner serifs (y, t, w)
-
             if cols == 1:
-                raw_w_pt = max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt
-                if raw_w_pt >= (printable_width_pt * 0.80):
-                    box_width_pt = printable_width_pt
-                    left_offset_pt = 0.0
-                else:
-                    box_width_pt = min(printable_width_pt, max(80.0, raw_w_pt))
-                    left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+                box_width_pt = min(printable_width_pt, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt)
                 tab_stops_pt = [0.0]
             else:
-                # Dynamic Tab Stops based on actual physical word widths per column
                 col_max_widths_pt = []
                 for c in range(cols):
                     col_widths = [item_widths_pt[i] for i in range(N) if i % cols == c]
                     col_max_widths_pt.append(max(col_widths) if col_widths else 45.0)
 
-                gap_pt = cm_to_pt(0.60)  # 6mm gap between columns
                 tab_stops_pt = [0.0]
                 for c in range(cols - 1):
                     next_tab_pt = tab_stops_pt[-1] + col_max_widths_pt[c] + gap_pt
                     tab_stops_pt.append(next_tab_pt)
 
-                raw_w_pt = tab_stops_pt[-1] + col_max_widths_pt[-1] + (2 * pad_horiz_pt) + extra_buffer_pt
-                if raw_w_pt >= (printable_width_pt * 0.80):
-                    box_width_pt = printable_width_pt
-                    left_offset_pt = 0.0
-                else:
-                    box_width_pt = min(printable_width_pt, raw_w_pt)
-                    left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+                box_width_pt = min(printable_width_pt, tab_stops_pt[-1] + col_max_widths_pt[-1] + (2 * pad_horiz_pt) + extra_buffer_pt)
+
+            left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             num_rows = len(lines_bank)
             exact_line_h_pt = self.font_size * 1.25
@@ -665,6 +642,10 @@ class RendererBlocksMixin:
                 tf.MarginLeft = pad_horiz_pt
                 tf.MarginRight = pad_horiz_pt
                 try:
+                    tf.WordWrap = 0  # False: prevent unwanted wrapping of tabbed columns
+                except Exception:
+                    pass
+                try:
                     tf.AutoSize = False
                 except Exception:
                     pass
@@ -677,7 +658,7 @@ class RendererBlocksMixin:
                 box_sel = word.Selection
                 box_sel.Font.Name = self.font_name
                 box_sel.Font.Size = self.font_size
-                box_sel.Font.Bold = 0
+                box_sel.Font.Bold = 1
                 box_sel.Font.Color = 0
 
                 box_sel.ParagraphFormat.SpaceBefore = 0
@@ -695,7 +676,7 @@ class RendererBlocksMixin:
                     box_sel.ParagraphFormat.SpaceAfter = 0
 
                     for idx_w, word_txt in enumerate(chunk):
-                        w_spans = parse_inline_spans(word_txt, default_bold=False)
+                        w_spans = parse_inline_spans(word_txt, default_bold=True)
                         self.write_inline_spans(box_sel, w_spans)
                         box_sel.Font.Color = 0
                         if idx_w < len(chunk) - 1:
