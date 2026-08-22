@@ -1229,7 +1229,10 @@ class RendererBlocksMixin:
         col_blank_strs = []
 
         if has_blanks:
-            # Measure max width of the word part (before blank) in each column
+            u_pt = self.measure_text_width_pt(doc, '_', self.font_name, self.font_size, is_bold=False)
+            u_width_cm = max(0.20, pt_to_cm(u_pt) * 1.15)
+
+            # Measure max width of the full word part (number + word) in each column
             col_word_max_w_cm = []
             for c_idx in range(num_cols):
                 max_w = 0.0
@@ -1238,7 +1241,10 @@ class RendererBlocksMixin:
                         raw_c = b.cols[c_idx]
                         clean_no_ins = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', raw_c, flags=re.IGNORECASE).replace('#', '').strip()
                         word_p = re.sub(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '', clean_no_ins).strip()
-                        w_pt = self.measure_text_width_pt(doc, word_p, self.font_name, self.font_size, is_bold=False)
+                        num_m = re.match(r'^\s*#?(\d+[\.\)])', raw_c)
+                        num_str = f"{num_m.group(1)} " if num_m else ""
+                        full_word = f"{num_str}{word_p}"
+                        w_pt = self.measure_text_width_pt(doc, full_word, self.font_name, self.font_size, is_bold=False)
                         max_w = max(max_w, pt_to_cm(w_pt) * 1.15)
                 col_word_max_w_cm.append(max_w if max_w > 0 else 2.5)
 
@@ -1247,12 +1253,12 @@ class RendererBlocksMixin:
                 next_start_cm = col_starts_cm[c_idx + 1] if (c_idx + 1 < num_cols) else printable_width_cm
 
                 # Exactly 2.0 mm (0.20 cm) after the longest word
-                blank_tab_cm = min(next_start_cm - 1.00, start_cm + col_word_max_w_cm[c_idx] + 0.20)
+                blank_tab_cm = start_cm + col_word_max_w_cm[c_idx] + 0.20
                 # Exactly 5.0 mm (0.50 cm) before the next column start
                 blank_end_cm = next_start_cm - 0.50
                 blank_width_cm = max(0.60, blank_end_cm - blank_tab_cm)
 
-                num_u = max(4, int(round(blank_width_cm / 0.15)))
+                num_u = max(3, int(blank_width_cm / u_width_cm))
                 col_blank_strs.append('_' * num_u)
 
                 if c_idx > 0:
