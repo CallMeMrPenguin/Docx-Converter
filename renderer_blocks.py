@@ -457,11 +457,11 @@ class RendererBlocksMixin:
             line_widths_pt = [self.measure_text_width_pt(doc, cl, self.font_name, self.font_size, is_bold=True) for cl in clean_lines]
             max_line_w_pt = max(line_widths_pt) if line_widths_pt else 50.0
 
-            pad_left_pt = cm_to_pt(0.25)   # 2.5 mm padding
-            pad_right_pt = cm_to_pt(0.25)  # 2.5 mm padding
-            pad_top_pt = cm_to_pt(0.15)    # 1.5 mm padding
-            pad_bottom_pt = cm_to_pt(0.15) # 1.5 mm padding
-            extra_buffer_pt = cm_to_pt(0.25) # 2.5 mm buffer for italic overhang & corner curve clearance
+            pad_left_pt = cm_to_pt(0.20)   # Exactly 2.0 mm left margin
+            pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm right margin
+            pad_top_pt = 0.0               # 0.0 pt top margin
+            pad_bottom_pt = 0.0            # 0.0 pt bottom margin
+            extra_buffer_pt = cm_to_pt(0.20) # 2.0 mm corner clearance buffer
 
             est_content_w = max_line_w_pt + pad_left_pt + pad_right_pt + extra_buffer_pt
 
@@ -474,13 +474,13 @@ class RendererBlocksMixin:
                 left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
                 is_full_width = False
 
-            # Vertical Height: (Num lines * Font Line Height) + Space Between Lines + Top/Bottom Margins + bottom descender clearance
+            # Vertical Height: (Num lines * Font Line Height) + Space Between Lines + 0 top/bottom margins
             num_lines = len(lines)
             exact_line_h_pt = self.font_size * 1.25  # Standard single line height
             space_between_pt = 2.0
             avail_inner_w = box_width_pt - pad_left_pt - pad_right_pt - extra_buffer_pt
             total_visual_lines = sum(max(1, math.ceil(lw / max(10.0, avail_inner_w))) for lw in line_widths_pt) if is_full_width else num_lines
-            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + pad_top_pt + pad_bottom_pt + 3.0
+            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + 2.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -495,13 +495,18 @@ class RendererBlocksMixin:
                 shape.RelativeVerticalPosition = 2
                 shape.Left = left_offset_pt
                 shape.Top = 0
-                shape.WrapFormat.Type = 7
-                shape.WrapFormat.DistanceTop = 12.0
-                shape.WrapFormat.DistanceBottom = 12.0
+                shape.WrapFormat.Type = 3  # wdWrapTopBottom
+                shape.WrapFormat.DistanceTop = 10.0
+                shape.WrapFormat.DistanceBottom = 10.0
+                try:
+                    shape.LockAspectRatio = False
+                    shape.LockAnchor = False
+                except Exception:
+                    pass
 
                 tf = shape.TextFrame
-                tf.MarginTop = pad_top_pt
-                tf.MarginBottom = pad_bottom_pt
+                tf.MarginTop = 0
+                tf.MarginBottom = 0
                 tf.MarginLeft = pad_left_pt
                 tf.MarginRight = pad_right_pt
                 try:
@@ -542,11 +547,6 @@ class RendererBlocksMixin:
                     if idx_line < len(lines) - 1:
                         box_sel.TypeParagraph()
 
-                try:
-                    shape.ConvertToInlineShape()
-                except Exception:
-                    pass
-
             except Exception as e:
                 print(f"[ULNRenderer] Warning creating Formula/Callout TextFrame box shape: {e}")
 
@@ -561,9 +561,9 @@ class RendererBlocksMixin:
             clean_words = [self.strip_markup_for_measurement(w) for w in words]
             item_widths_pt = [self.measure_text_width_pt(doc, cw, self.font_name, self.font_size, is_bold=True) for cw in clean_words]
             max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
-            pad_horiz_pt = cm_to_pt(0.25)  # 2.5 mm padding
-            pad_vert_pt = cm_to_pt(0.15)   # 1.5 mm padding
-            extra_buffer_pt = cm_to_pt(0.25)  # 2.5 mm buffer for italic overhang & corner curves
+            pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
+            pad_vert_pt = 0.0              # 0.0 mm top/bottom margin
+            extra_buffer_pt = cm_to_pt(0.20)  # 2.0 mm buffer for corner curves
             gap_pt = cm_to_pt(0.8)  # 8mm gap between columns
 
             # If items are long sentences/dialogue turns (>22% page width or >20 chars), format as 1 column
@@ -617,7 +617,7 @@ class RendererBlocksMixin:
             num_rows = len(lines_bank)
             exact_line_h_pt = self.font_size * 1.25
             space_between_pt = 2.0
-            box_height_pt = (num_rows * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + (2 * pad_vert_pt) + 3.0
+            box_height_pt = (num_rows * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + 2.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -632,13 +632,18 @@ class RendererBlocksMixin:
                 shape.RelativeVerticalPosition = 2
                 shape.Left = left_offset_pt
                 shape.Top = 0
-                shape.WrapFormat.Type = 7
-                shape.WrapFormat.DistanceTop = 12.0
-                shape.WrapFormat.DistanceBottom = 12.0
+                shape.WrapFormat.Type = 3  # wdWrapTopBottom
+                shape.WrapFormat.DistanceTop = 10.0
+                shape.WrapFormat.DistanceBottom = 10.0
+                try:
+                    shape.LockAspectRatio = False
+                    shape.LockAnchor = False
+                except Exception:
+                    pass
 
                 tf = shape.TextFrame
-                tf.MarginTop = pad_vert_pt
-                tf.MarginBottom = pad_vert_pt
+                tf.MarginTop = 0
+                tf.MarginBottom = 0
                 tf.MarginLeft = pad_horiz_pt
                 tf.MarginRight = pad_horiz_pt
                 try:
@@ -684,11 +689,6 @@ class RendererBlocksMixin:
 
                     if idx_line < len(lines_bank) - 1:
                         box_sel.TypeParagraph()
-
-                try:
-                    shape.ConvertToInlineShape()
-                except Exception:
-                    pass
 
             except Exception as e:
                 print(f"[ULNRenderer] Warning creating Word Bank TextFrame box shape: {e}")
