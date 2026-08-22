@@ -82,11 +82,18 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
     [OPT] the most beautifully | more beautifully | beautifully | as beautiful [/OPT]
     [OPT] for | since | in | at [/OPT]
 
-- [TAB2] : 2-Column Side-by-Side Paragraph Split Layout (Column 1 | Column 2)
-  - Used for 2-column matching, error correction with answer blanks on the right, or 2-column header tables.
-  - In Matching exercises (Questions in Col 1 | Answers in Col 2):
+- [TAB2], [TAB3], [TAB4] : Multi-Column Side-by-Side Paragraph Split Layout (Column 1 | Column 2 | Column 3...)
+  - [TAB2]: Used for 2-column matching, error correction with answer blanks on the right, or 2-column picture vocabulary grids.
     [TAB2] [P0] 1. How many calories should I eat in a day? | a. A little better, but still feel tired.
     [TAB2] [P0] 2. Shall we go and play basketball? | b. Wash your face daily and use gentle skin care products.
+  - [TAB3]: Used for 3-column exercises (e.g. Countable / Uncountable noun classification, short vocabulary lists with answer blanks):
+    [TAB3] #1. beef _____ | #7. spinach _____ | #13. turmeric _____
+    [TAB3] #2. apple _____ | #8. egg _____ | #14. pancake _____
+    [TAB3] #3. bread _____ | #9. butter _____ | #15. vegetable _____
+    [TAB3] #4. biscuit _____ | #10. lemonade _____ | #16. coffee _____
+    [TAB3] #5. rice _____ | #11. sandwich _____ | #17. sugar _____
+    [TAB3] #6. spring roll _____ | #12. ham _____ | #18. orange _____
+  - [TAB4]: Used for 4-column short item layouts.
 
 - [TABLE] ... [/TABLE] : Multi-row visible bordered data table container.
   - STRICT MANDATE: [TABLE] is strictly and exclusively reserved for visible bordered grid tables.
@@ -106,7 +113,6 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
     - Example: `[BOX] S + have/has + V3/ed + ... [/BOX]`
   - For Framed Word Banks: Separate vocabulary items using pipes `|`. The compiler will auto-calculate columns into a balanced framed word bank.
     - Example: `[BOX] photosynthesis | chlorophyll | sunlight [/BOX]`
-  - NOTE: If the word list has NO border frame in the original, use `[TABLE: borderless]` instead!
 
 - [QUOTE] ... [/QUOTE] : Indented, JUSTIFIED text block for reading passages, stories, or dialogs (first line indent: 0.75 cm, justified, no empty line gaps between paragraphs).
 
@@ -178,9 +184,9 @@ E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES:
      [TAB2] 11. What does the sign say? | [PIC]
      [OPT] Maximum 40 vehicles are allowed on this road. | You shouldn't exceed this maximum speed. | Minimum 40 vehicles are allowed on this road. | You shouldn't move below this speed. [/OPT]
 
-F. STRICT RULE: WHEN TO USE [TAB2] VS STANDARD [P0]/[P1]:
-   - DO NOT use [TAB2] for regular sentences, sentence transformations, or inline fill-in-the-blanks.
-   - Use [TAB2] ONLY when there are two distinct side-by-side columns:
+F. STRICT RULE: WHEN TO USE [TAB2] / [TAB3] / [TAB4] VS STANDARD [P0]/[P1]:
+   - DO NOT use [TAB2]/[TAB3] for regular sentences, sentence transformations, or inline fill-in-the-blanks.
+   - Use [TAB2], [TAB3], [TAB4] ONLY when there are distinct side-by-side columns:
      1. Error Correction lines with a right-hand answer blank column:
         [NUM]
         [TAB2] [P0] #1. Nam is my classmates. He watches TV every night. | <blank>
@@ -192,6 +198,15 @@ F. STRICT RULE: WHEN TO USE [TAB2] VS STANDARD [P0]/[P1]:
         [TAB2] [P0] #2. acne | b. a skin condition that causes small red spots...
         [/NUM]
      3. 2-Column Picture Vocabulary & Word Completion grids (see section I below).
+     4. 3-Column or 4-Column Short Items / Classification Lists (e.g. Countable/Uncountable, Part of Speech labeling):
+        [NUM]
+        [TAB3] #1. beef _____ | #7. spinach _____ | #13. turmeric _____
+        [TAB3] #2. apple _____ | #8. egg _____ | #14. pancake _____
+        [TAB3] #3. bread _____ | #9. butter _____ | #15. vegetable _____
+        [TAB3] #4. biscuit _____ | #10. lemonade _____ | #16. coffee _____
+        [TAB3] #5. rice _____ | #11. sandwich _____ | #17. sugar _____
+        [TAB3] #6. spring roll _____ | #12. ham _____ | #18. orange _____
+        [/NUM]
 
 G. DIALOGUE & CONVERSATION EXERCISES:
    - CASE 1: Numbered Speaking Q&A Pairs (Numbered questions with Speaker A blank line):

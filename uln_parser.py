@@ -38,12 +38,14 @@ class ULNTableData:
 
 @dataclass
 class ULNBlock:
-    tag: str  # "H1", "H2", "H3", "H4", "H5", "H6", "P0", "P1", "P2", "TAB2", "BOX", "QUOTE", "PIC", "TABLE", "P", "INS"
+    tag: str  # "H1", "H2", "H3", "H4", "H5", "H6", "P0", "P1", "P2", "TAB", "TAB2", "TAB3", "TAB4", "BOX", "QUOTE", "PIC", "TABLE", "P", "INS"
     content: str = ""
     col1: str = ""
     col2: str = ""
+    cols: List[str] = field(default_factory=list)
     col1_spans: List[InlineSpan] = field(default_factory=list)
     col2_spans: List[InlineSpan] = field(default_factory=list)
+    cols_spans: List[List[InlineSpan]] = field(default_factory=list)
     spans: List[InlineSpan] = field(default_factory=list)
     pic: Optional[PicInfo] = None
     table_data: Optional[ULNTableData] = None
@@ -410,7 +412,7 @@ class ULNParser:
             if not trimmed:
                 continue
 
-            tag_match = re.match(r'^\[(H1|H2|H3|H4|H5|H6|P0|P1|P2|TAB2|PIC|INS)\]\s*(.*)$', trimmed, re.IGNORECASE)
+            tag_match = re.match(r'^\[(H1|H2|H3|H4|H5|H6|P0|P1|P2|TAB\d*|PIC|INS)\]\s*(.*)$', trimmed, re.IGNORECASE)
 
             if tag_match:
                 tag = tag_match.group(1).upper()
@@ -422,39 +424,51 @@ class ULNParser:
                     pic_info = parse_pic_tag(rest_content)
                     blocks.append(ULNBlock(tag=tag, content=rest_content, spans=spans, pic=pic_info, is_instruction=True))
 
-                elif tag == "TAB2":
+                elif tag.startswith("TAB"):
+                    # Check if line starts with [PIC: ...] followed by text
                     pic_start_match = re.match(r'^\s*(\[PIC:[^\]]+\])\s+(.*)$', rest_content, re.IGNORECASE)
-                    if pic_start_match:
-                        col1_raw = pic_start_match.group(1).strip()
-                        col2_raw = pic_start_match.group(2).strip()
-                    elif '\t' in rest_content:
-                        parts = rest_content.split('\t', 1)
-                        col1_raw = parts[0].strip() if len(parts) > 0 else ""
-                        col2_raw = parts[1].strip() if len(parts) > 1 else ""
+                    if pic_start_match and tag == "TAB2":
+                        parts = [pic_start_match.group(1).strip(), pic_start_match.group(2).strip()]
                     elif ' | ' in rest_content:
-                        parts = rest_content.split(' | ', 1)
-                        col1_raw = parts[0].strip() if len(parts) > 0 else ""
-                        col2_raw = parts[1].strip() if len(parts) > 1 else ""
+                        parts = [p.strip() for p in rest_content.split(' | ') if p.strip()]
+                    elif '|' in rest_content:
+                        parts = [p.strip() for p in rest_content.split('|') if p.strip()]
+                    elif '\t' in rest_content:
+                        parts = [p.strip() for p in rest_content.split('\t') if p.strip()]
                     else:
-                        parts = re.split(r'\s{2,}', rest_content, 1)
-                        col1_raw = parts[0].strip() if len(parts) > 0 else ""
-                        col2_raw = parts[1].strip() if len(parts) > 1 else ""
+                        parts = [p.strip() for p in re.split(r'\s{3,}', rest_content) if p.strip()]
 
-                    c1_tag_match = re.match(r'^\s*\[(P0|P1|P2)\]\s*(.*)$', col1_raw, re.IGNORECASE)
-                    if c1_tag_match:
-                        col1_raw = c1_tag_match.group(2)
+                    if len(parts) < 2:
+                        parts = [rest_content.strip(), ""]
 
-                    c2_tag_match = re.match(r'^\s*\[(P0|P1|P2)\]\s*(.*)$', col2_raw, re.IGNORECASE)
-                    if c2_tag_match:
-                        col2_raw = c2_tag_match.group(2)
+                    clean_cols = []
+                    cols_spans = []
+                    for part in parts:
+                        c_match = re.match(r'^\s*\[(P0|P1|P2)\]\s*(.*)$', part, re.IGNORECASE)
+                        c_text = c_match.group(2) if c_match else part
+                        clean_cols.append(c_text)
+                        cols_spans.append(parse_inline_spans(c_text))
 
-                    col1_spans = parse_inline_spans(col1_raw)
-                    col2_spans = parse_inline_spans(col2_raw)
+                    num_cols = len(clean_cols)
+                    actual_tag = f"TAB{num_cols}" if tag in ("TAB", "TAB2") and num_cols > 2 else tag
+                    if actual_tag == "TAB":
+                        actual_tag = f"TAB{num_cols}"
 
-                    pic_info = parse_pic_tag(col2_raw) or parse_pic_tag(col1_raw)
+                    col1_raw = clean_cols[0] if len(clean_cols) > 0 else ""
+                    col2_raw = clean_cols[1] if len(clean_cols) > 1 else ""
+                    col1_spans = cols_spans[0] if len(cols_spans) > 0 else []
+                    col2_spans = cols_spans[1] if len(cols_spans) > 1 else []
+
+                    pic_info = None
+                    for c_raw in clean_cols:
+                        pic_info = parse_pic_tag(c_raw)
+                        if pic_info:
+                            break
 
                     blocks.append(ULNBlock(
-                        tag="TAB2",
+                        tag=actual_tag,
+                        cols=clean_cols,
+                        cols_spans=cols_spans,
                         col1=col1_raw,
                         col2=col2_raw,
                         col1_spans=col1_spans,

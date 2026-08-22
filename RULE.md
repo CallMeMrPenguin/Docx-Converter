@@ -60,11 +60,14 @@ For multi-step tasks, state a brief plan:
 
 Strong success criteria let you loop independently. Weak criteria ("make it work") require constant clarification.
 
-## 5. STRICT DOMAIN RULES: ABSOLUTELY NO BORDERLESS TABLES (`[TABLE: borderless]`)
+## 5. STRICT DOMAIN RULES: NO BORDERLESS TABLES — USE NATIVE TAB STOPS (`[TAB2]`, `[TAB3]`, `[TAB4]`)
 
 **STRICTLY FORBIDDEN: BORDERLESS TABLES.**
 - Under NO circumstances may `[TABLE: borderless]` be used, generated, or recommended.
-- All 2-column side-by-side layouts, matching exercises, picture grids, sign/notice diagrams, or definition lists MUST use native paragraph tab stops via `[TAB2]`.
+- All side-by-side multi-column layouts MUST use native paragraph tab stops:
+  - **`[TAB2]`**: 2-column matching, side-by-side error corrections, picture vocabulary grids, sign/notice diagrams.
+  - **`[TAB3]`**: 3-column exercises (e.g. Countable / Uncountable noun classification, short vocabulary lists with answer blanks).
+  - **`[TAB4]`**: 4-column short item layouts.
 - `[TABLE] ... [/TABLE]` is strictly and exclusively reserved for visible bordered grid tables.
 
 ---

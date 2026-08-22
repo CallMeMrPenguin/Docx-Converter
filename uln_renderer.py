@@ -681,16 +681,22 @@ class ULNWordRenderer(RendererBlocksMixin):
                             self.write_inline_spans(sel, c_spans)
                             sel.TypeParagraph()
 
-            elif tag == "TAB2":
+            elif tag.startswith("TAB"):
+                num_cols = len(block.cols) if block.cols else (3 if tag == "TAB3" else (4 if tag == "TAB4" else 2))
+                if num_cols >= 3:
+                    self.current_block_tag = tag
+                    self.render_tab_multi(sel, doc, block, idx_block, blocks, printable_width_cm)
+                    continue
+
                 self.current_block_tag = "TAB2"
                 group_start = idx_block
-                while group_start > 0 and blocks[group_start - 1].tag == "TAB2":
+                while group_start > 0 and blocks[group_start - 1].tag.startswith("TAB") and (not blocks[group_start - 1].cols or len(blocks[group_start - 1].cols) == 2):
                     group_start -= 1
 
                 # Collect the full group from start to end
                 tab2_group = []
                 lookahead = group_start
-                while lookahead < len(blocks) and blocks[lookahead].tag == "TAB2":
+                while lookahead < len(blocks) and blocks[lookahead].tag.startswith("TAB") and (not blocks[lookahead].cols or len(blocks[lookahead].cols) == 2):
                     tab2_group.append(blocks[lookahead])
                     lookahead += 1
 
