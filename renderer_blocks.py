@@ -1295,6 +1295,11 @@ class RendererBlocksMixin:
                     tab_stops_cm.append(curr_pos)
 
         # Apply paragraph formatting
+        try:
+            sel.Range.ListFormat.RemoveNumbers()
+        except Exception:
+            pass
+
         sel.ParagraphFormat.LeftIndent = 0
         sel.ParagraphFormat.FirstLineIndent = 0
         sel.ParagraphFormat.SpaceBefore = 2

@@ -115,30 +115,53 @@ def open_prompt_editor_dialog(parent_root):
     tool_frame = tk.Frame(win, bg="#111827", padx=16, pady=8)
     tool_frame.pack(fill="x")
 
+    def _reset_status():
+        try:
+            if win.winfo_exists() and status_lbl.winfo_exists():
+                status_lbl.config(text=f"File: {get_prompt_storage_path()}", fg="#94a3b8")
+        except Exception:
+            pass
+
     def copy_all():
         text = p_text.get("1.0", tk.END).strip()
         parent_root.clipboard_clear()
         parent_root.clipboard_append(text)
-        status_lbl.config(text="✓ Đã sao chép toàn bộ Prompt vào Clipboard!", fg="#4ade80")
-        parent_root.after(3000, lambda: status_lbl.config(text=f"File: {get_prompt_storage_path()}", fg="#94a3b8"))
+        try:
+            if win.winfo_exists() and status_lbl.winfo_exists():
+                status_lbl.config(text="✓ Đã sao chép toàn bộ Prompt vào Clipboard!", fg="#4ade80")
+        except Exception:
+            pass
+        parent_root.after(3000, _reset_status)
 
     def save_changes():
         text = p_text.get("1.0", tk.END).rstrip() + "\n"
         if save_prompt_text(text):
-            status_lbl.config(text="✓ Đã lưu thay đổi Prompt thành công!", fg="#4ade80")
+            try:
+                if win.winfo_exists() and status_lbl.winfo_exists():
+                    status_lbl.config(text="✓ Đã lưu thay đổi Prompt thành công!", fg="#4ade80")
+            except Exception:
+                pass
             messagebox.showinfo("Thành công", "Đã lưu nội dung Prompt thành công!")
         else:
-            status_lbl.config(text="⚠ Lỗi khi lưu file prompt!", fg="#f43f5e")
+            try:
+                if win.winfo_exists() and status_lbl.winfo_exists():
+                    status_lbl.config(text="⚠ Lỗi khi lưu file prompt!", fg="#f43f5e")
+            except Exception:
+                pass
             messagebox.showerror("Lỗi", "Không thể lưu file prompt.")
-        parent_root.after(3000, lambda: status_lbl.config(text=f"File: {get_prompt_storage_path()}", fg="#94a3b8"))
+        parent_root.after(3000, _reset_status)
 
     def reset_default():
         if messagebox.askyesno("Xác nhận", "Bạn có chắc chắn muốn khôi phục lại Prompt mặc định ban đầu không?"):
             default_content = reset_prompt_text()
             p_text.delete("1.0", tk.END)
             p_text.insert("1.0", default_content)
-            status_lbl.config(text="✓ Đã khôi phục Prompt về mặc định!", fg="#38bdf8")
-            parent_root.after(3000, lambda: status_lbl.config(text=f"File: {get_prompt_storage_path()}", fg="#94a3b8"))
+            try:
+                if win.winfo_exists() and status_lbl.winfo_exists():
+                    status_lbl.config(text="✓ Đã khôi phục Prompt về mặc định!", fg="#38bdf8")
+            except Exception:
+                pass
+            parent_root.after(3000, _reset_status)
 
     def open_folder():
         storage_path = get_prompt_storage_path()
