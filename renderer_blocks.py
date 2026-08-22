@@ -192,7 +192,7 @@ class RendererBlocksMixin:
     def calculate_optimal_option_cols(self, items: List[str], left_indent_cm: float, printable_width_cm: float) -> int:
         """
         Calculates optimal column count (1, 2, 3, or 4 columns) for multiple-choice options
-        based on exact physical GDI typographical width so text wrapping NEVER occurs.
+        based on exact physical GDI typographical width with Word metrics (1.15x) so text wrapping NEVER occurs.
         """
         N = len(items)
         if N <= 1:
@@ -201,14 +201,14 @@ class RendererBlocksMixin:
         remaining_width_cm = max(5.0, printable_width_cm - left_indent_cm)
         remaining_width_pt = cm_to_pt(remaining_width_cm)
 
-        # Measure exact physical width in points of each option item
+        # Measure exact physical width in points of each option item with Word typographical scaling (1.15x)
         clean_items = [self.strip_markup_for_measurement(item) for item in items]
         measurer = get_gdi_text_measurer()
-        item_widths_pt = [measurer.measure_text_pt(ci, font_name=self.font_name, font_size_pt=self.font_size, is_bold=False) for ci in clean_items]
+        item_widths_pt = [measurer.measure_text_pt(ci, font_name=self.font_name, font_size_pt=self.font_size, is_bold=False) * 1.15 for ci in clean_items]
         max_item_w_pt = max(item_widths_pt) if item_widths_pt else 0.0
 
-        # Safety gap between columns (at least 6.0 mm = ~17.0 pt)
-        col_gap_pt = cm_to_pt(0.60)
+        # Minimum safety distance between columns (strictly >= 5.0 mm = 0.50 cm)
+        col_gap_pt = cm_to_pt(0.50)
 
         # Candidate column counts to evaluate based on total items
         if N >= 4:

@@ -705,7 +705,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                     col2_tab_pos_cm = printable_width_cm - blank_w_cm
                 else:
                     # Standard 2-Column Matching Layout:
-                    # Measure exact physical width of longest Column 1 line using Windows GDI for 100.0% precision
+                    # Measure exact physical width of longest Column 1 line using Windows GDI with Word typographical scaling (1.15x)
                     c1_clean_texts = []
                     for b in tab2_group:
                         raw_t = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.col1, flags=re.IGNORECASE).replace('#', '').strip()
@@ -713,10 +713,27 @@ class ULNWordRenderer(RendererBlocksMixin):
                         c1_clean_texts.append(clean_t)
 
                     max_c1_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in c1_clean_texts) if c1_clean_texts else 100.0
-                    exact_end_cm = base_indent_cm + pt_to_cm(max_c1_w_pt)
+                    c1_word_w_cm = pt_to_cm(max_c1_w_pt) * 1.15
 
-                    # Tab Stop = exact end of longest Column 1 line + exactly 5.0 mm (0.50 cm) gap
-                    col2_tab_pos_cm = min(printable_width_cm - 3.5, exact_end_cm + 0.50)
+                    # Measure Column 2 width to ensure both columns fit cleanly on the page
+                    c2_clean_texts = []
+                    for b in tab2_group:
+                        clean_c2 = self.strip_markup_for_measurement(b.col2.strip())
+                        c2_clean_texts.append(clean_c2)
+                    max_c2_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in c2_clean_texts) if c2_clean_texts else 50.0
+                    c2_word_w_cm = pt_to_cm(max_c2_w_pt) * 1.15
+
+                    min_gap_cm = 0.50  # MINIMUM DISTANCE BETWEEN 2 COLUMNS: STRICTLY >= 5.0 MM (0.50 cm)
+
+                    # Ideal Tab Stop = base_indent + Word physical text end of longest Column 1 line + 5.0 mm minimum gap
+                    ideal_tab_cm = base_indent_cm + c1_word_w_cm + min_gap_cm
+
+                    # If both columns fit on 1 line:
+                    if ideal_tab_cm + c2_word_w_cm <= printable_width_cm:
+                        col2_tab_pos_cm = ideal_tab_cm
+                    else:
+                        # If row is too wide, reserve right space for Column 2 and let Column 1 wrap cleanly
+                        col2_tab_pos_cm = max(base_indent_cm + 4.0, printable_width_cm - max(3.5, c2_word_w_cm))
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
@@ -784,20 +801,6 @@ class ULNWordRenderer(RendererBlocksMixin):
                     col2_trim = block.col2.strip()
                     m_opt = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z])[\.\)](?:\*\*|\*|\]|\}|\{u\}|\))*)\s+(.*)$', col2_trim)
 
-                    pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
-                    if q_num is not None:
-                        num_fmt = self.get_effective_number_format(pref, delim)
-                        self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                        from uln_parser import parse_inline_spans
-                        c1_spans = parse_inline_spans(c1_body.strip())
-                        self.write_inline_spans(sel, c1_spans)
-                    else:
-                        try:
-                            sel.Range.ListFormat.RemoveNumbers()
-                        except Exception:
-                            pass
-                        self.write_inline_spans(sel, block.col1_spans)
-
                     # Single tab stop: col1 text → \t → col2 content (option letter + body inline)
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_tab_pos_cm)
                     sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-col1_needed_cm)
@@ -805,6 +808,36 @@ class ULNWordRenderer(RendererBlocksMixin):
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
                     sel.ParagraphFormat.KeepWithNext = False
                     sel.ParagraphFormat.PageBreakBefore = False
+
+                    try:
+                        sel.Range.ListFormat.RemoveNumbers()
+                    except Exception:
+                        pass
+
+                    pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
+                    if q_num is not None:
+                        # Write formatted question number directly (bold number + dot) to ensure exact positioning
+                        delim_char = delim if delim else "."
+                        num_prefix_str = f"{q_num}{delim_char} "
+                        sel.Font.Name = self.font_name
+                        sel.Font.Size = self.font_size
+                        sel.Font.Bold = 1
+                        sel.Font.Italic = 0
+                        sel.Font.Underline = 0
+                        q_color_int = parse_color_to_rgb_int(self.question_color)
+                        if q_color_int is not None:
+                            sel.Font.Color = q_color_int
+                        else:
+                            sel.Font.Color = 0
+                        sel.TypeText(num_prefix_str)
+                        sel.Font.Bold = 0
+                        sel.Font.Color = 0
+
+                        from uln_parser import parse_inline_spans
+                        c1_spans = parse_inline_spans(c1_body.strip())
+                        self.write_inline_spans(sel, c1_spans)
+                    else:
+                        self.write_inline_spans(sel, block.col1_spans)
 
                     sel.TypeText("\t")
 
