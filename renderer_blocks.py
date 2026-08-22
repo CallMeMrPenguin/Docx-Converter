@@ -492,9 +492,9 @@ class RendererBlocksMixin:
         extra_buffer_pt = cm_to_pt(0.20)   # 2.0 mm corner buffer
         gap_pt = cm_to_pt(0.80)            # 8.0 mm inter-column gap
 
-        # If items are long sentences (>28% page width), use single column
-        if max_item_w_pt >= (printable_width_pt * 0.28):
-            return 1, [[w] for w in words], min(printable_width_pt, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt), [0.0]
+        # If items are exceptionally long sentences (>85% page width), use single column
+        if max_item_w_pt >= (printable_width_pt * 0.85):
+            return 1, [[w] for w in words], printable_width_pt, [0.0]
 
         items_with_w = list(zip(words, item_widths_pt))
 

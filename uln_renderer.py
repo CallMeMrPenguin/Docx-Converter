@@ -392,11 +392,12 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                 # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct
                 blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', block.content, re.IGNORECASE)
-                # Check if paragraph has trailing picture [PIC] or [PIC: ...]
                 trailing_pic_match = re.search(r'\s*(\[PIC(?::[^\]]+)?\])\s*$', block.content, re.IGNORECASE)
-                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank)
-                is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', block.content)) or bool(re.search(r'_{15,}', block.content)) or is_dialogue_line
-                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and not trailing_pic_match and is_transform_or_long) else None
+                is_arrow_rewrite = bool(re.search(r'(?:→|->|=>|➔|➜)', block.content))
+                # STRICT RULE: NEVER enable full tab leader if has_next_opt is True!
+                # ONLY enable for explicit arrow rewrites (→), standalone long blank rewrites (____), or non-OPT dialogues!
+                should_allow_full_blank = (not has_next_opt) and (is_arrow_rewrite or bool(re.search(r'_{15,}', block.content)) or (is_dialogue_line and not has_next_opt))
+                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and not trailing_pic_match and should_allow_full_blank) else None
 
                 if blank_symbol_match:
                     trailing_sym = blank_symbol_match.group(1).strip()
@@ -420,16 +421,16 @@ class ULNWordRenderer(RendererBlocksMixin):
                     text_part = block.content[:trailing_pic_match.start()].strip()
                     pic_str = trailing_pic_match.group(1).strip()
                     pic_info = parse_pic_tag(pic_str) or PicInfo(description="Activity Picture", pos="right", size="small")
-                    pic_w_cm = 3.6
-                    pic_h_cm = 2.5
+                    pic_w_cm = 2.0
+                    pic_h_cm = 1.4
                     col_pic_pos_cm = printable_width_cm - pic_w_cm
 
                     sel.ParagraphFormat.LeftIndent = 0
                     sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.TabStops.ClearAll()
                     sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col_pic_pos_cm), Alignment=0)
-                    sel.ParagraphFormat.SpaceBefore = 4
-                    sel.ParagraphFormat.SpaceAfter = 4
+                    sel.ParagraphFormat.SpaceBefore = 3
+                    sel.ParagraphFormat.SpaceAfter = 3
                     sel.ParagraphFormat.KeepWithNext = False
 
                     pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
@@ -646,9 +647,9 @@ class ULNWordRenderer(RendererBlocksMixin):
                 blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', content_to_render, re.IGNORECASE)
                 # Check if paragraph has trailing picture [PIC] or [PIC: ...]
                 trailing_pic_match = re.search(r'\s*(\[PIC(?::[^\]]+)?\])\s*$', content_to_render, re.IGNORECASE)
-                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank)
-                is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', content_to_render)) or bool(re.search(r'_{15,}', content_to_render)) or is_dlg_speaker
-                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', content_to_render, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and not trailing_pic_match and is_transform_or_long) else None
+                is_arrow_rewrite = bool(re.search(r'(?:→|->|=>|➔|➜)', content_to_render)) or bool(re.search(r'(?:→|->|=>|➔|➜)', block.content))
+                should_allow_full_blank = (not has_next_opt) and (is_arrow_rewrite or (tag == "P1") or bool(re.search(r'_{15,}', content_to_render)) or is_dlg_speaker)
+                trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', content_to_render, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and not trailing_pic_match and should_allow_full_blank) else None
 
                 if blank_symbol_match:
                     trailing_sym = blank_symbol_match.group(1).strip()
@@ -671,8 +672,8 @@ class ULNWordRenderer(RendererBlocksMixin):
                     text_part = content_to_render[:trailing_pic_match.start()].strip()
                     pic_str = trailing_pic_match.group(1).strip()
                     pic_info = parse_pic_tag(pic_str) or PicInfo(description="Activity Picture", pos="right", size="small")
-                    pic_w_cm = 3.6
-                    pic_h_cm = 2.5
+                    pic_w_cm = 2.0
+                    pic_h_cm = 1.4
                     col_pic_pos_cm = printable_width_cm - pic_w_cm
 
                     sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
@@ -907,6 +908,11 @@ class ULNWordRenderer(RendererBlocksMixin):
                         col2_trim = block.col2.strip()
                         m_opt = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z])[\.\)](?:\*\*|\*|\]|\}|\{u\}|\))*)\s+(.*)$', col2_trim)
 
+                        try:
+                            sel.Range.ListFormat.RemoveNumbers()
+                        except Exception:
+                            pass
+
                         # Single tab stop: col1 text → \t → col2 content (option letter + body inline)
                         sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_tab_pos_cm)
                         sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-col1_needed_cm)
@@ -914,11 +920,6 @@ class ULNWordRenderer(RendererBlocksMixin):
                         sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
                         sel.ParagraphFormat.KeepWithNext = False
                         sel.ParagraphFormat.PageBreakBefore = False
-
-                        try:
-                            sel.Range.ListFormat.RemoveNumbers()
-                        except Exception:
-                            pass
 
                         pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
                         if q_num is not None:
