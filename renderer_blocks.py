@@ -474,13 +474,14 @@ class RendererBlocksMixin:
                 left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
                 is_full_width = False
 
-            # Vertical Height: (Num lines * Font Line Height) + Space Between Lines + 0 top/bottom margins
+            # Vertical Height: (Num lines * Font Line Height) + Space Between Lines + Descender clearance buffer for y, g, p
             num_lines = len(lines)
-            exact_line_h_pt = self.font_size * 1.25  # Standard single line height
+            exact_line_h_pt = self.font_size * 1.28  # Standard single line height
             space_between_pt = 2.0
+            descender_clearance_pt = max(5.0, self.font_size * 0.38)  # Prevents descenders (y, g, p, q, j) from touching bottom border
             avail_inner_w = box_width_pt - pad_left_pt - pad_right_pt - extra_buffer_pt
             total_visual_lines = sum(max(1, math.ceil(lw / max(10.0, avail_inner_w))) for lw in line_widths_pt) if is_full_width else num_lines
-            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + 2.0
+            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + descender_clearance_pt + 2.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -495,14 +496,9 @@ class RendererBlocksMixin:
                 shape.RelativeVerticalPosition = 2
                 shape.Left = left_offset_pt
                 shape.Top = 0
-                shape.WrapFormat.Type = 3  # wdWrapTopBottom
-                shape.WrapFormat.DistanceTop = 10.0
-                shape.WrapFormat.DistanceBottom = 10.0
-                try:
-                    shape.LockAspectRatio = False
-                    shape.LockAnchor = False
-                except Exception:
-                    pass
+                shape.WrapFormat.Type = 7
+                shape.WrapFormat.DistanceTop = 12.0
+                shape.WrapFormat.DistanceBottom = 12.0
 
                 tf = shape.TextFrame
                 tf.MarginTop = 0
@@ -546,6 +542,11 @@ class RendererBlocksMixin:
                     box_sel.Font.Color = 0
                     if idx_line < len(lines) - 1:
                         box_sel.TypeParagraph()
+
+                try:
+                    shape.ConvertToInlineShape()
+                except Exception:
+                    pass
 
             except Exception as e:
                 print(f"[ULNRenderer] Warning creating Formula/Callout TextFrame box shape: {e}")
@@ -615,9 +616,10 @@ class RendererBlocksMixin:
             left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             num_rows = len(lines_bank)
-            exact_line_h_pt = self.font_size * 1.25
+            exact_line_h_pt = self.font_size * 1.28
             space_between_pt = 2.0
-            box_height_pt = (num_rows * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + 2.0
+            descender_clearance_pt = max(5.0, self.font_size * 0.38)  # Prevents descenders (y, g, p, q, j) from touching bottom border
+            box_height_pt = (num_rows * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + descender_clearance_pt + 2.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -632,14 +634,9 @@ class RendererBlocksMixin:
                 shape.RelativeVerticalPosition = 2
                 shape.Left = left_offset_pt
                 shape.Top = 0
-                shape.WrapFormat.Type = 3  # wdWrapTopBottom
-                shape.WrapFormat.DistanceTop = 10.0
-                shape.WrapFormat.DistanceBottom = 10.0
-                try:
-                    shape.LockAspectRatio = False
-                    shape.LockAnchor = False
-                except Exception:
-                    pass
+                shape.WrapFormat.Type = 7
+                shape.WrapFormat.DistanceTop = 12.0
+                shape.WrapFormat.DistanceBottom = 12.0
 
                 tf = shape.TextFrame
                 tf.MarginTop = 0
@@ -689,6 +686,11 @@ class RendererBlocksMixin:
 
                     if idx_line < len(lines_bank) - 1:
                         box_sel.TypeParagraph()
+
+                try:
+                    shape.ConvertToInlineShape()
+                except Exception:
+                    pass
 
             except Exception as e:
                 print(f"[ULNRenderer] Warning creating Word Bank TextFrame box shape: {e}")
