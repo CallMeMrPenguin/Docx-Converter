@@ -60,8 +60,8 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
 - [P2] : Sub-sub-question / Sub-option Level 2 (Left Indent: 1.0 cm, e.g., "i)", "ii)", "1)")
 
 - [NUM] ... [/NUM] : Auto-Numbering Container for sequential exercise questions.
-  - Wrap any set of numbered exercise questions inside `[NUM] ... [/NUM]`.
-  - Inside `[NUM]`, write question numbers using `#N` placeholders (e.g. `#1.`, `#2.`, `Question #1`, `Câu #1:`).
+  - MANDATORY MANDATE: Wrap ANY set of numbered exercise questions inside `[NUM] ... [/NUM]`. This applies to Multiple Choice, Sentence Transformation, 2-Column Matching, Speaking Dialogues, and Fill-in-the-blank exercises.
+  - Inside `[NUM]`, ALWAYS write question numbers using `#N` placeholders (e.g. `#1.`, `#2.`, `Question #1`, `Câu #1:`).
   - The compiler handles sequence compilation cleanly while allowing any text prefix (like `Question #1` or `#1.`).
   - Example:
     [NUM]
@@ -82,11 +82,14 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
     [OPT] the most beautifully | more beautifully | beautifully | as beautiful [/OPT]
     [OPT] for | since | in | at [/OPT]
 
-- [TAB2] : 2-Column Side-by-Side Paragraph Split Layout (Column 1  Column 2)
+- [TAB2] : 2-Column Side-by-Side Paragraph Split Layout (Column 1 | Column 2)
   - Used for 2-column matching, error correction with answer blanks on the right, or 2-column header tables.
+  - In Matching exercises (Questions in Col 1 | Answers in Col 2):
+    [TAB2] [P0] 1. How many calories should I eat in a day? | a. A little better, but still feel tired.
+    [TAB2] [P0] 2. Shall we go and play basketball? | b. Wash your face daily and use gentle skin care products.
 
 - [TABLE] ... [/TABLE] or [TABLE: borderless] ... [/TABLE] : Multi-row data table container.
-  - Options: Use `[TABLE]` for native bordered grid tables, or `[TABLE: borderless]` for borderless multi-column layouts.
+  - Options: Use `[TABLE]` for native bordered grid tables, or `[TABLE: borderless]` for borderless multi-column word lists / layouts.
   - Inside `[TABLE]`, use `[TH]` for header rows and `[TR]` for standard data rows.
   - Separate cell columns using the pipe `|` symbol.
   - Example Bordered Table:
@@ -95,19 +98,24 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
     [TR] ______ | ______
     [TR] ______ | ______
     [/TABLE]
-  - Example Borderless Table:
+  - Example Borderless Table (Word Grid with NO visible border box in original):
     [TABLE: borderless]
-    [TH] /f/ | /v/
-    [TR] ______ | ______
+    [TR] fun | fine | coffee | over | graph
+    [TR] phone | brave | verb | stuff | clever
+    [TR] enough | laughing | leaf | leave | vitamin
+    [TR] view | few | valley | save | valve
     [/TABLE]
 
-- [BOX] ... [/BOX] : Framing container for Grammar Formulas, Rule Callouts, Notes, or Word Banks.
+- [BOX] ... [/BOX] : Framing container for Grammar Formulas, Rule Callouts, Notes, or FRAMED Word Banks.
+  - Use [BOX] ONLY when the original source image explicitly shows a visible border / box around the content!
   - For Grammar Formulas & Rules: Put the full formula / rule sentence directly inside without pipes. It will be rendered as a centered, continuous single-line (or multi-line) rounded framed box.
     - Example: `[BOX] Từ phủ định / Cụm từ phủ định + Trợ động từ / To be / Modal Verb + S + V (nguyên thể) [/BOX]`
     - Example: `[BOX] S + have/has + V3/ed + ... [/BOX]`
-  - For Word Banks: Separate vocabulary items using pipes `|`. The compiler will auto-calculate columns into a balanced word bank.
+  - For Framed Word Banks: Separate vocabulary items using pipes `|`. The compiler will auto-calculate columns into a balanced framed word bank.
     - Example: `[BOX] photosynthesis | chlorophyll | sunlight [/BOX]`
-- [QUOTE] ... [/QUOTE] : Indented, JUSTIFIED text block for reading passages, stories, or dialogs (first line indent: 0.75 cm, no empty line gaps).
+  - NOTE: If the word list has NO border frame in the original, use `[TABLE: borderless]` instead!
+
+- [QUOTE] ... [/QUOTE] : Indented, JUSTIFIED text block for reading passages, stories, or dialogs (first line indent: 0.75 cm, justified, no empty line gaps between paragraphs).
 
 - [PIC_GRID] ... [/PIC_GRID] : 4-column picture grid container (4 pictures per row).
   - Inside `[PIC_GRID]`, separate items using pipes `|`.
@@ -129,7 +137,9 @@ Apply these syntax rules directly inside strings:
 - [ins]**text**     -> Exercise Instruction class tag (MUST be wrapped around all exercise instructions: Roman numerals I., II., III. or task directives)
 - **text**          -> Bold text (MUST be applied to all section headers, Roman numerals I./II., and instruction headings)
 - *text*            -> Italic text (applied ONLY to explicitly italicized text)
+- ***text***        -> Bold + Italic text (applied when text is BOTH bold and italic, e.g. ***Fast and Furious***)
 - [text]{u}         -> Underlined text (ONLY wrap the exact underlined target letters/words, e.g. `[e]{u}xciting`, `[ch]{u}ildren`)
+- [text]{u,b}       -> Underlined + Bold text
 - [text]{upper}     -> Uppercase / Small Caps formatting
 - [text]{color:NAME}-> Text color (e.g., [red]{color:red}, [#FF0000]{color:#FF0000})
 - [text]{bg:NAME}   -> Background highlight / Fill color (e.g., [key word]{bg:yellow})
@@ -184,8 +194,16 @@ E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES (TABLE: BORDERLESS MANDATE):
 F. STRICT RULE: WHEN TO USE [TAB2] VS STANDARD [P0]/[P1]:
    - DO NOT use [TAB2] for regular sentences, sentence transformations, or inline fill-in-the-blanks.
    - Use [TAB2] ONLY when there are two distinct side-by-side columns:
-     1. Error Correction lines with a right-hand answer blank column: `[TAB2] [P0] 1. Question... | <blank>`
-     2. 2-Column Matching / Definition tables: `[TAB2] [P1] 1. rest | A. an activity...`
+     1. Error Correction lines with a right-hand answer blank column:
+        [NUM]
+        [TAB2] [P0] #1. Nam is my classmates. He watches TV every night. | <blank>
+        [TAB2] [P0] #2. I think collecting stamps are interesting. | <blank>
+        [/NUM]
+     2. 2-Column Matching / Definition tables:
+        [NUM]
+        [TAB2] [P0] #1. flu | a. a common illness that affects the nose and throat...
+        [TAB2] [P0] #2. acne | b. a skin condition that causes small red spots...
+        [/NUM]
 
 G. DIALOGUE & SPEAKING Q&A EXERCISES:
    - For dialogue exercises where Speaker A asks a question with an answer blank line and Speaker B provides a response:
@@ -197,6 +215,23 @@ G. DIALOGUE & SPEAKING Q&A EXERCISES:
      [P1] B: I started my hobby [five years ago]{u}.
      [/NUM]
    - The compiler automatically renders Speaker A with a full-width answer line running to the right margin, and perfectly indents Speaker B underneath Speaker A!
+
+H. EXERCISES WITH HANDWRITING ANSWER LINES BELOW QUESTIONS:
+   - When an exercise in the original textbook leaves a blank space or empty line under each question for students to write answers (e.g. "Underline and write S, V, O, Adv", Sentence Rewriting, or Open-ended Q&A):
+   - ALWAYS output `[P1] <blank>` below each question line!
+   - Example:
+     [P0] [ins]**XI. Underline and write S for the subject, V for the verb, O for the object and Adv for the adverb in each simple sentence below.**
+     [P0] *Ex: He never skips breakfast.*
+     [P1] *=> S   Adv    V      O*
+     [NUM]
+     [P0] #1. Swimming is a good form of exercise.
+     [P1] <blank>
+     [P0] #2. Gwen suffered from a weak heart.
+     [P1] <blank>
+     [P0] #3. I usually have a sandwich for lunch.
+     [P1] <blank>
+     [/NUM]
+   - The compiler automatically converts `[P1] <blank>` into a clean, full-width answer writing line matching textbook standards!
 
 ---
 

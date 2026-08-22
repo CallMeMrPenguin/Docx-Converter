@@ -709,15 +709,23 @@ class ULNWordRenderer(RendererBlocksMixin):
                 group_first_c1 = tab2_group[0].col1 if tab2_group else block.col1
                 base_indent_cm = 0.5 if "P1" in group_first_c1 else (1.0 if "P2" in group_first_c1 else 0.0)
 
-                # Algorithm: Calculate TAB2 start so longest Col 2 line touches printable_width_cm (right border)
-                min_col2_start_cm = base_indent_cm + max(2.5, (max_c1_len * 0.16) + 0.6)
-                c2_width_cm = (max_c2_len * 0.175) + 0.6
+                # Accurate Column 1 width estimation: 0.188 cm per char in Times New Roman 12pt + prefix buffer
+                c1_clean_lens = []
+                for b in tab2_group:
+                    raw_c1 = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.col1, flags=re.IGNORECASE)
+                    pref, delim, q_num, body = extract_question_prefix_and_body(raw_c1)
+                    c1_clean_lens.append(len(body.strip()) if body else len(raw_c1))
+                max_c1_clean_len = max(c1_clean_lens) if c1_clean_lens else max_c1_len
+
+                est_c1_max_w = base_indent_cm + (max_c1_clean_len * 0.188) + 0.8
+                min_col2_start_cm = base_indent_cm + max(2.5, est_c1_max_w)
+                c2_width_cm = (max_c2_len * 0.18) + 0.6
                 ideal_col2_start_cm = printable_width_cm - c2_width_cm
 
                 if ideal_col2_start_cm >= min_col2_start_cm:
                     col2_tab_pos_cm = ideal_col2_start_cm
                 else:
-                    col2_tab_pos_cm = min_col2_start_cm
+                    col2_tab_pos_cm = min(printable_width_cm - 3.5, min_col2_start_cm)
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 

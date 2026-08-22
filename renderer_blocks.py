@@ -272,13 +272,21 @@ class RendererBlocksMixin:
 
         left_indent_cm = 0.0 if has_standalone_q_num else 0.5
 
+        formatted_item_strings = [f"{let}. {body}" for let, body in normalized_items]
+        local_cols = self.calculate_optimal_option_cols(formatted_item_strings, left_indent_cm, printable_width_cm)
+        local_max_len = max(len(s) for s in formatted_item_strings) if formatted_item_strings else 0
+
         if self.current_group_opt_cols is not None:
-            num_cols = self.current_group_opt_cols
-            max_item_len = self.current_group_max_item_len or 0
+            # If current question's options are short and fit in 4 columns, preserve 4 columns
+            if local_cols > self.current_group_opt_cols:
+                num_cols = local_cols
+                max_item_len = local_max_len
+            else:
+                num_cols = self.current_group_opt_cols
+                max_item_len = self.current_group_max_item_len or local_max_len
         else:
-            formatted_item_strings = [f"{let}. {body}" for let, body in normalized_items]
-            num_cols = self.calculate_optimal_option_cols(formatted_item_strings, left_indent_cm, printable_width_cm)
-            max_item_len = max(len(s) for s in formatted_item_strings) if formatted_item_strings else 0
+            num_cols = local_cols
+            max_item_len = local_max_len
 
         if has_standalone_q_num:
             num_fmt = self.get_effective_number_format(extracted_pref, extracted_delim)
@@ -796,6 +804,11 @@ class RendererBlocksMixin:
         except Exception:
             pass
 
+        try:
+            tbl.Range.ListFormat.RemoveNumbers()
+        except Exception:
+            pass
+
         for r_idx, row_obj in enumerate(tdata.rows, 1):
             try:
                 tbl.Rows(r_idx).AllowBreakAcrossPages = False
@@ -805,6 +818,10 @@ class RendererBlocksMixin:
             for c_idx, cell_obj in enumerate(row_obj.cells, 1):
                 cell = tbl.Cell(r_idx, c_idx)
                 cell_range = cell.Range
+                try:
+                    cell_range.ListFormat.RemoveNumbers()
+                except Exception:
+                    pass
                 cell_range.Font.Name = self.font_name
                 cell_range.Font.Size = self.font_size
                 cell_range.ParagraphFormat.SpaceBefore = 0
@@ -814,11 +831,16 @@ class RendererBlocksMixin:
 
                 cell_txt = cell_obj.content.strip()
                 if re.match(r'^\s*(?:_{2,}|<blank>|\[BLANK\])\s*$', cell_txt, re.IGNORECASE):
+                    cell_range.Text = ""
                     continue
 
                 if cell_obj.spans:
                     cell_range.Select()
                     cell_sel = doc.Application.Selection
+                    try:
+                        cell_sel.Range.ListFormat.RemoveNumbers()
+                    except Exception:
+                        pass
                     self.write_inline_spans(cell_sel, cell_obj.spans, default_bold=cell_obj.is_header)
                 else:
                     cell_range.Bold = 1 if cell_obj.is_header else 0

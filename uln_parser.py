@@ -90,6 +90,7 @@ def parse_inline_spans(text: str, default_bold: bool = False, default_italic: bo
         r'(?P<pic>\[PIC(?::[^\]]+)?\])|'
         r'(?P<ins>\[ins\](?P<ins_txt>.*?)\[/ins\])|'
         r'(?P<annot>\[(?P<ann_txt>[^\]]+)\]\{(?P<ann_mod>[^\}]+)\})|'
+        r'(?P<bold_italic>\*\*\*(?P<bi_txt>.*?)\*\*\*)|'
         r'(?P<bold>\*\*(?P<b_txt>.*?)\*\*)|'
         r'(?P<italic>\*(?P<i_txt>.*?)\*)',
         re.IGNORECASE | re.DOTALL
@@ -114,6 +115,11 @@ def parse_inline_spans(text: str, default_bold: bool = False, default_italic: bo
         elif gd['ins']:
             ins_inner = gd['ins_txt']
             inner_spans = parse_inline_spans(ins_inner, default_bold=default_bold, default_italic=default_italic, default_instruction=True)
+            spans.extend(inner_spans)
+
+        elif gd['bold_italic']:
+            bi_inner = gd['bi_txt']
+            inner_spans = parse_inline_spans(bi_inner, default_bold=True, default_italic=True, default_instruction=default_instruction)
             spans.extend(inner_spans)
 
         elif gd['annot']:
@@ -377,8 +383,12 @@ class ULNParser:
                 else:
                     rest = trimmed[7:].strip()
                     if rest.upper().endswith("[/QUOTE]"):
-                        q_content = rest[:-8].strip()
-                        blocks.append(ULNBlock(tag="QUOTE", content=q_content, spans=parse_inline_spans(q_content)))
+                        raw_q_text = rest[:-8].strip()
+                        raw_paras = re.split(r'\n\s*\n+', raw_q_text)
+                        for p_txt in raw_paras:
+                            clean_p = " ".join(p_txt.split())
+                            if clean_p.strip():
+                                blocks.append(ULNBlock(tag="QUOTE", content=clean_p, spans=parse_inline_spans(clean_p)))
                         continue
                     else:
                         in_quote = True
@@ -388,8 +398,12 @@ class ULNParser:
             if in_quote:
                 if trimmed.upper() == "[/QUOTE]":
                     in_quote = False
-                    q_content = "\n".join(quote_lines)
-                    blocks.append(ULNBlock(tag="QUOTE", content=q_content, spans=parse_inline_spans(q_content)))
+                    raw_q_text = "\n".join(quote_lines)
+                    raw_paras = re.split(r'\n\s*\n+', raw_q_text.strip())
+                    for p_txt in raw_paras:
+                        clean_p = " ".join(p_txt.split())
+                        if clean_p.strip():
+                            blocks.append(ULNBlock(tag="QUOTE", content=clean_p, spans=parse_inline_spans(clean_p)))
                     quote_lines = []
                 else:
                     quote_lines.append(line)
