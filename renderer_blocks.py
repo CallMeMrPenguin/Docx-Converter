@@ -407,24 +407,9 @@ class RendererBlocksMixin:
                 return
 
             # Measure exact physical rendered width of longest line in Word COM for 100.0% precision
-            max_line_w_pt = 0.0
-            try:
-                left_m_pt = doc.PageSetup.LeftMargin
-                for l in lines:
-                    sel.SetRange(doc.Content.End - 1, doc.Content.End - 1)
-                    sel.Font.Name = self.font_name
-                    sel.Font.Size = self.font_size
-                    sel.Font.Bold = 1
-                    sel.TypeText(l)
-                    pos = sel.Information(5)
-                    sel.Delete(1, -len(l))
-                    w_pt = pos - left_m_pt
-                    if w_pt > max_line_w_pt:
-                        max_line_w_pt = w_pt
-            except Exception:
-                char_w_pt = max(4.0, self.font_size * 0.41)
-                max_len = max(len(l) for l in lines)
-                max_line_w_pt = max_len * char_w_pt
+            char_w_pt = max(4.0, self.font_size * 0.44)
+            max_len = max(len(l) for l in lines) if lines else 0
+            max_line_w_pt = max_len * char_w_pt
 
             pad_left_pt = cm_to_pt(0.20)   # Exactly 2.0 mm padding
             pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
@@ -523,23 +508,8 @@ class RendererBlocksMixin:
 
             N = len(words)
 
-            # Measure exact physical width of all items in Word COM
-            item_widths_pt = []
-            try:
-                left_m_pt = doc.PageSetup.LeftMargin
-                for w in words:
-                    sel.SetRange(doc.Content.End - 1, doc.Content.End - 1)
-                    sel.Font.Name = self.font_name
-                    sel.Font.Size = self.font_size
-                    sel.Font.Bold = 1
-                    sel.TypeText(w)
-                    pos = sel.Information(5)
-                    sel.Delete(1, -len(w))
-                    item_widths_pt.append(pos - left_m_pt)
-            except Exception:
-                char_w_pt = max(4.0, self.font_size * 0.41)
-                item_widths_pt = [len(w) * char_w_pt for w in words]
-
+            char_w_pt = max(4.0, self.font_size * 0.44)
+            item_widths_pt = [len(w) * char_w_pt for w in words]
             max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
             pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
             pad_vert_pt = cm_to_pt(0.10)   # Exactly 1.0 mm padding

@@ -53,21 +53,15 @@ class ULNCompiler:
                 pass
 
             word = win32com.client.Dispatch("Word.Application")
-            is_live_view = (visible or keep_open) and not background_mode
-            word.Visible = True if is_live_view else False
+            word.Visible = False
             word.DisplayAlerts = 0  # wdAlertsNone
             
             try:
-                word.ScreenUpdating = True if is_live_view else False
+                word.ScreenUpdating = False
             except Exception:
                 pass
 
             doc = word.Documents.Add()
-            if is_live_view:
-                try:
-                    word.Activate()
-                except Exception:
-                    pass
             
             # Execute pywin32 rendering
             self.renderer.render(blocks, doc, word)
