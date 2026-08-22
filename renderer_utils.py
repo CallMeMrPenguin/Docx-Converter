@@ -9,6 +9,12 @@ SUPPORTED_IMAGE_EXTENSIONS = (
     '.jfif', '.bmp', '.dib', '.gif', '.tiff', '.tif', '.ico', '.svg', '.wmf', '.emf'
 )
 
+def natural_sort_key(s: str) -> list:
+    """
+    Returns alphanumeric sorting key for natural sorting (e.g. img1, img2, img10 instead of img1, img10, img2).
+    """
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
+
 _pillow_plugins_registered = False
 
 def register_image_plugins():

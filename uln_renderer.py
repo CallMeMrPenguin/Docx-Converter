@@ -29,7 +29,8 @@ from renderer_utils import (
     apply_title_case_to_text,
     apply_sentence_case_to_text,
     SUPPORTED_IMAGE_EXTENSIONS,
-    ensure_word_compatible_image
+    ensure_word_compatible_image,
+    natural_sort_key
 )
 from renderer_blocks import RendererBlocksMixin
 
@@ -107,6 +108,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                     if f.lower().endswith(SUPPORTED_IMAGE_EXTENSIONS)
                 ]
                 if pics:
+                    pics.sort(key=lambda p: natural_sort_key(os.path.basename(p)))
                     idx = abs(hash(pic.description if pic else "img")) % len(pics)
                     found_path = pics[idx]
 

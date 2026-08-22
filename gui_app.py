@@ -19,6 +19,7 @@ from gui_prompt_editor import (
 )
 from gui_update_modal import show_update_modal_dialog
 from gui_docx_picker import open_docx_picker_dialog
+from renderer_utils import natural_sort_key
 
 class ULNFormatterApp:
     def __init__(self, root):
@@ -200,8 +201,11 @@ class ULNFormatterApp:
         img_btn_bar = tk.Frame(img_frame, bg="#1e293b")
         img_btn_bar.pack(fill="x")
 
-        btn_add_img = tk.Button(img_btn_bar, text="➕ Add Images...", command=self.add_images, bg="#3b82f6", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", pady=2)
+        btn_add_img = tk.Button(img_btn_bar, text="➕ Add...", command=self.add_images, bg="#3b82f6", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", pady=2)
         btn_add_img.pack(side="left", fill="x", expand=True, padx=(0, 2))
+
+        btn_sort_img = tk.Button(img_btn_bar, text="🔤 A-Z", command=self.sort_images, bg="#0284c7", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", pady=2)
+        btn_sort_img.pack(side="left", padx=2)
 
         btn_clear_img = tk.Button(img_btn_bar, text="🗑️ Clear", command=self.clear_images, bg="#64748b", fg="#ffffff", font=("Segoe UI", 8), relief="flat", pady=2)
         btn_clear_img.pack(side="right", padx=(2, 0))
@@ -706,7 +710,7 @@ class ULNFormatterApp:
 
     def add_images(self):
         files = filedialog.askopenfilenames(
-            title="Select Images for [PIC] Tags (In Order)",
+            title="Select Images for [PIC] Tags (Auto-sorted naturally by name)",
             filetypes=[
                 ("All Supported Images", "*.png;*.jpg;*.jpeg;*.avif;*.avifs;*.webp;*.heic;*.heif;*.jfif;*.bmp;*.dib;*.gif;*.tiff;*.tif;*.ico;*.svg;*.wmf;*.emf"),
                 ("AVIF Images (*.avif)", "*.avif;*.avifs"),
@@ -721,7 +725,14 @@ class ULNFormatterApp:
                 abs_f = os.path.abspath(f)
                 if abs_f not in self.user_image_paths:
                     self.user_image_paths.append(abs_f)
+            # Automatically sort all image paths naturally by filename (e.g. 1, 2, 3... 10)
+            self.user_image_paths.sort(key=lambda p: natural_sort_key(os.path.basename(p)))
             self.update_image_listbox()
+
+    def sort_images(self):
+        """Manually sorts the image queue naturally by filename."""
+        self.user_image_paths.sort(key=lambda p: natural_sort_key(os.path.basename(p)))
+        self.update_image_listbox()
 
     def clear_images(self):
         self.user_image_paths.clear()
