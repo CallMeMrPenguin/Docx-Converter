@@ -413,12 +413,12 @@ class RendererBlocksMixin:
             if not lines:
                 return
 
-            # Accurate character width multiplier for Times New Roman / Segoe UI (0.41 * fontSize)
+            # Accurate character width multiplier for Times New Roman / Segoe UI (0.41 * fontSize = 4.92 pt / 0.173 cm)
             char_w_pt = max(4.0, self.font_size * 0.41)
-            pad_left_pt = cm_to_pt(0.35)
-            pad_right_pt = cm_to_pt(0.35)
-            pad_top_pt = cm_to_pt(0.12)
-            pad_bottom_pt = cm_to_pt(0.12)
+            pad_left_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
+            pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
+            pad_top_pt = cm_to_pt(0.08)
+            pad_bottom_pt = cm_to_pt(0.08)
 
             max_len = max(len(l) for l in lines)
             est_content_w = (max_len * char_w_pt) + pad_left_pt + pad_right_pt
@@ -427,7 +427,7 @@ class RendererBlocksMixin:
                 box_width_pt = printable_width_pt
                 left_offset_pt = 0.0
             else:
-                box_width_pt = min(printable_width_pt, max(100.0, est_content_w))
+                box_width_pt = min(printable_width_pt, max(80.0, est_content_w))
                 left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             font_line_h = max(14.0, self.font_size * 1.35)
@@ -486,7 +486,7 @@ class RendererBlocksMixin:
                 box_sel.ParagraphFormat.SpaceBefore = 0
                 box_sel.ParagraphFormat.SpaceAfter = 0
                 box_sel.ParagraphFormat.LineSpacingRule = 0
-                box_sel.ParagraphFormat.Alignment = 1
+                box_sel.ParagraphFormat.Alignment = 0  # Left-aligned so longest line reaches exact 2.0 mm right margin
                 box_sel.ParagraphFormat.TabStops.ClearAll()
 
                 for idx_line, line_str in enumerate(lines):
