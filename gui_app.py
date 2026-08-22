@@ -654,12 +654,33 @@ class ULNFormatterApp:
     def _async_check_update(self, silent: bool):
         try:
             info = updater.check_for_updates()
-            self.root.after(0, lambda: self._handle_update_result(info, silent))
+            def _safe_res():
+                try:
+                    if self.root.winfo_exists():
+                        self._handle_update_result(info, silent)
+                except Exception:
+                    pass
+            self.root.after(0, _safe_res)
         except Exception as e:
             if not silent:
-                self.root.after(0, lambda: messagebox.showerror("Lỗi Cập Nhật", f"Không thể kết nối đến máy chủ cập nhật:\n{e}"))
+                def _safe_err():
+                    try:
+                        if self.root.winfo_exists():
+                            messagebox.showerror("Lỗi Cập Nhật", f"Không thể kết nối đến máy chủ cập nhật:\n{e}")
+                    except Exception:
+                        pass
+                self.root.after(0, _safe_err)
         finally:
-            self.root.after(0, lambda: self.btn_update.config(text="🔄 Kiểm tra Cập nhật", state="normal"))
+            def _safe_btn():
+                try:
+                    if self.root.winfo_exists():
+                        self.btn_update.config(text="🔄 Kiểm tra Cập nhật", state="normal")
+                except Exception:
+                    pass
+            try:
+                self.root.after(0, _safe_btn)
+            except Exception:
+                pass
 
     def _handle_update_result(self, info: dict, silent: bool):
         if info.get("has_update"):

@@ -232,17 +232,35 @@ H. EXERCISES WITH HANDWRITING ANSWER LINES BELOW QUESTIONS:
    - The compiler automatically converts `[P1] <blank>` into a clean, full-width answer writing line matching textbook standards!
 
 I. PICTURE VOCABULARY & WORD COMPLETION GRIDS (2-COLUMN PICTURE EXERCISES):
-   - MANDATE: For exercises presenting a 2-column grid of numbered pictures with incomplete words / letter blanks (e.g. `1. [PIC] o__e__e__t___`, `2. [PIC] f___`):
-   - ALWAYS use `[TAB2]`!
-   - On each line, place the left item in Column 1 and the right item in Column 2, separated by the pipe `|` symbol:
+   - MANDATE FOR WORD COMPLETION & MISSING CHARACTER BLANKS:
+     1. ALWAYS separate consecutive underscores with a space: write `_ _` or `_ _ _` instead of `__` or `___` (e.g. `f _ _`, `p _ _`, `c _ ff _ _`).
+     2. STRICT LETTER COUNT MATCHING: The number of `_` characters MUST exactly match the number of missing letters in the target vocabulary word!
+        - Example 1: `o _ _ e _ _ e _ _ t _ _ _` -> for "omelette" (exact letter slots).
+        - Example 2: `f _ _` -> for "fox" (2 missing letters).
+        - Example 3: `s _ _ u _ _ e` -> for "sauce".
+        - Example 4: `r _ _` -> for "rod" (2 missing letters).
+        - Example 5: `s _ _ _ s _ g _ _` -> for "sausage".
+        - Example 6: `w _ t _ _` -> for "water".
+        - Example 7: `c _ ff _ _` -> for "coffee".
+        - Example 8: `p _ _` -> for "pot" (2 missing letters).
+        - Example 9: `p _ r _` -> for "pork".
+        - Example 10: `s _ o _ m` -> for "storm".
+        - Example 11: `s _ l _` -> for "salt".
+        - Example 12: `b _ t _ l _` -> for "bottle".
+        - Example 13: `f _ r _` -> for "fork".
+        - Example 14: `h _ r _ e` -> for "horse".
+     3. NO EXTRANEOUS INFORMATION / NO NOTES MANDATE: Strictly output only the original text from the document. Do NOT add external notes, hints, translations, answers, or conversational commentary.
+   - MANDATE FOR 2-COLUMN LAYOUT:
+     - ALWAYS use `[TAB2]` (NEVER use tables).
+     - On each line, place the left item in Column 1 and the right item in Column 2, separated by the pipe `|` symbol:
      [P0] [ins]**I. Look at the pictures and complete the words. Then put them in the correct column.**
-     [TAB2] 1. [PIC: omelette] o__e__e__t___ | 2. [PIC: fox] f___
-     [TAB2] 3. [PIC: sauce] s__u__e | 4. [PIC: rod] r___
-     [TAB2] 5. [PIC: sausage] s___s_g___ | 6. [PIC: water] w_t___
-     [TAB2] 7. [PIC: coffee] c__ff___ | 8. [PIC: pot] p___
-     [TAB2] 9. [PIC: pork] p__r___ | 10. [PIC: storm] s__o__m
-     [TAB2] 11. [PIC: salt] s__l___ | 12. [PIC: bottle] b__t__l___
-     [TAB2] 13. [PIC: fork] f__r___ | 14. [PIC: horse] h__r__e
+     [TAB2] 1. [PIC: omelette] o _ _ e _ _ e _ _ t _ _ _ | 2. [PIC: fox] f _ _
+     [TAB2] 3. [PIC: sauce] s _ _ u _ _ e | 4. [PIC: rod] r _ _
+     [TAB2] 5. [PIC: sausage] s _ _ _ s _ g _ _ | 6. [PIC: water] w _ t _ _
+     [TAB2] 7. [PIC: coffee] c _ ff _ _ | 8. [PIC: pot] p _ _
+     [TAB2] 9. [PIC: pork] p _ r _ | 10. [PIC: storm] s _ o _ m
+     [TAB2] 11. [PIC: salt] s _ l _ | 12. [PIC: bottle] b _ t _ l _
+     [TAB2] 13. [PIC: fork] f _ r _ | 14. [PIC: horse] h _ r _ e
    - If there is a phonetic or category classification table below it, follow immediately with a standard bordered `[TABLE]`:
      [TABLE]
      [TH] /ɒ/ | /ɔː/
