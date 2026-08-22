@@ -443,6 +443,14 @@ class RendererBlocksMixin:
         self._text_width_cache[cache_key] = calc_w
         return calc_w
 
+    def strip_markup_for_measurement(self, text: str) -> str:
+        """Strips inline ULN tags, bold/italic markers, and answer blanks for clean physical text width measurement."""
+        if not text:
+            return ""
+        t = re.sub(r'\[(.*?)\]\{(?:u|b|i|[a-zA-Z0-9#:,]+)\}', r'\1', text)
+        t = re.sub(r'\[\/?ins\]|\*\*|\*|__|_|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '', t)
+        return t.strip()
+
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
         Renders Word Bank / Callout Box / Formula Box inside a MS Word Rounded Rectangle Shape TextFrame.
@@ -470,13 +478,19 @@ class RendererBlocksMixin:
             if not lines:
                 return
 
-            # Measure exact physical rendered width of longest line in Word COM for 100.0% precision
-            max_line_w_pt = max(self.measure_text_width_pt(doc, l, self.font_name, self.font_size, is_bold=True) for l in lines) if lines else 50.0
+            # Measure exact physical rendered width of clean lines without markup noise
+            clean_lines = [self.strip_markup_for_measurement(l) for l in lines]
+            max_line_w_pt = max(self.measure_text_width_pt(doc, cl, self.font_name, self.font_size, is_bold=True) for cl in clean_lines) if clean_lines else 50.0
 
             pad_left_pt = cm_to_pt(0.20)   # Exactly 2.0 mm padding
             pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
             pad_top_pt = cm_to_pt(0.10)    # 1.0 mm padding
-            pad_bottom_pt = cm_to_pt(0.10) # 1.0 mm padding
+
+            # Set MarginBottom = 0 when last line contains descenders (y, g, p, q, j)
+            last_line_clean = clean_lines[-1] if clean_lines else ""
+            last_line_has_descenders = any(c in 'ygpqj_ýỳỵỷỹ' for c in last_line_clean.lower())
+            pad_bottom_pt = 0.0 if last_line_has_descenders else cm_to_pt(0.10)
+
             extra_buffer_pt = cm_to_pt(0.40) # +4.0 mm extra right margin buffer
 
             est_content_w = max_line_w_pt + pad_left_pt + pad_right_pt + extra_buffer_pt
@@ -570,7 +584,8 @@ class RendererBlocksMixin:
 
             N = len(words)
 
-            item_widths_pt = [self.measure_text_width_pt(doc, w, self.font_name, self.font_size, is_bold=True) for w in words]
+            clean_words = [self.strip_markup_for_measurement(w) for w in words]
+            item_widths_pt = [self.measure_text_width_pt(doc, cw, self.font_name, self.font_size, is_bold=True) for cw in clean_words]
             max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
             pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
             pad_vert_pt = cm_to_pt(0.10)   # Exactly 1.0 mm padding
@@ -593,6 +608,12 @@ class RendererBlocksMixin:
             lines_bank = []
             for i in range(0, N, cols):
                 lines_bank.append(words[i:i + cols])
+
+            # Set MarginBottom = 0 when last row contains descenders (y, g, p, q, j)
+            last_row_words = lines_bank[-1] if lines_bank else []
+            last_row_text = " ".join(self.strip_markup_for_measurement(w) for w in last_row_words)
+            last_row_has_descenders = any(c in 'ygpqj_ýỳỵỷỹ' for c in last_row_text.lower())
+            pad_bottom_pt = 0.0 if last_row_has_descenders else pad_vert_pt
 
             extra_buffer_pt = cm_to_pt(0.40)  # +4.0 mm extra right margin buffer
 
@@ -619,7 +640,7 @@ class RendererBlocksMixin:
             num_rows = len(lines_bank)
             exact_line_h_pt = self.font_size * 1.25
             space_between_pt = 2.0
-            box_height_pt = (num_rows * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + (2 * pad_vert_pt) + 2.0
+            box_height_pt = (num_rows * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + pad_vert_pt + pad_bottom_pt + 2.0
 
             try:
                 shape = doc.Shapes.AddShape(
@@ -640,7 +661,7 @@ class RendererBlocksMixin:
 
                 tf = shape.TextFrame
                 tf.MarginTop = pad_vert_pt
-                tf.MarginBottom = pad_vert_pt
+                tf.MarginBottom = pad_bottom_pt
                 tf.MarginLeft = pad_horiz_pt
                 tf.MarginRight = pad_horiz_pt
                 try:
