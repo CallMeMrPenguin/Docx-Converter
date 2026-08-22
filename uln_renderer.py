@@ -715,13 +715,13 @@ class ULNWordRenderer(RendererBlocksMixin):
                 group_first_c1 = tab2_group[0].col1 if tab2_group else block.col1
                 base_indent_cm = 0.5 if "P1" in group_first_c1 else (1.0 if "P2" in group_first_c1 else 0.0)
 
-                # Accurate Column 1 width estimation: 0.188 cm per char in Times New Roman 12pt + prefix buffer
-                c1_clean_lens = []
+                # Calculate exact width of the longest Column 1 text across all rows in the group
+                c1_full_lens = []
                 for b in tab2_group:
-                    raw_c1 = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.col1, flags=re.IGNORECASE)
-                    pref, delim, q_num, body = extract_question_prefix_and_body(raw_c1)
-                    c1_clean_lens.append(len(body.strip()) if body else len(raw_c1))
-                max_c1_clean_len = max(c1_clean_lens) if c1_clean_lens else max_c1_len
+                    raw_c1 = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.col1, flags=re.IGNORECASE).strip()
+                    raw_c1 = raw_c1.replace('#', '')
+                    c1_full_lens.append(len(raw_c1))
+                max_c1_len = max(c1_full_lens) if c1_full_lens else 10
 
                 # Check if Column 2 is an answer blank (e.g. ______ or <blank> or [BLANK])
                 col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?(?:_{2,}|<blank>|\[BLANK\])\s*$', block.col2, re.IGNORECASE))
@@ -731,12 +731,10 @@ class ULNWordRenderer(RendererBlocksMixin):
                     blank_w_cm = 2.8
                     col2_tab_pos_cm = printable_width_cm - blank_w_cm
                 else:
-                    # Robust Column 2 Alignment Rule for Word Tab Stops:
-                    # In Word, the tab stop MUST ALWAYS be placed after the longest Column 1 text
-                    # so that Column 1 never exceeds the tab stop on the first line.
-                    min_gap_cm = 0.3  # 3mm safety gap
-                    c1_w = base_indent_cm + (max_c1_clean_len * 0.19) + 0.6
-                    col2_tab_pos_cm = min(printable_width_cm - 3.5, c1_w + min_gap_cm)
+                    # Standard 2-Column Matching Layout:
+                    # Exact position = longest Column 1 text width + exactly 5mm (0.5 cm) gap
+                    exact_c1_w = base_indent_cm + (max_c1_len * 0.193)
+                    col2_tab_pos_cm = min(printable_width_cm - 3.5, exact_c1_w + 0.5)
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
