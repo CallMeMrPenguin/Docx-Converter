@@ -437,8 +437,9 @@ class RendererBlocksMixin:
             pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
             pad_top_pt = cm_to_pt(0.10)    # 1.0 mm padding
             pad_bottom_pt = cm_to_pt(0.10) # 1.0 mm padding
+            extra_buffer_pt = cm_to_pt(0.40) # +4.0 mm extra right margin buffer
 
-            est_content_w = max_line_w_pt + pad_left_pt + pad_right_pt
+            est_content_w = max_line_w_pt + pad_left_pt + pad_right_pt + extra_buffer_pt
 
             if est_content_w >= (printable_width_pt * 0.85):
                 box_width_pt = printable_width_pt
@@ -569,8 +570,10 @@ class RendererBlocksMixin:
             for i in range(0, N, cols):
                 lines_bank.append(words[i:i + cols])
 
+            extra_buffer_pt = cm_to_pt(0.40)  # +4.0 mm extra right margin buffer
+
             if cols == 1:
-                box_width_pt = min(printable_width_pt, max_item_w_pt + (2 * pad_horiz_pt))
+                box_width_pt = min(printable_width_pt, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt)
                 tab_stops_pt = [0.0]
             else:
                 # Dynamic Tab Stops based on actual physical word widths per column
@@ -585,7 +588,7 @@ class RendererBlocksMixin:
                     next_tab_pt = tab_stops_pt[-1] + col_max_widths_pt[c] + gap_pt
                     tab_stops_pt.append(next_tab_pt)
 
-                box_width_pt = min(printable_width_pt, tab_stops_pt[-1] + col_max_widths_pt[-1] + (2 * pad_horiz_pt))
+                box_width_pt = min(printable_width_pt, tab_stops_pt[-1] + col_max_widths_pt[-1] + (2 * pad_horiz_pt) + extra_buffer_pt)
 
             left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
