@@ -837,7 +837,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                             # DYNAMICALLY DETERMINE OPTIMAL UNIFORM IMAGE SIZE ACROSS ALL PICTURES
                             # Available horizontal width for the 2 images:
                             avail_w_for_imgs = printable_width_cm - base_indent_cm - c1_word_w_cm - c2_word_w_cm - (2 * spacing_around_img_cm) - min_gap_cm
-                            opt_pic_w_cm = min(4.5, max(2.8, avail_w_for_imgs / 2.0))
+                            opt_pic_w_cm = min(4.5, max(3.5, avail_w_for_imgs / 2.0))
                             opt_pic_h_cm = opt_pic_w_cm * 0.72
                             self.current_tab2_pic_width_cm = opt_pic_w_cm
                             self.current_tab2_pic_height_cm = opt_pic_h_cm
