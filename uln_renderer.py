@@ -705,14 +705,15 @@ class ULNWordRenderer(RendererBlocksMixin):
                     col2_tab_pos_cm = printable_width_cm - blank_w_cm
                 else:
                     # Standard 2-Column Matching Layout:
-                    # Measure exact physical width of longest Column 1 line in Word COM for 100.0% precision
+                    # Measure exact physical width of longest Column 1 line using Windows GDI for 100.0% precision
                     c1_clean_texts = []
                     for b in tab2_group:
                         raw_t = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.col1, flags=re.IGNORECASE).replace('#', '').strip()
-                        c1_clean_texts.append(raw_t)
+                        clean_t = self.strip_markup_for_measurement(raw_t)
+                        c1_clean_texts.append(clean_t)
 
                     max_c1_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in c1_clean_texts) if c1_clean_texts else 100.0
-                    exact_end_cm = base_indent_cm + (max_c1_w_pt / 28.3465)
+                    exact_end_cm = base_indent_cm + pt_to_cm(max_c1_w_pt)
 
                     # Tab Stop = exact end of longest Column 1 line + exactly 5.0 mm (0.50 cm) gap
                     col2_tab_pos_cm = min(printable_width_cm - 3.5, exact_end_cm + 0.50)

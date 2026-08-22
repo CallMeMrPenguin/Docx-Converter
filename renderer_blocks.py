@@ -160,8 +160,10 @@ class RendererBlocksMixin:
         if all_items:
             left_indent_cm = 0.5
             cols = self.calculate_optimal_option_cols(all_items, left_indent_cm, printable_width_cm)
-            max_len = max(len(i) for i in all_items)
-            return cols, max_len
+            clean_items = [self.strip_markup_for_measurement(i) for i in all_items]
+            measurer = get_gdi_text_measurer()
+            max_w_pt = max(measurer.measure_text_pt(ci, font_name=self.font_name, font_size_pt=self.font_size, is_bold=False) for ci in clean_items) if clean_items else 0.0
+            return cols, max_w_pt
         return None, None
 
     def render_num_container(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
@@ -190,36 +192,39 @@ class RendererBlocksMixin:
     def calculate_optimal_option_cols(self, items: List[str], left_indent_cm: float, printable_width_cm: float) -> int:
         """
         Calculates optimal column count (1, 2, 3, or 4 columns) for multiple-choice options
-        so text wrapping NEVER occurs across available printable width.
+        based on exact physical GDI typographical width so text wrapping NEVER occurs.
         """
         N = len(items)
         if N <= 1:
             return 1
 
         remaining_width_cm = max(5.0, printable_width_cm - left_indent_cm)
-        max_len = max(len(item) for item in items) if items else 0
+        remaining_width_pt = cm_to_pt(remaining_width_cm)
 
-        # In Times New Roman 12pt (remaining width ~16.0cm):
-        # 4 columns (4.0cm/col): max 18 chars (including option letter like 'A. ')
-        # 2 columns (8.0cm/col): max 38 chars
-        # 1 column: > 38 chars (full sentences)
+        # Measure exact physical width in points of each option item
+        clean_items = [self.strip_markup_for_measurement(item) for item in items]
+        measurer = get_gdi_text_measurer()
+        item_widths_pt = [measurer.measure_text_pt(ci, font_name=self.font_name, font_size_pt=self.font_size, is_bold=False) for ci in clean_items]
+        max_item_w_pt = max(item_widths_pt) if item_widths_pt else 0.0
+
+        # Safety gap between columns (at least 6.0 mm = ~17.0 pt)
+        col_gap_pt = cm_to_pt(0.60)
+
+        # Candidate column counts to evaluate based on total items
         if N >= 4:
-            if max_len <= 18:
-                return 4
-            elif max_len <= 38:
-                return 2
-            else:
-                return 1
+            candidate_cols = [4, 2]
         elif N == 3:
-            if max_len <= 26:
-                return 3
-            else:
-                return 1
+            candidate_cols = [3]
         elif N == 2:
-            if max_len <= 38:
-                return 2
-            else:
-                return 1
+            candidate_cols = [2]
+        else:
+            candidate_cols = []
+
+        for c in candidate_cols:
+            col_slot_w_pt = (remaining_width_pt - ((c - 1) * col_gap_pt)) / c
+            # If the longest item fits comfortably inside the column slot
+            if max_item_w_pt <= col_slot_w_pt:
+                return c
 
         return 1
 
@@ -227,7 +232,7 @@ class RendererBlocksMixin:
         """
         Renders dedicated multiple-choice option container [OPT] ... [/OPT].
         Automatically formats option letters (A., B., C., D.) as bold, and calculates optimal column count
-        (1, 2, 3, or 4 columns) based on max item length so text wrapping NEVER occurs.
+        (1, 2, 3, or 4 columns) based on exact GDI physical text width so text wrapping NEVER occurs.
         """
         raw_text = block.content.strip()
         if not raw_text:
@@ -258,15 +263,9 @@ class RendererBlocksMixin:
                 q_num_extracted = q_match.group(1) or q_match.group(2) or q_match.group(3)
                 items[0] = q_match.group(4).strip() if q_match.group(4) else items[0]
 
-        has_any_letters = False
-        for item in items:
-            if re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z0-9][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*', item):
-                has_any_letters = True
-                break
-
         normalized_items = []
         for idx_item, item in enumerate(items):
-            m_let = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z0-9][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', item)
+            m_let = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', item)
             if m_let:
                 let_part = m_let.group(1).rstrip('.)')
                 body_part = m_let.group(2).strip()
@@ -277,17 +276,14 @@ class RendererBlocksMixin:
 
         left_indent_cm = 0.0 if has_standalone_q_num else 0.5
 
-        def clean_opt_for_measurement(text: str) -> str:
-            t = re.sub(r'\[(.*?)\]\{(?:u|b|i|[a-zA-Z0-9#]+)\}', r'\1', text)
-            return re.sub(r'\[.*?\]|\{.*?\}|\*|_', '', t).strip()
-
-        formatted_item_strings = [f"{let}. {clean_opt_for_measurement(body)}" for let, body in normalized_items]
+        formatted_item_strings = [f"{let}. {self.strip_markup_for_measurement(body)}" for let, body in normalized_items]
         local_cols = self.calculate_optimal_option_cols(formatted_item_strings, left_indent_cm, printable_width_cm)
-        local_max_len = max(len(s) for s in formatted_item_strings) if formatted_item_strings else 0
+        measurer = get_gdi_text_measurer()
+        local_max_w_pt = max(measurer.measure_text_pt(s, font_name=self.font_name, font_size_pt=self.font_size) for s in formatted_item_strings) if formatted_item_strings else 0.0
 
         # Each question independently uses its own optimal column count based on its actual option lengths
         num_cols = local_cols
-        max_item_len = local_max_len
+        max_item_len = local_max_w_pt
 
         if has_standalone_q_num:
             num_fmt = self.get_effective_number_format(extracted_pref, extracted_delim)
