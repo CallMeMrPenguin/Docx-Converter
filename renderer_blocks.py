@@ -413,15 +413,32 @@ class RendererBlocksMixin:
             if not lines:
                 return
 
-            # Accurate character width multiplier for Times New Roman / Segoe UI (0.41 * fontSize = 4.92 pt / 0.173 cm)
-            char_w_pt = max(4.0, self.font_size * 0.41)
-            pad_left_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
-            pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
-            pad_top_pt = cm_to_pt(0.08)
-            pad_bottom_pt = cm_to_pt(0.08)
+            # Measure exact physical rendered width of longest line in Word COM for 100.0% precision
+            max_line_w_pt = 0.0
+            try:
+                left_m_pt = doc.PageSetup.LeftMargin
+                for l in lines:
+                    sel.SetRange(doc.Content.End - 1, doc.Content.End - 1)
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 1
+                    sel.TypeText(l)
+                    pos = sel.Information(5)
+                    sel.Delete(1, -len(l))
+                    w_pt = pos - left_m_pt
+                    if w_pt > max_line_w_pt:
+                        max_line_w_pt = w_pt
+            except Exception:
+                char_w_pt = max(4.0, self.font_size * 0.41)
+                max_len = max(len(l) for l in lines)
+                max_line_w_pt = max_len * char_w_pt
 
-            max_len = max(len(l) for l in lines)
-            est_content_w = (max_len * char_w_pt) + pad_left_pt + pad_right_pt
+            pad_left_pt = cm_to_pt(0.20)   # Exactly 2.0 mm padding
+            pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
+            pad_top_pt = cm_to_pt(0.10)    # 1.0 mm padding
+            pad_bottom_pt = cm_to_pt(0.10) # 1.0 mm padding
+
+            est_content_w = max_line_w_pt + pad_left_pt + pad_right_pt
 
             if est_content_w >= (printable_width_pt * 0.85):
                 box_width_pt = printable_width_pt
@@ -430,15 +447,11 @@ class RendererBlocksMixin:
                 box_width_pt = min(printable_width_pt, max(80.0, est_content_w))
                 left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
-            font_line_h = max(14.0, self.font_size * 1.35)
-            avail_text_w = max(1.0, box_width_pt - pad_left_pt - pad_right_pt)
-            est_total_lines = 0
-            for l in lines:
-                est_w = len(l) * char_w_pt
-                est_total_lines += max(1, math.ceil(est_w / avail_text_w))
-
-            num_display_lines = max(len(lines), est_total_lines)
-            box_height_pt = (num_display_lines * font_line_h) + pad_top_pt + pad_bottom_pt + 4.0
+            # Vertical Height: (Num lines * Font Line Height) + Space Between Lines + Top/Bottom Margins
+            num_lines = len(lines)
+            exact_line_h_pt = self.font_size * 1.25  # Standard single line height
+            space_between_pt = 2.0
+            box_height_pt = (num_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + pad_top_pt + pad_bottom_pt + 2.0
 
             try:
                 shape = doc.Shapes.AddShape(
