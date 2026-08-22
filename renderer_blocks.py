@@ -824,8 +824,9 @@ class RendererBlocksMixin:
                     cell_range.Text = cell_txt
 
         try:
-            end_range = doc.Range(tbl.Range.End + 1, tbl.Range.End + 1)
-            end_range.Select()
+            rng_after = tbl.Range
+            rng_after.Collapse(0)  # wdCollapseEnd = 0
+            rng_after.Select()
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.RightIndent = 0
             sel.ParagraphFormat.FirstLineIndent = 0
@@ -922,8 +923,9 @@ class RendererBlocksMixin:
             cap_sel.TypeText(cap_text)
 
         try:
-            end_range = doc.Range(tbl.Range.End + 1, tbl.Range.End + 1)
-            end_range.Select()
+            rng_after = tbl.Range
+            rng_after.Collapse(0)  # wdCollapseEnd = 0
+            rng_after.Select()
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.RightIndent = 0
             sel.ParagraphFormat.SpaceBefore = 6
