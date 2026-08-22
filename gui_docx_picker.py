@@ -100,9 +100,16 @@ def open_docx_picker_dialog(parent_app):
     search_frame.pack(side="right")
 
     tk.Label(search_frame, text="🔍 Tìm tên file:", font=("Segoe UI", 9), bg="#111827", fg="#94a3b8").pack(side="left", padx=(0, 4))
-    ent_search = tk.Entry(search_frame, textvariable=search_var, bg="#090d16", fg="#ffffff", insertbackground="#ffffff", font=("Segoe UI", 9), width=24)
+    ent_search = tk.Entry(search_frame, textvariable=search_var, bg="#090d16", fg="#ffffff", insertbackground="#ffffff", font=("Segoe UI", 9), width=22)
     ent_search.pack(side="left")
     ent_search.bind("<KeyRelease>", lambda e: filter_and_render_tree())
+
+    def clear_search_filter():
+        search_var.set("")
+        filter_and_render_tree()
+
+    btn_clear_s = tk.Button(search_frame, text="✖", command=clear_search_filter, bg="#334155", fg="#f43f5e", font=("Segoe UI", 8, "bold"), relief="flat", padx=5, pady=1, cursor="hand2")
+    btn_clear_s.pack(side="left", padx=(3, 0))
 
     # ── MAIN SPLIT PANE ────────────────────────────────────────────
     main_split = tk.Frame(win, bg="#0f172a", padx=16, pady=10)
@@ -127,10 +134,13 @@ def open_docx_picker_dialog(parent_app):
     tree.heading("size", text="Dung Lượng", anchor="center")
     tree.heading("status", text="Trạng Thái", anchor="center")
 
-    tree.column("#0", width=260, minwidth=180)
-    tree.column("mtime", width=120, minwidth=100, anchor="center")
-    tree.column("size", width=80, minwidth=70, anchor="center")
-    tree.column("status", width=100, minwidth=90, anchor="center")
+    tree.column("#0", width=280, minwidth=180, stretch=True)
+    tree.column("mtime", width=120, minwidth=100, stretch=False, anchor="center")
+    tree.column("size", width=80, minwidth=70, stretch=False, anchor="center")
+    tree.column("status", width=100, minwidth=90, stretch=False, anchor="center")
+
+    tree.tag_configure("has_uln", foreground="#4ade80")
+    tree.tag_configure("no_uln", foreground="#94a3b8")
 
     tree.pack(fill="both", expand=True)
     tree_scroll.config(command=tree.yview)
@@ -309,13 +319,15 @@ def open_docx_picker_dialog(parent_app):
 
             matching_count += 1
             status_text = "✓ Có ULN" if f["has_uln"] else "- Không có"
+            tag_name = "has_uln" if f["has_uln"] else "no_uln"
             icon_prefix = "📄 "
-            
+
             item_id = tree.insert(
                 "",
                 "end",
                 text=f"{icon_prefix}{f['filename']}",
-                values=(f["mtime"], f"{f['size_kb']:.1f} KB", status_text)
+                values=(f["mtime"], f"{f['size_kb']:.1f} KB", status_text),
+                tags=(tag_name,)
             )
             file_data_map[item_id] = f
 

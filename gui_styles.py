@@ -23,4 +23,11 @@ def setup_dark_theme(root):
     root.option_add("*TCombobox*Listbox.selectBackground", "#3b82f6")
     root.option_add("*TCombobox*Listbox.selectForeground", "#ffffff")
     root.option_add("*TCombobox*Listbox.font", ("Segoe UI", 9))
+
+    # Configure Treeview dark styling
+    style.configure("Treeview", background="#090d16", foreground="#f8fafc", fieldbackground="#090d16", rowheight=28, font=("Segoe UI", 9), borderwidth=0)
+    style.map("Treeview", background=[("selected", "#2563eb")], foreground=[("selected", "#ffffff")])
+    style.configure("Treeview.Heading", background="#1e293b", foreground="#38bdf8", font=("Segoe UI", 9, "bold"), borderwidth=1, relief="flat")
+    style.map("Treeview.Heading", background=[("active", "#334155")])
+
     return style
