@@ -586,20 +586,20 @@ class RendererBlocksMixin:
             pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
             pad_vert_pt = cm_to_pt(0.12)   # Exactly 1.2 mm padding
 
-            # If items are long sentences/dialogue turns (>22% page width or >20 chars), format as 1 column
-            if max_item_w_pt >= (printable_width_pt * 0.22):
-                cols = 1
-            else:
-                est_slot_w = max_item_w_pt + cm_to_pt(0.8)
-                max_fit_cols = max(1, int(printable_width_pt / est_slot_w))
-                if N <= 5:
-                    cols = min(N, max_fit_cols)
-                elif N <= 8:
-                    cols = min(4, max_fit_cols)
-                elif N <= 10:
-                    cols = min(5, max_fit_cols)
-                else:
-                    cols = min(4, max_fit_cols)
+            # Calculate optimal column count based on physical feasibility (4 -> 3 -> 2 -> 1)
+            cols = 1
+            for test_cols in [4, 3, 2]:
+                if N >= test_cols:
+                    col_maxes = []
+                    for c in range(test_cols):
+                        c_widths = [item_widths_pt[i] for i in range(N) if i % test_cols == c]
+                        col_maxes.append(max(c_widths) if c_widths else 45.0)
+                    gap_pt = cm_to_pt(0.60)  # 6mm gap
+                    pad_pt = cm_to_pt(0.40)  # 4mm pad
+                    needed_w_pt = sum(col_maxes) + ((test_cols - 1) * gap_pt) + pad_pt
+                    if needed_w_pt <= printable_width_pt:
+                        cols = test_cols
+                        break
 
             lines_bank = []
             for i in range(0, N, cols):
@@ -608,7 +608,13 @@ class RendererBlocksMixin:
             extra_buffer_pt = cm_to_pt(0.50)  # +5.0 mm extra right margin buffer for corner serifs (y, t, w)
 
             if cols == 1:
-                box_width_pt = min(printable_width_pt, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt)
+                raw_w_pt = max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt
+                if raw_w_pt >= (printable_width_pt * 0.80):
+                    box_width_pt = printable_width_pt
+                    left_offset_pt = 0.0
+                else:
+                    box_width_pt = min(printable_width_pt, max(80.0, raw_w_pt))
+                    left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
                 tab_stops_pt = [0.0]
             else:
                 # Dynamic Tab Stops based on actual physical word widths per column
@@ -617,15 +623,19 @@ class RendererBlocksMixin:
                     col_widths = [item_widths_pt[i] for i in range(N) if i % cols == c]
                     col_max_widths_pt.append(max(col_widths) if col_widths else 45.0)
 
-                gap_pt = cm_to_pt(0.8)  # 8mm gap between columns
+                gap_pt = cm_to_pt(0.60)  # 6mm gap between columns
                 tab_stops_pt = [0.0]
                 for c in range(cols - 1):
                     next_tab_pt = tab_stops_pt[-1] + col_max_widths_pt[c] + gap_pt
                     tab_stops_pt.append(next_tab_pt)
 
-                box_width_pt = min(printable_width_pt, tab_stops_pt[-1] + col_max_widths_pt[-1] + (2 * pad_horiz_pt) + extra_buffer_pt)
-
-            left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+                raw_w_pt = tab_stops_pt[-1] + col_max_widths_pt[-1] + (2 * pad_horiz_pt) + extra_buffer_pt
+                if raw_w_pt >= (printable_width_pt * 0.80):
+                    box_width_pt = printable_width_pt
+                    left_offset_pt = 0.0
+                else:
+                    box_width_pt = min(printable_width_pt, raw_w_pt)
+                    left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             num_rows = len(lines_bank)
             exact_line_h_pt = self.font_size * 1.25
@@ -667,7 +677,7 @@ class RendererBlocksMixin:
                 box_sel = word.Selection
                 box_sel.Font.Name = self.font_name
                 box_sel.Font.Size = self.font_size
-                box_sel.Font.Bold = 1
+                box_sel.Font.Bold = 0
                 box_sel.Font.Color = 0
 
                 box_sel.ParagraphFormat.SpaceBefore = 0
@@ -685,7 +695,7 @@ class RendererBlocksMixin:
                     box_sel.ParagraphFormat.SpaceAfter = 0
 
                     for idx_w, word_txt in enumerate(chunk):
-                        w_spans = parse_inline_spans(word_txt, default_bold=True)
+                        w_spans = parse_inline_spans(word_txt, default_bold=False)
                         self.write_inline_spans(box_sel, w_spans)
                         box_sel.Font.Color = 0
                         if idx_w < len(chunk) - 1:
