@@ -403,6 +403,36 @@ class RendererBlocksMixin:
         sel.ParagraphFormat.TabStops.ClearAll()
         self.last_rendered_tag = "OPT"
 
+    def measure_text_width_pt(self, doc, text: str, font_name: str = "Times New Roman", font_size: float = 12.0, is_bold: bool = False) -> float:
+        """Accurately measures physical text width in Word COM without any paragraph indent interference."""
+        if not text:
+            return 0.0
+        try:
+            rng = doc.Range(doc.Content.End - 1, doc.Content.End - 1)
+            rng.ParagraphFormat.Reset()
+            rng.ParagraphFormat.LeftIndent = 0
+            rng.ParagraphFormat.FirstLineIndent = 0
+            rng.ParagraphFormat.TabStops.ClearAll()
+            rng.Font.Name = font_name
+            rng.Font.Size = font_size
+            rng.Font.Bold = 1 if is_bold else 0
+            rng.Font.Italic = 0
+
+            start_pos = rng.Information(5)
+            rng.Text = text
+            end_rng = doc.Range(rng.End, rng.End)
+            end_pos = end_rng.Information(5)
+            rng.Delete()
+
+            width_pt = end_pos - start_pos
+            if width_pt > 0:
+                return width_pt
+        except Exception:
+            pass
+
+        char_w = font_size * (0.42 if is_bold else 0.38)
+        return len(text) * char_w
+
     def render_box_shape(self, sel, doc, word, block: ULNBlock, printable_width_cm: float):
         """
         Renders Word Bank / Callout Box / Formula Box inside a MS Word Rounded Rectangle Shape TextFrame.
@@ -431,24 +461,7 @@ class RendererBlocksMixin:
                 return
 
             # Measure exact physical rendered width of longest line in Word COM for 100.0% precision
-            max_line_w_pt = 0.0
-            try:
-                left_m_pt = doc.PageSetup.LeftMargin
-                for l in lines:
-                    sel.SetRange(doc.Content.End - 1, doc.Content.End - 1)
-                    sel.Font.Name = self.font_name
-                    sel.Font.Size = self.font_size
-                    sel.Font.Bold = 0
-                    sel.TypeText(l)
-                    pos = sel.Information(5)
-                    sel.Delete(1, -len(l))
-                    w_pt = pos - left_m_pt
-                    if w_pt > max_line_w_pt:
-                        max_line_w_pt = w_pt
-            except Exception:
-                char_w_pt = max(4.0, self.font_size * 0.33)
-                max_len = max(len(l) for l in lines) if lines else 0
-                max_line_w_pt = max_len * char_w_pt
+            max_line_w_pt = max(self.measure_text_width_pt(doc, l, self.font_name, self.font_size, is_bold=True) for l in lines) if lines else 50.0
 
             pad_left_pt = cm_to_pt(0.20)   # Exactly 2.0 mm padding
             pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
@@ -547,22 +560,7 @@ class RendererBlocksMixin:
 
             N = len(words)
 
-            item_widths_pt = []
-            try:
-                left_m_pt = doc.PageSetup.LeftMargin
-                for w in words:
-                    sel.SetRange(doc.Content.End - 1, doc.Content.End - 1)
-                    sel.Font.Name = self.font_name
-                    sel.Font.Size = self.font_size
-                    sel.Font.Bold = 0
-                    sel.TypeText(w)
-                    pos = sel.Information(5)
-                    sel.Delete(1, -len(w))
-                    item_widths_pt.append(pos - left_m_pt)
-            except Exception:
-                char_w_pt = max(4.0, self.font_size * 0.33)
-                item_widths_pt = [len(w) * char_w_pt for w in words]
-
+            item_widths_pt = [self.measure_text_width_pt(doc, w, self.font_name, self.font_size, is_bold=True) for w in words]
             max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
             pad_horiz_pt = cm_to_pt(0.20)  # Exactly 2.0 mm padding
             pad_vert_pt = cm_to_pt(0.10)   # Exactly 1.0 mm padding
