@@ -384,14 +384,16 @@ class ULNWordRenderer(RendererBlocksMixin):
                 sel.ParagraphFormat.PageBreakBefore = False
                 is_ins_block = block.is_instruction or any(s.is_instruction for s in block.spans)
                 
-                # Check if this P0 is a numbered question stem followed by an OPT block
+                # Check if this P0 is a numbered question stem followed by an OPT block or Dialogue continuation
                 has_next_opt = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag == "OPT")
-                pref_chk, delim_chk, q_num_chk, _ = extract_question_prefix_and_body(block.content)
+                has_next_dlg = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P0"] and bool(re.search(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', blocks[idx_block + 1].content, re.IGNORECASE)))
+                pref_chk, delim_chk, q_num_chk, body_chk = extract_question_prefix_and_body(block.content)
                 is_numbered_q = (q_num_chk is not None)
+                is_dialogue_line = bool(re.search(r'(?:^|#\d+[\.\)]\s*)(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', block.content, re.IGNORECASE))
 
-                if is_ins_block or (is_numbered_q and has_next_opt):
-                    sel.ParagraphFormat.SpaceBefore = 14 if self.last_rendered_tag == "BOX" else 8
-                    sel.ParagraphFormat.SpaceAfter = 4
+                if is_ins_block or (is_numbered_q and (has_next_opt or has_next_dlg)):
+                    sel.ParagraphFormat.SpaceBefore = 14 if self.last_rendered_tag == "BOX" else (8 if is_ins_block else 6)
+                    sel.ParagraphFormat.SpaceAfter = 4 if is_ins_block else 2
                     sel.ParagraphFormat.KeepWithNext = True
                 else:
                     sel.ParagraphFormat.SpaceBefore = 6
@@ -401,8 +403,8 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                 # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct
                 blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', block.content, re.IGNORECASE)
-                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank), ONLY for sentence transformation arrows (→ / ->) or 15+ long underscores
-                is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', block.content)) or bool(re.search(r'_{15,}', block.content))
+                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank)
+                is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', block.content)) or bool(re.search(r'_{15,}', block.content)) or is_dialogue_line
                 trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', block.content, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and is_transform_or_long) else None
 
                 if blank_symbol_match:
@@ -428,19 +430,28 @@ class ULNWordRenderer(RendererBlocksMixin):
                     text_part = trailing_blank_symbol_match.group(1)
                     trailing_sym = trailing_blank_symbol_match.group(2).strip()
 
-                    q_num_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', text_part, re.IGNORECASE)
-                    if q_num_match and q_num_match.group(4).strip():
-                        self.apply_native_numbered_list(word, sel)
+                    pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
+                    if q_num is not None and c_body.strip():
+                        num_fmt = self.get_effective_number_format(pref, delim)
+                        self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
                         if self.last_rendered_tag == "BOX":
                             sel.ParagraphFormat.SpaceBefore = 14
-                        text_part = q_num_match.group(4).strip()
+                        text_part = c_body.strip()
                     else:
-                        try:
-                            sel.Range.ListFormat.RemoveNumbers()
-                        except Exception:
-                            pass
-                        if self.last_rendered_tag == "BOX":
-                            sel.ParagraphFormat.SpaceBefore = 14
+                        q_num_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', text_part, re.IGNORECASE)
+                        if q_num_match and q_num_match.group(4).strip():
+                            q_num_val = q_num_match.group(1) or q_num_match.group(2) or q_num_match.group(3)
+                            self.apply_native_numbered_list(word, sel, q_num=q_num_val)
+                            if self.last_rendered_tag == "BOX":
+                                sel.ParagraphFormat.SpaceBefore = 14
+                            text_part = q_num_match.group(4).strip()
+                        else:
+                            try:
+                                sel.Range.ListFormat.RemoveNumbers()
+                            except Exception:
+                                pass
+                            if self.last_rendered_tag == "BOX":
+                                sel.ParagraphFormat.SpaceBefore = 14
 
                     from uln_parser import parse_inline_spans as _pis
                     text_spans = _pis(text_part)
@@ -493,7 +504,14 @@ class ULNWordRenderer(RendererBlocksMixin):
 
             elif tag in ["P1", "P2"]:
                 pref, delim, q_num, content_to_render = extract_question_prefix_and_body(block.content)
-                left_indent_cm = 0.0 if (q_num is not None) else (0.5 if tag == "P1" else 1.0)
+                is_dlg_speaker = bool(re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', content_to_render, re.IGNORECASE))
+                
+                if q_num is not None:
+                    left_indent_cm = 0.0
+                elif is_dlg_speaker:
+                    left_indent_cm = 0.63  # Matches Word's native numbered list tab stop (18 pt)
+                else:
+                    left_indent_cm = 0.5 if tag == "P1" else 1.0
 
                 if q_num is not None:
                     num_fmt = self.get_effective_number_format(pref, delim)
@@ -504,21 +522,26 @@ class ULNWordRenderer(RendererBlocksMixin):
                     except Exception:
                         pass
 
+                has_next_dlg = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P0"] and bool(re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', blocks[idx_block + 1].content, re.IGNORECASE)))
 
+                if is_dlg_speaker:
+                    sel.ParagraphFormat.SpaceBefore = 1
+                    sel.ParagraphFormat.SpaceAfter = 2 if has_next_dlg else 6
+                    sel.ParagraphFormat.KeepWithNext = has_next_dlg
+                else:
+                    space_before_p1 = 14 if (self.last_rendered_tag == "BOX") else (4 if tag == "P1" else 3)
+                    sel.ParagraphFormat.SpaceBefore = space_before_p1
+                    sel.ParagraphFormat.SpaceAfter = 3
+                    sel.ParagraphFormat.KeepWithNext = False
+
+                sel.ParagraphFormat.Alignment = 0
 
                 items = split_line_into_option_items(content_to_render)
 
-
-                space_before_p1 = 14 if (self.last_rendered_tag == "BOX") else (4 if tag == "P1" else 3)
-                sel.ParagraphFormat.SpaceBefore = space_before_p1
-                sel.ParagraphFormat.SpaceAfter = 3
-                sel.ParagraphFormat.KeepWithNext = False
-                sel.ParagraphFormat.Alignment = 0
-
                 # Check if paragraph is ONLY a standalone blank line _____ or <blank> or [BLANK], optionally followed by symbol/punct
                 blank_symbol_match = re.match(r'^\s*(?:_{3,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])\s*([?\.\!:,;]?)\s*$', content_to_render, re.IGNORECASE)
-                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank), ONLY for sentence transformation arrows (→ / ->) or 15+ long underscores
-                is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', content_to_render)) or bool(re.search(r'_{15,}', content_to_render))
+                # Check if paragraph has text THEN ends with <blank> / [BLANK] / _____ (Option B: trailing blank)
+                is_transform_or_long = bool(re.match(r'^\s*(?:→|->)', content_to_render)) or bool(re.search(r'_{15,}', content_to_render)) or is_dlg_speaker
                 trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', content_to_render, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and is_transform_or_long) else None
 
                 if blank_symbol_match:

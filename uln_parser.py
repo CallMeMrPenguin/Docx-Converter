@@ -469,21 +469,31 @@ class ULNParser:
                     is_ins = any(s.is_instruction for s in spans) or bool(re.search(r'\[ins\]', trimmed, re.IGNORECASE))
                     blocks.append(ULNBlock(tag="P0", content=trimmed, spans=spans, pic=pic_info, is_instruction=is_ins))
 
-        # Merge empty P0/P1 question-number-only blocks preceding OPT blocks
+        # Merge empty P0/P1 question-number-only blocks preceding OPT blocks or Dialogue lines
         merged_blocks: List[ULNBlock] = []
         i = 0
         while i < len(blocks):
             curr = blocks[i]
             if i + 1 < len(blocks) and curr.tag in ["P0", "P1"]:
                 num_only_match = re.match(r'^\s*(?:\*\*)?(?:(?:Question|Câu|Task|Exercise|Ex|Activity)\s+)?#(\d+)[\.\)\:\-]?\s*(?:\*\*)?[:\.\)]?\s*$', curr.content, re.IGNORECASE)
-                if num_only_match and blocks[i + 1].tag == "OPT":
-                    opt_blk = blocks[i + 1]
-                    # Preserve exact question prefix (e.g. "Question #1.", "Câu #1:", "#1.")
-                    opt_blk.content = f"{curr.content.strip()} {opt_blk.content}"
-                    opt_blk.spans = parse_inline_spans(opt_blk.content)
-                    merged_blocks.append(opt_blk)
-                    i += 2
-                    continue
+                if num_only_match:
+                    nxt = blocks[i + 1]
+                    if nxt.tag == "OPT":
+                        nxt.content = f"{curr.content.strip()} {nxt.content}"
+                        nxt.spans = parse_inline_spans(nxt.content)
+                        merged_blocks.append(nxt)
+                        i += 2
+                        continue
+                    elif nxt.tag in ["P0", "P1"]:
+                        # Check if next block starts with dialogue/speaker pattern e.g. A:, Speaker A:, Q:
+                        if re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', nxt.content, re.IGNORECASE):
+                            nxt.tag = "P0"
+                            nxt.content = f"{curr.content.strip()} {nxt.content}"
+                            nxt.spans = parse_inline_spans(nxt.content)
+                            merged_blocks.append(nxt)
+                            i += 2
+                            continue
+
             merged_blocks.append(curr)
             i += 1
 
