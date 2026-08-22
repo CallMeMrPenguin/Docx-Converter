@@ -1202,12 +1202,12 @@ class RendererBlocksMixin:
 
         # 1. Collect full group of consecutive TAB blocks with the same column count
         group_start = idx_block
-        while group_start > 0 and blocks[group_start - 1].tag.startswith("TAB") and len(blocks[group_start - 1].cols) == num_cols:
+        while group_start > 0 and blocks[group_start - 1].tag.startswith("TAB") and (len(blocks[group_start - 1].cols) if blocks[group_start - 1].cols else 0) == num_cols:
             group_start -= 1
 
         tab_group = []
         lookahead = group_start
-        while lookahead < len(blocks) and blocks[lookahead].tag.startswith("TAB") and len(blocks[lookahead].cols) == num_cols:
+        while lookahead < len(blocks) and blocks[lookahead].tag.startswith("TAB") and (len(blocks[lookahead].cols) if blocks[lookahead].cols else 0) == num_cols:
             tab_group.append(blocks[lookahead])
             lookahead += 1
 
@@ -1217,7 +1217,7 @@ class RendererBlocksMixin:
         # 2. Check if columns in this group contain answer blanks
         has_blanks = any(
             re.search(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', c)
-            for b in tab_group for c in b.cols
+            for b in tab_group for c in (b.cols or [])
         )
 
         avail_w_cm = printable_width_cm - base_indent_cm

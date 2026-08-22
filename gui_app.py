@@ -27,6 +27,7 @@ class ULNFormatterApp:
         self.version = updater.get_current_version()
         self.root.title(f"Universal Layout Notation (ULN) → DOCX Formatter v{self.version}")
         self.root.geometry("1220x840")
+        self.root.minsize(1050, 700)
         self.root.configure(bg="#0f172a")
 
         self.last_output_dir = os.path.expanduser("~\\Documents")
@@ -211,13 +212,28 @@ class ULNFormatterApp:
         btn_clear_img.pack(side="right", padx=(2, 0))
 
         # Action Buttons on Sidebar
-        btn_docx_side = tk.Button(sidebar, text="📥 Nhập từ file DOCX...", command=self.open_docx_picker, bg="#0284c7", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=4)
-        btn_docx_side.pack(fill="x", pady=(6, 2))
+        btn_compile_side = tk.Button(
+            sidebar,
+            text="🚀 COMPILE TO DOCX",
+            command=self.compile_docx,
+            bg="#16a34a",
+            fg="#ffffff",
+            activebackground="#15803d",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 11, "bold"),
+            relief="flat",
+            pady=8,
+            cursor="hand2"
+        )
+        btn_compile_side.pack(fill="x", pady=(10, 4))
 
-        btn_prompt_side = tk.Button(sidebar, text="📜 Xem / Sửa AI Prompt...", command=self.open_prompt_editor, bg="#0369a1", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=4)
+        btn_docx_side = tk.Button(sidebar, text="📥 Nhập từ file DOCX...", command=self.open_docx_picker, bg="#0284c7", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=4, cursor="hand2")
+        btn_docx_side.pack(fill="x", pady=2)
+
+        btn_prompt_side = tk.Button(sidebar, text="📜 Xem / Sửa AI Prompt...", command=self.open_prompt_editor, bg="#0369a1", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=4, cursor="hand2")
         btn_prompt_side.pack(fill="x", pady=2)
 
-        btn_sample = tk.Button(sidebar, text="Load Sample ULN", command=self.load_sample, bg="#475569", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=4)
+        btn_sample = tk.Button(sidebar, text="📄 Load Sample ULN", command=self.load_sample, bg="#475569", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=4, cursor="hand2")
         btn_sample.pack(fill="x", pady=2)
 
         # Right Text Area (Editor)
@@ -228,38 +244,55 @@ class ULNFormatterApp:
         btn_bar = tk.Frame(editor_frame, bg="#1e293b", pady=4)
         btn_bar.pack(fill="x", side="top")
 
-        btn_import_docx = tk.Button(btn_bar, text="📥 Nhập từ file DOCX", command=self.open_docx_picker, bg="#0284c7", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=4)
-        btn_import_docx.pack(side="left", padx=3)
+        # Pack Compile button FIRST to right to ensure it is ALWAYS visible and never clipped
+        btn_compile = tk.Button(
+            btn_bar,
+            text="🚀 COMPILE TO DOCX",
+            command=self.compile_docx,
+            bg="#16a34a",
+            fg="#ffffff",
+            activebackground="#15803d",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 10, "bold"),
+            relief="flat",
+            padx=14,
+            pady=4,
+            cursor="hand2"
+        )
+        btn_compile.pack(side="right", padx=(6, 2))
 
-        btn_embed_file = tk.Button(btn_bar, text="💾 Nhúng Raw vào DOCX...", command=self.embed_raw_to_docx_file, bg="#0369a1", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=4)
-        btn_embed_file.pack(side="left", padx=3)
-
-        btn_import = tk.Button(btn_bar, text="📁 Import .txt", command=self.import_file, bg="#334155", fg="#38bdf8", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=4)
-        btn_import.pack(side="left", padx=3)
+        btn_clear = tk.Button(btn_bar, text="🗑️ Clear", command=self.clear_text, bg="#334155", fg="#f43f5e", activebackground="#475569", activeforeground="#f43f5e", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=3, cursor="hand2")
+        btn_clear.pack(side="right", padx=2)
 
         btn_search = tk.Button(
             btn_bar,
-            text="🔍 Tìm kiếm (Ctrl+F)",
+            text="🔍 Tìm (Ctrl+F)",
             command=self.toggle_search_bar,
             bg="#334155",
             fg="#38bdf8",
             activebackground="#0284c7",
             activeforeground="#ffffff",
-            font=("Segoe UI", 9, "bold"),
+            font=("Segoe UI", 8, "bold"),
             relief="flat",
-            padx=10,
-            pady=4,
+            padx=8,
+            pady=3,
             cursor="hand2"
         )
-        btn_search.pack(side="left", padx=3)
+        btn_search.pack(side="right", padx=2)
 
-        btn_clear = tk.Button(btn_bar, text="🗑️ Clear Text", command=self.clear_text, bg="#334155", fg="#f43f5e", font=("Segoe UI", 9), relief="flat", padx=10, pady=4)
-        btn_clear.pack(side="left", padx=3)
+        btn_import_docx = tk.Button(btn_bar, text="📥 Nhập DOCX", command=self.open_docx_picker, bg="#0284c7", fg="#ffffff", activebackground="#0369a1", activeforeground="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=3, cursor="hand2")
+        btn_import_docx.pack(side="left", padx=2)
+
+        btn_embed_file = tk.Button(btn_bar, text="💾 Nhúng Raw", command=self.embed_raw_to_docx_file, bg="#0369a1", fg="#ffffff", activebackground="#0284c7", activeforeground="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=3, cursor="hand2")
+        btn_embed_file.pack(side="left", padx=2)
+
+        btn_import = tk.Button(btn_bar, text="📁 File .txt", command=self.import_file, bg="#334155", fg="#38bdf8", activebackground="#475569", activeforeground="#38bdf8", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=3, cursor="hand2")
+        btn_import.pack(side="left", padx=2)
 
         # Heading Quick Action Buttons (Alt+1..6)
         hdr_bar = tk.Frame(btn_bar, bg="#1e293b")
-        hdr_bar.pack(side="left", padx=10)
-        tk.Label(hdr_bar, text="Headings:", bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 9)).pack(side="left", padx=(0, 2))
+        hdr_bar.pack(side="left", padx=6)
+        tk.Label(hdr_bar, text="H:", bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 8, "bold")).pack(side="left", padx=(0, 2))
         for lvl in range(1, 7):
             h_btn = tk.Button(
                 hdr_bar,
@@ -272,12 +305,10 @@ class ULNFormatterApp:
                 font=("Segoe UI", 8, "bold"),
                 relief="flat",
                 padx=4,
-                pady=2
+                pady=1,
+                cursor="hand2"
             )
             h_btn.pack(side="left", padx=1)
-
-        btn_compile = tk.Button(btn_bar, text="🚀 COMPILE TO DOCX", command=self.compile_docx, bg="#16a34a", fg="#ffffff", font=("Segoe UI", 10, "bold"), relief="flat", padx=15, pady=4)
-        btn_compile.pack(side="right", padx=5)
 
         # Search & Replace Panel (Hidden by default, toggled with Ctrl+F / Ctrl+H)
         self.search_matches = []
