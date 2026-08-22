@@ -233,6 +233,22 @@ class ULNFormatterApp:
         btn_import = tk.Button(btn_bar, text="📁 Import .txt", command=self.import_file, bg="#334155", fg="#38bdf8", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=4)
         btn_import.pack(side="left", padx=3)
 
+        btn_search = tk.Button(
+            btn_bar,
+            text="🔍 Tìm kiếm (Ctrl+F)",
+            command=self.toggle_search_bar,
+            bg="#334155",
+            fg="#38bdf8",
+            activebackground="#0284c7",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            padx=10,
+            pady=4,
+            cursor="hand2"
+        )
+        btn_search.pack(side="left", padx=3)
+
         btn_clear = tk.Button(btn_bar, text="🗑️ Clear Text", command=self.clear_text, bg="#334155", fg="#f43f5e", font=("Segoe UI", 9), relief="flat", padx=10, pady=4)
         btn_clear.pack(side="left", padx=3)
 
@@ -259,6 +275,166 @@ class ULNFormatterApp:
         btn_compile = tk.Button(btn_bar, text="🚀 COMPILE TO DOCX", command=self.compile_docx, bg="#16a34a", fg="#ffffff", font=("Segoe UI", 10, "bold"), relief="flat", padx=15, pady=4)
         btn_compile.pack(side="right", padx=5)
 
+        # Search & Replace Panel (Hidden by default, toggled with Ctrl+F / Ctrl+H)
+        self.search_matches = []
+        self.current_match_idx = -1
+        self.search_is_visible = False
+        self.replace_is_visible = False
+
+        self.search_frame = tk.Frame(editor_frame, bg="#1e293b", padx=10, pady=6, highlightbackground="#334155", highlightthickness=1)
+
+        # Search Row (Find)
+        search_row = tk.Frame(self.search_frame, bg="#1e293b")
+        search_row.pack(fill="x", pady=(0, 2))
+
+        tk.Label(search_row, text="🔍 Tìm:", bg="#1e293b", fg="#38bdf8", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 6))
+
+        self.search_var = tk.StringVar()
+        self.search_var.trace_add("write", lambda *args: self.on_search_text_changed())
+
+        self.search_entry = tk.Entry(
+            search_row,
+            textvariable=self.search_var,
+            bg="#090d16",
+            fg="#f8fafc",
+            insertbackground="#ffffff",
+            font=("Consolas", 10),
+            relief="flat",
+            width=26
+        )
+        self.search_entry.pack(side="left", padx=(0, 8), ipady=2)
+
+        self.match_count_label = tk.Label(search_row, text="0 kết quả", bg="#1e293b", fg="#94a3b8", font=("Segoe UI", 9), width=12, anchor="w")
+        self.match_count_label.pack(side="left", padx=(0, 6))
+
+        btn_prev = tk.Button(
+            search_row,
+            text="▲ Trước",
+            command=self.find_prev,
+            bg="#334155",
+            fg="#f8fafc",
+            activebackground="#475569",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"),
+            relief="flat",
+            padx=6,
+            pady=1,
+            cursor="hand2"
+        )
+        btn_prev.pack(side="left", padx=2)
+
+        btn_next = tk.Button(
+            search_row,
+            text="▼ Sau",
+            command=self.find_next,
+            bg="#334155",
+            fg="#f8fafc",
+            activebackground="#475569",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"),
+            relief="flat",
+            padx=6,
+            pady=1,
+            cursor="hand2"
+        )
+        btn_next.pack(side="left", padx=2)
+
+        self.match_case_var = tk.BooleanVar(value=False)
+        chk_case = tk.Checkbutton(
+            search_row,
+            text="Aa Phân biệt hoa/thường",
+            variable=self.match_case_var,
+            command=self.on_search_text_changed,
+            bg="#1e293b",
+            fg="#94a3b8",
+            selectcolor="#090d16",
+            activebackground="#1e293b",
+            activeforeground="#f8fafc",
+            font=("Segoe UI", 8)
+        )
+        chk_case.pack(side="left", padx=8)
+
+        self.btn_toggle_replace = tk.Button(
+            search_row,
+            text="🔄 Thay thế",
+            command=self.toggle_replace_mode,
+            bg="#334155",
+            fg="#f59e0b",
+            activebackground="#d97706",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"),
+            relief="flat",
+            padx=8,
+            pady=1,
+            cursor="hand2"
+        )
+        self.btn_toggle_replace.pack(side="left", padx=4)
+
+        btn_close_search = tk.Button(
+            search_row,
+            text="✕",
+            command=self.hide_search_bar,
+            bg="#1e293b",
+            fg="#94a3b8",
+            activebackground="#1e293b",
+            activeforeground="#f43f5e",
+            font=("Segoe UI", 9, "bold"),
+            relief="flat",
+            cursor="hand2",
+            padx=4
+        )
+        btn_close_search.pack(side="right", padx=(4, 0))
+
+        # Replace Row
+        self.replace_row = tk.Frame(self.search_frame, bg="#1e293b")
+
+        tk.Label(self.replace_row, text="🔄 Thay:", bg="#1e293b", fg="#f59e0b", font=("Segoe UI", 9, "bold")).pack(side="left", padx=(0, 6))
+
+        self.replace_var = tk.StringVar()
+        self.replace_entry = tk.Entry(
+            self.replace_row,
+            textvariable=self.replace_var,
+            bg="#090d16",
+            fg="#f8fafc",
+            insertbackground="#ffffff",
+            font=("Consolas", 10),
+            relief="flat",
+            width=26
+        )
+        self.replace_entry.pack(side="left", padx=(0, 8), ipady=2)
+
+        btn_replace = tk.Button(
+            self.replace_row,
+            text="Thay thế (Enter)",
+            command=self.replace_current_match,
+            bg="#0284c7",
+            fg="#ffffff",
+            activebackground="#0369a1",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"),
+            relief="flat",
+            padx=8,
+            pady=1,
+            cursor="hand2"
+        )
+        btn_replace.pack(side="left", padx=2)
+
+        btn_replace_all = tk.Button(
+            self.replace_row,
+            text="Thay tất cả",
+            command=self.replace_all_matches,
+            bg="#0369a1",
+            fg="#ffffff",
+            activebackground="#0284c7",
+            activeforeground="#ffffff",
+            font=("Segoe UI", 8, "bold"),
+            relief="flat",
+            padx=8,
+            pady=1,
+            cursor="hand2"
+        )
+        btn_replace_all.pack(side="left", padx=2)
+
         # Text Area with Scrollbar
         txt_scroll = ttk.Scrollbar(editor_frame)
         txt_scroll.pack(side="right", fill="y")
@@ -277,6 +453,29 @@ class ULNFormatterApp:
         self.text_editor.pack(fill="both", expand=True)
         txt_scroll.config(command=self.text_editor.yview)
 
+        # Configure search highlighting tags
+        self.text_editor.tag_config("search_match", background="#334155", foreground="#38bdf8")
+        self.text_editor.tag_config("search_current", background="#f59e0b", foreground="#090d16")
+
+        # Bind Keybindings
+        self.root.bind("<Control-f>", lambda e: self.show_search_bar(with_replace=False))
+        self.root.bind("<Control-F>", lambda e: self.show_search_bar(with_replace=False))
+        self.root.bind("<Control-h>", lambda e: self.show_search_bar(with_replace=True))
+        self.root.bind("<Control-H>", lambda e: self.show_search_bar(with_replace=True))
+        self.root.bind("<F3>", lambda e: self.find_next())
+        self.root.bind("<Shift-F3>", lambda e: self.find_prev())
+
+        self.text_editor.bind("<Control-f>", lambda e: self.show_search_bar(with_replace=False))
+        self.text_editor.bind("<Control-F>", lambda e: self.show_search_bar(with_replace=False))
+        self.text_editor.bind("<Control-h>", lambda e: self.show_search_bar(with_replace=True))
+        self.text_editor.bind("<Control-H>", lambda e: self.show_search_bar(with_replace=True))
+
+        self.search_entry.bind("<Return>", self.find_next)
+        self.search_entry.bind("<Shift-Return>", self.find_prev)
+        self.search_entry.bind("<Escape>", lambda e: self.hide_search_bar())
+        self.replace_entry.bind("<Return>", lambda e: self.replace_current_match())
+        self.replace_entry.bind("<Escape>", lambda e: self.hide_search_bar())
+
         # Bind Alt+1 to Alt+6 heading shortcuts
         for lvl in range(1, 7):
             self.root.bind(f"<Alt-Key-{lvl}>", lambda e, l=lvl: self.apply_heading_shortcut(l, e))
@@ -289,6 +488,133 @@ class ULNFormatterApp:
 
         # Check for updates automatically in background after startup
         self.root.after(1500, self.auto_check_updates_background)
+
+    # ── SEARCH & REPLACE SYSTEM ────────────────────────────────────────
+    def show_search_bar(self, with_replace: bool = False):
+        """Displays search bar, populating with any currently selected text."""
+        try:
+            sel_text = self.text_editor.get(tk.SEL_FIRST, tk.SEL_LAST).strip()
+            if sel_text and '\n' not in sel_text:
+                self.search_var.set(sel_text)
+        except Exception:
+            pass
+
+        self.search_frame.pack(fill="x", side="top", before=self.text_editor, pady=(0, 4))
+        self.search_is_visible = True
+
+        if with_replace:
+            self.replace_row.pack(fill="x", pady=(4, 0))
+            self.replace_is_visible = True
+            self.replace_entry.focus_set()
+            self.replace_entry.select_range(0, tk.END)
+        else:
+            if hasattr(self, 'replace_is_visible') and not self.replace_is_visible:
+                self.replace_row.pack_forget()
+            self.search_entry.focus_set()
+            self.search_entry.select_range(0, tk.END)
+
+        self.on_search_text_changed()
+
+    def hide_search_bar(self):
+        """Hides search bar and clears all highlight tags."""
+        self.search_frame.pack_forget()
+        self.search_is_visible = False
+        self.clear_search_highlights()
+        self.text_editor.focus_set()
+
+    def toggle_search_bar(self):
+        if getattr(self, 'search_is_visible', False):
+            self.hide_search_bar()
+        else:
+            self.show_search_bar(with_replace=False)
+
+    def toggle_replace_mode(self):
+        if getattr(self, 'replace_is_visible', False):
+            self.replace_row.pack_forget()
+            self.replace_is_visible = False
+            self.search_entry.focus_set()
+        else:
+            self.replace_row.pack(fill="x", pady=(4, 0))
+            self.replace_is_visible = True
+            self.replace_entry.focus_set()
+            self.replace_entry.select_range(0, tk.END)
+
+    def clear_search_highlights(self):
+        self.text_editor.tag_remove("search_match", "1.0", tk.END)
+        self.text_editor.tag_remove("search_current", "1.0", tk.END)
+        self.search_matches = []
+        self.current_match_idx = -1
+
+    def on_search_text_changed(self):
+        """Finds all occurrences in text_editor and highlights them."""
+        self.clear_search_highlights()
+        query = self.search_var.get()
+        if not query:
+            self.match_count_label.config(text="0 kết quả", fg="#94a3b8")
+            return
+
+        match_case = self.match_case_var.get()
+        start = "1.0"
+        while True:
+            pos = self.text_editor.search(query, start, stopindex=tk.END, nocase=not match_case)
+            if not pos:
+                break
+            end = f"{pos}+{len(query)}c"
+            self.search_matches.append((pos, end))
+            self.text_editor.tag_add("search_match", pos, end)
+            start = end
+
+        total = len(self.search_matches)
+        if total > 0:
+            self.current_match_idx = 0
+            self._highlight_current_match()
+        else:
+            self.match_count_label.config(text="Không tìm thấy", fg="#f43f5e")
+
+    def _highlight_current_match(self):
+        self.text_editor.tag_remove("search_current", "1.0", tk.END)
+        if 0 <= self.current_match_idx < len(self.search_matches):
+            pos, end = self.search_matches[self.current_match_idx]
+            self.text_editor.tag_add("search_current", pos, end)
+            self.text_editor.see(pos)
+            self.match_count_label.config(text=f"{self.current_match_idx + 1}/{len(self.search_matches)} kết quả", fg="#38bdf8")
+
+    def find_next(self, event=None):
+        if not self.search_matches:
+            return "break"
+        self.current_match_idx = (self.current_match_idx + 1) % len(self.search_matches)
+        self._highlight_current_match()
+        return "break"
+
+    def find_prev(self, event=None):
+        if not self.search_matches:
+            return "break"
+        self.current_match_idx = (self.current_match_idx - 1) % len(self.search_matches)
+        self._highlight_current_match()
+        return "break"
+
+    def replace_current_match(self, event=None):
+        if not self.search_matches or self.current_match_idx < 0 or self.current_match_idx >= len(self.search_matches):
+            return "break"
+        pos, end = self.search_matches[self.current_match_idx]
+        replace_str = self.replace_var.get()
+        self.text_editor.delete(pos, end)
+        self.text_editor.insert(pos, replace_str)
+        curr_idx = self.current_match_idx
+        self.on_search_text_changed()
+        if self.search_matches:
+            self.current_match_idx = min(curr_idx, len(self.search_matches) - 1)
+            self._highlight_current_match()
+        return "break"
+
+    def replace_all_matches(self):
+        if not self.search_matches:
+            return
+        replace_str = self.replace_var.get()
+        for pos, end in reversed(self.search_matches):
+            self.text_editor.delete(pos, end)
+            self.text_editor.insert(pos, replace_str)
+        self.on_search_text_changed()
 
     # ── PROMPT MANAGEMENT ──────────────────────────────────────────────
     def get_prompt_storage_path(self) -> str:

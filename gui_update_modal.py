@@ -58,10 +58,14 @@ def show_update_modal_dialog(parent_root, info: dict):
         def progress_cb(downloaded, total):
             if total > 0:
                 pct = int(downloaded / total * 100)
-                parent_root.after(0, lambda: [
-                    progress_bar.config(value=pct),
-                    status_lbl.config(text=f"Đang tải bản cập nhật: {pct}% ({downloaded // 1024} KB / {total // 1024} KB)")
-                ])
+                def _update_ui():
+                    try:
+                        if win.winfo_exists():
+                            progress_bar.config(value=pct)
+                            status_lbl.config(text=f"Đang tải bản cập nhật: {pct}% ({downloaded // 1024} KB / {total // 1024} KB)")
+                    except Exception:
+                        pass
+                parent_root.after(0, _update_ui)
 
         def run_dl():
             ok, msg = updater.download_and_install_update(
@@ -69,19 +73,22 @@ def show_update_modal_dialog(parent_root, info: dict):
                 release_url=info.get("release_url", ""),
                 progress_callback=progress_cb
             )
-            if not ok:
-                parent_root.after(0, lambda: [
-                    progress_bar.pack_forget(),
-                    status_lbl.config(text=msg, fg="#f43f5e"),
-                    btn_update_now.config(state="normal", text="Mở trang tải trên Web"),
-                    btn_update_now.config(command=lambda: updater.webbrowser.open(info.get("release_url", ""))),
-                    btn_cancel.config(state="normal")
-                ])
-            else:
-                parent_root.after(0, lambda: [
-                    status_lbl.config(text=msg, fg="#4ade80"),
-                    btn_cancel.config(state="normal", text="Đóng")
-                ])
+            def _handle_dl_result():
+                try:
+                    if not win.winfo_exists():
+                        return
+                    if not ok:
+                        progress_bar.pack_forget()
+                        status_lbl.config(text=msg, fg="#f43f5e")
+                        btn_update_now.config(state="normal", text="Mở trang tải trên Web")
+                        btn_update_now.config(command=lambda: updater.webbrowser.open(info.get("release_url", "")))
+                        btn_cancel.config(state="normal")
+                    else:
+                        status_lbl.config(text=msg, fg="#4ade80")
+                        btn_cancel.config(state="normal", text="Đóng")
+                except Exception:
+                    pass
+            parent_root.after(0, _handle_dl_result)
 
         threading.Thread(target=run_dl, daemon=True).start()
 
