@@ -268,6 +268,11 @@ class ULNWordRenderer(RendererBlocksMixin):
             block = blocks[idx_block]
             tag = block.tag
 
+            sel.Font.Italic = 0
+            sel.Font.Bold = 0
+            sel.Font.Underline = 0
+            sel.Font.Color = 0
+
             if tag == "H1":
                 try:
                     sel.Style = doc.Styles("Heading 1")
@@ -717,15 +722,18 @@ class ULNWordRenderer(RendererBlocksMixin):
                     c1_clean_lens.append(len(body.strip()) if body else len(raw_c1))
                 max_c1_clean_len = max(c1_clean_lens) if c1_clean_lens else max_c1_len
 
-                est_c1_max_w = base_indent_cm + (max_c1_clean_len * 0.188) + 0.8
-                min_col2_start_cm = base_indent_cm + max(2.5, est_c1_max_w)
-                c2_width_cm = (max_c2_len * 0.18) + 0.6
-                ideal_col2_start_cm = printable_width_cm - c2_width_cm
+                # Check if Column 2 is an answer blank (e.g. ______ or <blank> or [BLANK])
+                col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?(?:_{2,}|<blank>|\[BLANK\])\s*$', block.col2, re.IGNORECASE))
 
-                if ideal_col2_start_cm >= min_col2_start_cm:
-                    col2_tab_pos_cm = ideal_col2_start_cm
+                if col2_is_blank:
+                    # Dynamic 2-Column Error Correction Layout
+                    est_c1_w = base_indent_cm + (max_c1_clean_len * 0.185) + 1.3
+                    col2_tab_pos_cm = max(base_indent_cm + 10.0, est_c1_w)
+                    col2_tab_pos_cm = min(col2_tab_pos_cm, printable_width_cm - 2.5)
                 else:
-                    col2_tab_pos_cm = min(printable_width_cm - 3.5, min_col2_start_cm)
+                    # Balanced 2-Column Matching / Definition Layout:
+                    # Sets Column 2 at ~8.0 cm so both columns have ample balanced space
+                    col2_tab_pos_cm = min(8.2, max(7.0, printable_width_cm * 0.48))
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
@@ -734,9 +742,6 @@ class ULNWordRenderer(RendererBlocksMixin):
                 sel.ParagraphFormat.SpaceAfter = 3
                 sel.ParagraphFormat.KeepWithNext = False
                 sel.ParagraphFormat.PageBreakBefore = False
-
-                # Check if Column 2 is an answer blank (e.g. ______ or <blank> or [BLANK])
-                col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?(?:_{2,}|<blank>|\[BLANK\])\s*$', block.col2, re.IGNORECASE))
 
                 # Detect header row in TAB2 (e.g. A | B)
                 is_header_row = (block == tab2_group[0] and len(block.col1.strip()) <= 10 and len(block.col2.strip()) <= 10 and not re.search(r'\d', block.col1))
@@ -758,15 +763,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                     sel.TypeParagraph()
 
                 elif col2_is_blank:
-                    # Dynamic 2-Column Error Correction Layout:
-                    # 1. Optimal col2 start position based on longest Column 1 sentence (0.185cm per char + prefix/space buffer)
-                    c1_char_lens = [len(extract_question_prefix_and_body(b.col1)[3].strip()) for b in tab2_group]
-                    max_c1_body_len = max(c1_char_lens) if c1_char_lens else max_c1_len
-                    est_c1_w = base_indent_cm + (max_c1_body_len * 0.185) + 0.8 + 0.5
-                    col2_tab_pos_cm = max(base_indent_cm + 10.0, est_c1_w)
-                    col2_tab_pos_cm = min(col2_tab_pos_cm, printable_width_cm - 2.5)
-
-                    # 2. Safe blank width: strictly bounded within printable width with 0.4cm buffer to guarantee 0 line wraps
+                    # Safe blank width: strictly bounded within printable width with 0.4cm buffer to guarantee 0 line wraps
                     avail_w_cm = max(1.5, printable_width_cm - col2_tab_pos_cm - 0.4)
                     blank_w_cm = min(3.5, avail_w_cm)
                     char_under_w_cm = max(0.18, (self.font_size * 0.44) / 28.3465)
@@ -874,7 +871,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                 self.render_num_container(sel, doc, word, block, printable_width_cm)
 
             elif tag == "OPT":
-                if self.current_group_opt_cols is None:
+                if idx_block == 0 or blocks[idx_block - 1].tag != "OPT":
                     consecutive_opts = []
                     k = idx_block
                     while k < len(blocks) and blocks[k].tag == "OPT":
@@ -893,19 +890,22 @@ class ULNWordRenderer(RendererBlocksMixin):
                     self.current_group_max_item_len = None
 
             elif tag == "QUOTE":
-                # Reading passage: standard body text (Left/Right Indent = 0), only first line indented (0.75 cm), justified
-                space_before_quote = 14 if (self.last_rendered_tag == "BOX") else 0
+                raw_c = block.content.strip()
+                is_subhead = (len(raw_c) <= 60 and (raw_c.startswith('*') or raw_c.startswith('**') or raw_c.startswith('_')))
+                space_before_quote = 14 if (self.last_rendered_tag == "BOX") else (6 if is_subhead else 0)
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.RightIndent = 0
-                sel.ParagraphFormat.FirstLineIndent = cm_to_pt(0.75)
+                sel.ParagraphFormat.FirstLineIndent = 0 if is_subhead else cm_to_pt(0.75)
                 sel.ParagraphFormat.SpaceBefore = space_before_quote
-                sel.ParagraphFormat.SpaceAfter = 4
-                sel.ParagraphFormat.Alignment = 3  # wdAlignParagraphJustify = 3
+                sel.ParagraphFormat.SpaceAfter = 2 if is_subhead else 4
+                sel.ParagraphFormat.KeepWithNext = is_subhead
+                sel.ParagraphFormat.Alignment = 0 if is_subhead else 3  # Left for subhead, Justified for body
                 self.write_inline_spans(sel, block.spans, default_italic=False)
                 sel.TypeParagraph()
                 sel.ParagraphFormat.RightIndent = 0
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.KeepWithNext = False
 
             elif tag == "PIC":
                 if block.pic:

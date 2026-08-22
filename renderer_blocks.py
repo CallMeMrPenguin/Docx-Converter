@@ -655,12 +655,12 @@ class RendererBlocksMixin:
         num_rows = len(tdata.rows)
         num_cols = max(len(r.cells) for r in tdata.rows)
 
-        if tdata.borderless:
-            has_pic = any(
-                "[PIC" in cell.content.upper() or parse_pic_tag(cell.content) is not None
-                for row in tdata.rows for cell in row.cells
-            )
+        has_pic = any(
+            "[PIC" in cell.content.upper() or parse_pic_tag(cell.content) is not None
+            for row in tdata.rows for cell in row.cells
+        )
 
+        if tdata.borderless and has_pic:
             pic_info_found = None
             text_rows = []
 
@@ -768,7 +768,7 @@ class RendererBlocksMixin:
             self.last_rendered_tag = "TABLE"
             return
 
-        # Bordered Table Layout
+        # Native Table Layout (Bordered or Borderless Grid)
         p_table_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
         try:
             p_table_anchor.ParagraphFormat.SpaceBefore = 14.0 if (self.last_rendered_tag == "BOX") else 8.0
@@ -779,15 +779,18 @@ class RendererBlocksMixin:
         tbl = doc.Tables.Add(Range=p_table_anchor, NumRows=num_rows, NumColumns=num_cols)
         tbl.AllowAutoFit = False
 
-        try:
-            tbl.Borders.InsideLineStyle = 1
-            tbl.Borders.InsideLineWidth = 8
-            tbl.Borders.InsideColor = 0
-            tbl.Borders.OutsideLineStyle = 1
-            tbl.Borders.OutsideLineWidth = 8
-            tbl.Borders.OutsideColor = 0
-        except Exception:
-            pass
+        if tdata.borderless:
+            tbl.Borders.Enable = False
+        else:
+            try:
+                tbl.Borders.InsideLineStyle = 1
+                tbl.Borders.InsideLineWidth = 8
+                tbl.Borders.InsideColor = 0
+                tbl.Borders.OutsideLineStyle = 1
+                tbl.Borders.OutsideLineWidth = 8
+                tbl.Borders.OutsideColor = 0
+            except Exception:
+                pass
 
         col_w_pt = cm_to_pt(printable_width_cm) / max(1, num_cols)
         for col_idx in range(1, num_cols + 1):

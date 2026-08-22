@@ -384,11 +384,10 @@ class ULNParser:
                     rest = trimmed[7:].strip()
                     if rest.upper().endswith("[/QUOTE]"):
                         raw_q_text = rest[:-8].strip()
-                        raw_paras = re.split(r'\n\s*\n+', raw_q_text)
-                        for p_txt in raw_paras:
-                            clean_p = " ".join(p_txt.split())
-                            if clean_p.strip():
-                                blocks.append(ULNBlock(tag="QUOTE", content=clean_p, spans=parse_inline_spans(clean_p)))
+                        for q_l in raw_q_text.splitlines():
+                            clean_l = q_l.strip()
+                            if clean_l:
+                                blocks.append(ULNBlock(tag="QUOTE", content=clean_l, spans=parse_inline_spans(clean_l)))
                         continue
                     else:
                         in_quote = True
@@ -398,12 +397,10 @@ class ULNParser:
             if in_quote:
                 if trimmed.upper() == "[/QUOTE]":
                     in_quote = False
-                    raw_q_text = "\n".join(quote_lines)
-                    raw_paras = re.split(r'\n\s*\n+', raw_q_text.strip())
-                    for p_txt in raw_paras:
-                        clean_p = " ".join(p_txt.split())
-                        if clean_p.strip():
-                            blocks.append(ULNBlock(tag="QUOTE", content=clean_p, spans=parse_inline_spans(clean_p)))
+                    for q_l in quote_lines:
+                        clean_l = q_l.strip()
+                        if clean_l:
+                            blocks.append(ULNBlock(tag="QUOTE", content=clean_l, spans=parse_inline_spans(clean_l)))
                     quote_lines = []
                 else:
                     quote_lines.append(line)
