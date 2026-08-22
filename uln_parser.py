@@ -338,6 +338,10 @@ class ULNParser:
                     opt_lines.append(line)
                 continue
 
+            # Ignore standalone [NUM] and [/NUM] container tags
+            if trimmed.upper() in ("[NUM]", "[/NUM]"):
+                continue
+
             # Handle multi-line [BOX] ... [/BOX] or [WORDBANK] ... [/WORDBANK]
             is_box_start = (
                 trimmed.upper() == "[BOX]" or trimmed.upper().startswith("[BOX] ") or trimmed.upper().startswith("[BOX:") or

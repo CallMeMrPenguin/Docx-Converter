@@ -1225,71 +1225,11 @@ class RendererBlocksMixin:
         min_gap_cm = 0.50  # 5.0 mm minimum gap
 
         col_starts_cm = [base_indent_cm + (i * even_step_cm) for i in range(num_cols)]
-        tab_stops_cm = []
-        col_blank_strs = []
 
-        if has_blanks:
-            u_pt = self.measure_text_width_pt(doc, '_', self.font_name, self.font_size, is_bold=False)
-            u_width_cm = max(0.20, pt_to_cm(u_pt) * 1.15)
+        u_pt = self.measure_text_width_pt(doc, '_', self.font_name, self.font_size, is_bold=False)
+        u_width_cm = max(0.20, pt_to_cm(u_pt) * 1.15)
 
-            # Measure max width of the full word part (number + word) in each column
-            col_word_max_w_cm = []
-            for c_idx in range(num_cols):
-                max_w = 0.0
-                for b in tab_group:
-                    if c_idx < len(b.cols):
-                        raw_c = b.cols[c_idx]
-                        clean_no_ins = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', raw_c, flags=re.IGNORECASE).replace('#', '').strip()
-                        word_p = re.sub(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '', clean_no_ins).strip()
-                        w_pt = self.measure_text_width_pt(doc, word_p, self.font_name, self.font_size, is_bold=False)
-                        max_w = max(max_w, pt_to_cm(w_pt) * 1.15)
-                col_word_max_w_cm.append(max_w if max_w > 0 else 2.0)
-
-            for c_idx in range(num_cols):
-                start_cm = col_starts_cm[c_idx]
-                next_start_cm = col_starts_cm[c_idx + 1] if (c_idx + 1 < num_cols) else printable_width_cm
-
-                # Exactly 2.0 mm (0.20 cm) after the longest word
-                blank_tab_cm = start_cm + col_word_max_w_cm[c_idx] + 0.20
-                # Exactly 5.0 mm (0.50 cm) before the next column start
-                blank_end_cm = next_start_cm - 0.50
-                blank_width_cm = max(0.60, blank_end_cm - blank_tab_cm)
-
-                num_u = max(3, int(blank_width_cm / u_width_cm))
-                col_blank_strs.append('_' * num_u)
-
-                if c_idx > 0:
-                    tab_stops_cm.append(start_cm)
-                tab_stops_cm.append(blank_tab_cm)
-        else:
-            # Measure max full width of each column
-            col_max_widths_cm = []
-            for c_idx in range(num_cols):
-                clean_texts = []
-                for b in tab_group:
-                    if c_idx < len(b.cols):
-                        raw_t = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.cols[c_idx], flags=re.IGNORECASE).replace('#', '').strip()
-                        clean_t = self.strip_markup_for_measurement(raw_t)
-                        clean_texts.append(clean_t)
-                max_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in clean_texts) if clean_texts else 30.0
-                col_max_widths_cm.append(pt_to_cm(max_w_pt) * 1.15)
-
-            use_even_spacing = True
-            for c_idx in range(num_cols - 1):
-                w_curr = col_max_widths_cm[c_idx]
-                if w_curr + min_gap_cm > even_step_cm:
-                    use_even_spacing = False
-                    break
-
-            if use_even_spacing:
-                for c_idx in range(1, num_cols):
-                    tab_stops_cm.append(base_indent_cm + (c_idx * even_step_cm))
-            else:
-                curr_pos = base_indent_cm
-                for c_idx in range(1, num_cols):
-                    w_prev = col_max_widths_cm[c_idx - 1]
-                    curr_pos += max(even_step_cm, w_prev + min_gap_cm)
-                    tab_stops_cm.append(curr_pos)
+        tab_stops_cm = [col_starts_cm[i] for i in range(1, num_cols)]
 
         # Apply paragraph formatting
         try:
@@ -1324,6 +1264,22 @@ class RendererBlocksMixin:
             if has_blanks and re.search(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', body_content):
                 word_part = re.sub(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '', body_content).strip()
 
+                # Measure this specific item's width (number + word)
+                num_str = f"{num_prefix} " if num_prefix else ""
+                full_item_str = f"{num_str}{word_part}".strip()
+                w_pt = self.measure_text_width_pt(doc, full_item_str, self.font_name, self.font_size, is_bold=False)
+                item_w_cm = pt_to_cm(w_pt) * 1.15
+
+                start_c = col_starts_cm[c_idx]
+                next_c = col_starts_cm[c_idx + 1] if (c_idx + 1 < num_cols) else printable_width_cm
+
+                # Blank starts 2mm after word
+                blank_start_abs = start_c + item_w_cm + 0.20
+                # Blank ends 5mm before next column
+                blank_end_abs = next_c - 0.50
+                blank_w = max(0.60, blank_end_abs - blank_start_abs)
+                num_u = max(3, int(round(blank_w / u_width_cm)))
+
                 if num_prefix:
                     sel.Font.Name = self.font_name
                     sel.Font.Size = self.font_size
@@ -1343,14 +1299,13 @@ class RendererBlocksMixin:
                 body_spans = _pis(word_part)
                 self.write_inline_spans(sel, body_spans)
 
-                # Tab to the aligned blank position
-                sel.TypeText("\t")
+                # Blank starts exactly 2mm after text (rendered as a space + calculated underscores)
                 sel.Font.Bold = 0
                 sel.Font.Italic = 0
                 sel.Font.Underline = 0
                 sel.Font.Color = 0
-                blank_str = col_blank_strs[c_idx] if c_idx < len(col_blank_strs) else "______"
-                sel.TypeText(blank_str)
+                sel.TypeText(" ")
+                sel.TypeText("_" * num_u)
             else:
                 if num_prefix:
                     sel.Font.Name = self.font_name
