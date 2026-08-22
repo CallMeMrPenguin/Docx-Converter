@@ -725,15 +725,19 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                     min_gap_cm = 0.50  # MINIMUM DISTANCE BETWEEN 2 COLUMNS: STRICTLY >= 5.0 MM (0.50 cm)
 
-                    # Ideal Tab Stop = base_indent + Word physical text end of longest Column 1 line + 5.0 mm minimum gap
-                    ideal_tab_cm = base_indent_cm + c1_word_w_cm + min_gap_cm
+                    # 1. Maximum Tab Stop position where Column 2 still does NOT wrap before page right margin
+                    tab_max_cm = printable_width_cm - c2_word_w_cm - 0.10  # 1.0 mm safety margin before page right edge
 
-                    # If both columns fit on 1 line:
-                    if ideal_tab_cm + c2_word_w_cm <= printable_width_cm:
-                        col2_tab_pos_cm = ideal_tab_cm
+                    # 2. Minimum Tab Stop position to maintain at least 5.0 mm gap after Column 1
+                    tab_min_cm = base_indent_cm + c1_word_w_cm + min_gap_cm
+
+                    # Logic: Maximize distance between 2 columns so Column 2 doesn't wrap;
+                    # If Column 2 would wrap or exceed page width, narrow the gap down towards the 5mm limit
+                    if tab_max_cm >= tab_min_cm:
+                        col2_tab_pos_cm = tab_max_cm
                     else:
-                        # If row is too wide, reserve right space for Column 2 and let Column 1 wrap cleanly
-                        col2_tab_pos_cm = max(base_indent_cm + 4.0, printable_width_cm - max(3.5, c2_word_w_cm))
+                        # Narrow gap towards 5mm limit, and if total width exceeds page, reserve right space for Col 2 so Col 1 wraps
+                        col2_tab_pos_cm = max(base_indent_cm + 4.0, printable_width_cm - max(3.5, c2_word_w_cm) - 0.10)
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
