@@ -839,99 +839,107 @@ class RendererBlocksMixin:
         self.last_rendered_tag = "TABLE"
 
     def render_pic_grid(self, sel, doc, children: List[ULNBlock], printable_width_cm: float):
-        """Renders 4-column horizontal picture grid [PIC_GRID] with automatic captions below each picture."""
+        """
+        Renders 4-column horizontal picture grid [PIC_GRID] using pure paragraph Tab Stops (no Table object).
+        Each row has a picture line and an aligned caption line using identical Center Tab Stops.
+        """
         if not children:
             return
 
         N = len(children)
-        printable_width_pt = cm_to_pt(printable_width_cm)
         cols = min(4, N)
-        rows = math.ceil(N / cols)
+        slot_w_cm = printable_width_cm / cols
 
-        p_anchor = doc.Range(sel.Range.Start, sel.Range.Start)
-        tbl = doc.Tables.Add(Range=p_anchor, NumRows=rows * 2, NumColumns=cols)
-        tbl.AllowAutoFit = False
+        for idx_chunk in range(0, N, cols):
+            chunk = children[idx_chunk:idx_chunk + cols]
+            idx_row = idx_chunk // cols
 
-        try:
-            tbl.Borders.InsideLineStyle = 0
-            tbl.Borders.OutsideLineStyle = 0
-        except Exception:
-            pass
+            # ── 1. Picture Line ──────────────────────────────────────────
+            sel.ParagraphFormat.TabStops.ClearAll()
+            for c in range(cols):
+                center_pos_cm = slot_w_cm * (c + 0.5)
+                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(center_pos_cm), Alignment=1)  # wdAlignTabCenter = 1
 
-        col_w_pt = printable_width_pt / cols
-        for c in range(1, cols + 1):
-            try:
-                tbl.Columns(c).Width = col_w_pt
-            except Exception:
-                pass
-
-        for idx_item, child in enumerate(children):
-            r_idx = (idx_item // cols) * 2 + 1
-            c_idx = (idx_item % cols) + 1
-
-            cell_pic = tbl.Cell(r_idx, c_idx)
-            cell_pic.Range.Select()
-            pic_sel = doc.Application.Selection
-            pic_sel.ParagraphFormat.Alignment = 1
-            pic_sel.ParagraphFormat.SpaceBefore = 4
-            pic_sel.ParagraphFormat.SpaceAfter = 2
-
-            pic_info = child.pic or parse_pic_tag(child.content) or PicInfo(description=f"Picture {idx_item + 1}", pos="center", size="small")
-            target_path = self.get_next_image_path(pic_info)
-
-            if target_path and os.path.exists(target_path):
-                try:
-                    shp = pic_sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
-                    shp.Width = min(col_w_pt - 10.0, cm_to_pt(3.6))
-                    shp.Height = cm_to_pt(2.6)
-                except Exception as e:
-                    print(f"[ULNRenderer] Warning in pic_grid picture: {e}")
-            else:
-                pic_sel.Font.Name = self.font_name
-                pic_sel.Font.Size = 9.0
-                pic_sel.Font.Italic = True
-                pic_sel.Font.Bold = True
-                try:
-                    pic_sel.Font.Color = 8421504
-                except Exception:
-                    pass
-                pic_sel.TypeText(f"[ 🖼️ {idx_item + 1} ]")
-
-            cell_cap = tbl.Cell(r_idx + 1, c_idx)
-            cell_cap.Range.Select()
-            cap_sel = doc.Application.Selection
-            cap_sel.ParagraphFormat.Alignment = 1
-            cap_sel.ParagraphFormat.SpaceBefore = 2
-            cap_sel.ParagraphFormat.SpaceAfter = 6
-            cap_sel.Font.Name = self.font_name
-            cap_sel.Font.Size = self.font_size
-            cap_sel.Font.Bold = 0
-            cap_sel.Font.Italic = 0
-            cap_sel.Font.Color = 0
-
-            cap_text = f"{idx_item + 1}. ______"
-            m_cap = re.search(r'(\d+[\.\)]?\s*(?:<blank>|\[BLANK\]|_{2,}|[^\t\|]+))', child.content)
-            if m_cap:
-                raw_cap = m_cap.group(1).strip()
-                if "<blank>" in raw_cap or "[BLANK]" in raw_cap:
-                    cap_text = re.sub(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '______', raw_cap)
-                elif "_" in raw_cap:
-                    cap_text = raw_cap
-                else:
-                    cap_text = f"{idx_item + 1}. {raw_cap}"
-
-            cap_sel.TypeText(cap_text)
-
-        try:
-            rng_after = tbl.Range
-            rng_after.Collapse(0)  # wdCollapseEnd = 0
-            rng_after.Select()
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.RightIndent = 0
-            sel.ParagraphFormat.SpaceBefore = 6
-            sel.ParagraphFormat.SpaceAfter = 4
+            sel.ParagraphFormat.FirstLineIndent = 0
             sel.ParagraphFormat.Alignment = 0
-        except Exception:
-            pass
+            sel.ParagraphFormat.SpaceBefore = 8 if idx_row == 0 else 4
+            sel.ParagraphFormat.SpaceAfter = 2
+            sel.ParagraphFormat.LineSpacingRule = 0
+
+            for c_idx, child in enumerate(chunk):
+                global_idx = idx_chunk + c_idx
+                sel.TypeText("\t")
+
+                pic_info = child.pic or parse_pic_tag(child.content) or PicInfo(description=f"Picture {global_idx + 1}", pos="center", size="small")
+                target_path = self.get_next_image_path(pic_info)
+
+                if target_path and os.path.exists(target_path):
+                    try:
+                        col_w_pt = cm_to_pt(slot_w_cm)
+                        shp = sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
+                        shp.Width = min(col_w_pt - 10.0, cm_to_pt(3.6))
+                        shp.Height = cm_to_pt(2.6)
+                    except Exception as e:
+                        print(f"[ULNRenderer] Warning in pic_grid picture: {e}")
+                else:
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = 9.0
+                    sel.Font.Italic = True
+                    sel.Font.Bold = True
+                    try:
+                        sel.Font.Color = 8421504  # Grey
+                    except Exception:
+                        pass
+                    sel.TypeText(f"[ 🖼️ {global_idx + 1} ]")
+
+            sel.TypeParagraph()
+
+            # ── 2. Caption Line ──────────────────────────────────────────
+            sel.ParagraphFormat.TabStops.ClearAll()
+            for c in range(cols):
+                center_pos_cm = slot_w_cm * (c + 0.5)
+                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(center_pos_cm), Alignment=1)  # wdAlignTabCenter = 1
+
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.RightIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.ParagraphFormat.Alignment = 0
+            sel.ParagraphFormat.SpaceBefore = 2
+            sel.ParagraphFormat.SpaceAfter = 6
+            sel.ParagraphFormat.LineSpacingRule = 0
+
+            for c_idx, child in enumerate(chunk):
+                global_idx = idx_chunk + c_idx
+                sel.TypeText("\t")
+                sel.Font.Name = self.font_name
+                sel.Font.Size = self.font_size
+                sel.Font.Bold = 0
+                sel.Font.Italic = 0
+                sel.Font.Color = 0
+
+                cap_text = f"{global_idx + 1}. ______"
+                clean_content = re.sub(r'\[PIC(?::[^\]]*)?\]', '', child.content, flags=re.IGNORECASE).strip()
+                m_num = re.match(r'^(?:#?(\d+)[\.\)]\s*)?(.*)$', clean_content)
+                if m_num:
+                    num_part = m_num.group(1) or str(global_idx + 1)
+                    body_part = m_num.group(2).strip()
+                    if not body_part or "<blank>" in body_part.lower() or "[blank]" in body_part.lower() or "_" in body_part:
+                        cap_text = f"{num_part}. ______"
+                    else:
+                        cap_text = f"{num_part}. {body_part}"
+
+                sel.TypeText(cap_text)
+
+            sel.TypeParagraph()
+
+        sel.ParagraphFormat.TabStops.ClearAll()
+        sel.ParagraphFormat.LeftIndent = 0
+        sel.ParagraphFormat.RightIndent = 0
+        sel.ParagraphFormat.FirstLineIndent = 0
+        sel.ParagraphFormat.SpaceBefore = 6
+        sel.ParagraphFormat.SpaceAfter = 4
+        sel.ParagraphFormat.Alignment = 0
 
         self.last_rendered_tag = "PIC_GRID"

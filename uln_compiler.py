@@ -125,12 +125,7 @@ class ULNCompiler:
                         word.Quit()
                     except Exception:
                         pass
-                # Once Word closes and releases file lock, inject backup zip entry
-                if abs_output_path and os.path.exists(abs_output_path):
-                    try:
-                        embed_raw_uln_zip(abs_output_path, uln_text)
-                    except Exception:
-                        pass
+
             else:
                 # Fully detach COM object references so Word operates as a standalone user window
                 try:
