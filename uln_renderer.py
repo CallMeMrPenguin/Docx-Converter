@@ -715,14 +715,6 @@ class ULNWordRenderer(RendererBlocksMixin):
                 group_first_c1 = tab2_group[0].col1 if tab2_group else block.col1
                 base_indent_cm = 0.5 if "P1" in group_first_c1 else (1.0 if "P2" in group_first_c1 else 0.0)
 
-                # Calculate exact width of the longest Column 1 text across all rows in the group
-                c1_full_lens = []
-                for b in tab2_group:
-                    raw_c1 = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.col1, flags=re.IGNORECASE).strip()
-                    raw_c1 = raw_c1.replace('#', '')
-                    c1_full_lens.append(len(raw_c1))
-                max_c1_len = max(c1_full_lens) if c1_full_lens else 10
-
                 # Check if Column 2 is an answer blank (e.g. ______ or <blank> or [BLANK])
                 col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?(?:_{2,}|<blank>|\[BLANK\])\s*$', block.col2, re.IGNORECASE))
 
@@ -732,9 +724,17 @@ class ULNWordRenderer(RendererBlocksMixin):
                     col2_tab_pos_cm = printable_width_cm - blank_w_cm
                 else:
                     # Standard 2-Column Matching Layout:
-                    # Exact position = longest Column 1 text width + exactly 5mm (0.5 cm) gap
-                    exact_c1_w = base_indent_cm + (max_c1_len * 0.193)
-                    col2_tab_pos_cm = min(printable_width_cm - 3.5, exact_c1_w + 0.5)
+                    # Physical end of longest Column 1 text in Word (0.1815 cm/char in 12pt) + EXACTLY 5.0 mm (0.50 cm) gap
+                    c1_full_lens = []
+                    for b in tab2_group:
+                        raw_t = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.col1, flags=re.IGNORECASE).strip()
+                        raw_t = raw_t.replace('#', '')
+                        c1_full_lens.append(len(raw_t))
+                    max_len = max(c1_full_lens) if c1_full_lens else 10
+                    exact_end_cm = base_indent_cm + (max_len * 0.1815)
+
+                    # Tab Stop = exact end of longest Column 1 line + exactly 5.0 mm (0.50 cm)
+                    col2_tab_pos_cm = min(printable_width_cm - 3.5, exact_end_cm + 0.5)
 
                 col1_needed_cm = col2_tab_pos_cm - base_indent_cm
 
