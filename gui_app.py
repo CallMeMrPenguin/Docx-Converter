@@ -225,13 +225,16 @@ class ULNFormatterApp:
         btn_bar.pack(fill="x", side="top")
 
         btn_import_docx = tk.Button(btn_bar, text="📥 Nhập từ file DOCX", command=self.open_docx_picker, bg="#0284c7", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=4)
-        btn_import_docx.pack(side="left", padx=5)
+        btn_import_docx.pack(side="left", padx=3)
+
+        btn_embed_file = tk.Button(btn_bar, text="💾 Nhúng Raw vào DOCX...", command=self.embed_raw_to_docx_file, bg="#0369a1", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=4)
+        btn_embed_file.pack(side="left", padx=3)
 
         btn_import = tk.Button(btn_bar, text="📁 Import .txt", command=self.import_file, bg="#334155", fg="#38bdf8", font=("Segoe UI", 9, "bold"), relief="flat", padx=10, pady=4)
-        btn_import.pack(side="left", padx=5)
+        btn_import.pack(side="left", padx=3)
 
         btn_clear = tk.Button(btn_bar, text="🗑️ Clear Text", command=self.clear_text, bg="#334155", fg="#f43f5e", font=("Segoe UI", 9), relief="flat", padx=10, pady=4)
-        btn_clear.pack(side="left", padx=5)
+        btn_clear.pack(side="left", padx=3)
 
         # Heading Quick Action Buttons (Alt+1..6)
         hdr_bar = tk.Frame(btn_bar, bg="#1e293b")
@@ -427,6 +430,26 @@ class ULNFormatterApp:
         that contain embedded raw ULN data, allowing one-click re-import into the editor.
         """
         open_docx_picker_dialog(self)
+
+    def embed_raw_to_docx_file(self):
+        """Allows user to select any existing DOCX file and inject the current editor's ULN code into it."""
+        uln_text = self.text_editor.get("1.0", tk.END).strip()
+        if not uln_text:
+            messagebox.showwarning("Thông báo", "Trình soạn thảo hiện tại đang trống. Vui lòng nhập mã ULN trước khi nhúng.")
+            return
+
+        fpath = filedialog.askopenfilename(
+            title="Chọn file DOCX để nhúng mã nguồn ULN",
+            initialdir=self.last_output_dir,
+            filetypes=[("Word Document", "*.docx"), ("All Files", "*.*")]
+        )
+        if fpath and os.path.exists(fpath):
+            from uln_compiler import embed_raw_uln_zip
+            ok = embed_raw_uln_zip(fpath, uln_text)
+            if ok:
+                messagebox.showinfo("Thành công", f"Đã chèn/nhúng thành công mã Raw ULN vào file:\n{os.path.basename(fpath)}")
+            else:
+                messagebox.showerror("Lỗi", "Không thể chèn mã ULN vào file Word (vui lòng đảm bảo file đã được đóng trong Word trước khi chèn).")
 
 
 

@@ -125,6 +125,10 @@ class ULNCompiler:
                         word.Quit()
                     except Exception:
                         pass
+                try:
+                    embed_raw_uln_zip(abs_output_path, uln_text)
+                except Exception:
+                    pass
 
             else:
                 # Fully detach COM object references so Word operates as a standalone user window
@@ -192,23 +196,25 @@ def extract_raw_uln(docx_path: str) -> Optional[str]:
     if not os.path.exists(docx_path):
         return None
     try:
+        import html
         with zipfile.ZipFile(docx_path, 'r') as zf:
-            # Check 1: direct text file
-            if 'customXml/uln_raw_source.txt' in zf.namelist():
-                raw = zf.read('customXml/uln_raw_source.txt').decode('utf-8', errors='ignore')
-                return raw.replace('\r\n', '\n')
-            # Check 2: Word CustomXMLParts item
+            # Check 1: direct text file in customXml or root
+            for target_name in ['customXml/uln_raw_source.txt', 'uln_raw_source.txt', 'word/uln_raw_source.txt']:
+                if target_name in zf.namelist():
+                    raw = zf.read(target_name).decode('utf-8', errors='ignore')
+                    return raw.replace('\r\n', '\n')
+
+            # Check 2: Word CustomXMLParts item or any embedded xml part
             for name in zf.namelist():
-                if name.startswith('customXml/item') and name.endswith('.xml'):
-                    xml_str = zf.read(name).decode('utf-8', errors='ignore')
-                    m = re.search(r'<uln_raw_data><!\[CDATA\[(.*?)\]\]></uln_raw_data>', xml_str, re.DOTALL)
-                    if m:
-                        raw = m.group(1).replace("]]]]><![CDATA[>", "]]>")
-                        return raw.replace('\r\n', '\n')
-                    m2 = re.search(r'<uln_raw_data>(.*?)</uln_raw_data>', xml_str, re.DOTALL)
-                    if m2:
-                        raw = m2.group(1).replace("]]]]><![CDATA[>", "]]>")
-                        return raw.replace('\r\n', '\n')
+                if name.endswith('.xml') or 'custom' in name.lower():
+                    xml_bytes = zf.read(name)
+                    if b'uln_raw_data' in xml_bytes or b'ULN_RAW' in xml_bytes:
+                        xml_str = xml_bytes.decode('utf-8', errors='ignore')
+                        m = re.search(r'<uln_raw_data[^>]*>(?:<!\[CDATA\[)?(.*?)(?:\]\]>)?</uln_raw_data>', xml_str, re.DOTALL | re.IGNORECASE)
+                        if m:
+                            raw = m.group(1).replace("]]]]><![CDATA[>", "]]>")
+                            raw = html.unescape(raw)
+                            return raw.replace('\r\n', '\n')
     except Exception as e:
         print(f"[ULNCompiler] Could not extract raw ULN from {docx_path}: {e}")
     return None
@@ -220,13 +226,31 @@ def has_embedded_uln(docx_path: str) -> bool:
     return raw is not None and len(raw.strip()) > 0
 
 
-def embed_raw_uln_zip(docx_path: str, raw_uln_text: str):
-    """Directly appends/updates customXml/uln_raw_source.txt in the docx zip archive."""
+def embed_raw_uln_zip(docx_path: str, raw_uln_text: str) -> bool:
+    """Directly appends/updates customXml/uln_raw_source.txt and CustomXML parts in the docx zip archive."""
+    if not os.path.exists(docx_path):
+        return False
+    temp_docx = docx_path + ".tmp_uln"
     try:
-        with zipfile.ZipFile(docx_path, 'a', compression=zipfile.ZIP_DEFLATED) as zf:
-            zf.writestr('customXml/uln_raw_source.txt', raw_uln_text.encode('utf-8'))
+        with zipfile.ZipFile(docx_path, 'r') as zin:
+            with zipfile.ZipFile(temp_docx, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.infolist():
+                    if item.filename not in ['customXml/uln_raw_source.txt', 'customXml/item99.xml']:
+                        zout.writestr(item, zin.read(item.filename))
+                zout.writestr('customXml/uln_raw_source.txt', raw_uln_text.encode('utf-8'))
+                safe_uln = raw_uln_text.replace(']]>', ']]]]><![CDATA[>')
+                xml_content = '<uln_raw_data><![CDATA[' + safe_uln + ']]></uln_raw_data>'
+                zout.writestr('customXml/item99.xml', xml_content.encode('utf-8'))
+        os.replace(temp_docx, docx_path)
+        return True
     except Exception as e:
-        print(f"[ULNCompiler] Warning injecting zip uln_raw_source.txt: {e}")
+        print(f"[ULNCompiler] Warning injecting zip uln_raw_source: {e}")
+        if os.path.exists(temp_docx):
+            try:
+                os.remove(temp_docx)
+            except Exception:
+                pass
+        return False
 
 
 def scan_folder_for_uln_docx(folder_path: str) -> List[Dict[str, Any]]:

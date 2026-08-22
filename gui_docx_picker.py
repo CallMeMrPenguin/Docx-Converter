@@ -202,6 +202,44 @@ def open_docx_picker_dialog(parent_app):
         win.destroy()
         messagebox.showinfo("Thành công", f"Đã nạp thành công mã nguồn ULN từ file:\n{f_data.get('filename')}")
 
+    def embed_current_uln_to_selected():
+        sel_items = tree.selection()
+        if not sel_items:
+            messagebox.showwarning("Thông báo", "Vui lòng chọn một file DOCX từ danh sách.")
+            return
+        item_id = sel_items[0]
+        f_data = file_data_map.get(item_id)
+        if not f_data:
+            return
+
+        current_uln = parent_app.text_editor.get("1.0", tk.END).strip()
+        if not current_uln:
+            messagebox.showwarning("Thông báo", "Trình soạn thảo hiện tại đang trống. Vui lòng nhập mã ULN trước khi nhúng.")
+            return
+
+        fpath = f_data["filepath"]
+        from uln_compiler import embed_raw_uln_zip
+        ok = embed_raw_uln_zip(fpath, current_uln)
+        if ok:
+            messagebox.showinfo("Thành công", f"Đã nhúng thành công mã Raw ULN vào file:\n{f_data['filename']}")
+            refresh_list()
+        else:
+            messagebox.showerror("Lỗi", "Không thể nhúng mã ULN vào file (vui lòng đảm bảo file đã được đóng trong Word).")
+
+    btn_embed = tk.Button(
+        footer_bar,
+        text="💾 Nhúng mã ULN hiện tại vào file này",
+        command=embed_current_uln_to_selected,
+        bg="#0284c7",
+        fg="#ffffff",
+        font=("Segoe UI", 9, "bold"),
+        relief="flat",
+        padx=14,
+        pady=4,
+        cursor="hand2"
+    )
+    btn_embed.pack(side="right", padx=(8, 0))
+
     btn_load = tk.Button(
         footer_bar,
         text="📥 Nạp bản Raw vào Trình Soạn Thảo (Load ULN)",
