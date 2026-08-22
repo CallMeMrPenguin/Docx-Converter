@@ -648,7 +648,8 @@ class ULNWordRenderer(RendererBlocksMixin):
                 # Check if paragraph has trailing picture [PIC] or [PIC: ...]
                 trailing_pic_match = re.search(r'\s*(\[PIC(?::[^\]]+)?\])\s*$', content_to_render, re.IGNORECASE)
                 is_arrow_rewrite = bool(re.search(r'(?:→|->|=>|➔|➜)', content_to_render)) or bool(re.search(r'(?:→|->|=>|➔|➜)', block.content))
-                should_allow_full_blank = (not has_next_opt) and (is_arrow_rewrite or (tag == "P1") or bool(re.search(r'_{15,}', content_to_render)) or is_dlg_speaker)
+                is_arrow_only = bool(re.match(r'^\s*(?:→|->|=>|➔|➜)\s*$', content_to_render))
+                should_allow_full_blank = (not has_next_opt) and (is_arrow_rewrite or is_arrow_only or (tag == "P1") or bool(re.search(r'_{15,}', content_to_render)) or is_dlg_speaker)
                 trailing_blank_symbol_match = re.match(r'^(.+?)\s*(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,})\s*([?\.\!:,;]?)\s*$', content_to_render, re.DOTALL | re.IGNORECASE) if (not blank_symbol_match and not trailing_pic_match and should_allow_full_blank) else None
 
                 if blank_symbol_match:
@@ -691,6 +692,47 @@ class ULNWordRenderer(RendererBlocksMixin):
                     self.render_pic(sel, doc, pic_info)
                     self.current_tab2_pic_width_cm = None
                     self.current_tab2_pic_height_cm = None
+                    sel.TypeParagraph()
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                elif trailing_blank_symbol_match or is_arrow_only:
+                    text_part = trailing_blank_symbol_match.group(1) if trailing_blank_symbol_match else content_to_render.strip()
+                    trailing_sym = trailing_blank_symbol_match.group(2).strip() if trailing_blank_symbol_match else ""
+
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2, Leader=4)
+
+                    pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
+                    if q_num is not None and c_body.strip():
+                        delim_char = delim if delim else "."
+                        num_prefix_str = f"{q_num}{delim_char} "
+                        sel.Font.Name = self.font_name
+                        sel.Font.Size = self.font_size
+                        sel.Font.Bold = 1
+                        sel.Font.Italic = 0
+                        sel.Font.Underline = 0
+                        q_color_int = parse_color_to_rgb_int(self.question_color)
+                        if q_color_int is not None:
+                            sel.Font.Color = q_color_int
+                        else:
+                            sel.Font.Color = 0
+                        sel.TypeText(num_prefix_str)
+                        sel.Font.Bold = 0
+                        sel.Font.Color = 0
+                        text_part = c_body.strip()
+
+                    from uln_parser import parse_inline_spans as _pis
+                    text_spans = _pis(text_part)
+                    self.write_inline_spans(sel, text_spans)
+
+                    sel.Font.Color = 0  # Enforce black for trailing answer blank
+                    sel.Font.Underline = 0
+                    sel.Font.Bold = 0
+                    if trailing_sym:
+                        sel.TypeText(f"\t{trailing_sym}")
+                    else:
+                        sel.TypeText("\t")
                     sel.TypeParagraph()
                     sel.ParagraphFormat.TabStops.ClearAll()
                 else:
@@ -811,23 +853,34 @@ class ULNWordRenderer(RendererBlocksMixin):
                                 col2_tab_pos_cm = max(base_indent_cm + 4.0, tab_min_cm)
 
                         elif c1_has_pic or c2_has_pic:
-                            # Single column with picture
-                            avail_w_for_img = printable_width_cm - base_indent_cm - c1_word_w_cm - c2_word_w_cm - spacing_around_img_cm - min_gap_cm
-                            opt_pic_w_cm = min(5.0, max(3.0, avail_w_for_img))
-                            opt_pic_h_cm = opt_pic_w_cm * 0.72
-                            self.current_tab2_pic_width_cm = opt_pic_w_cm
-                            self.current_tab2_pic_height_cm = opt_pic_h_cm
+                            # Check if this is a Sentence Fill-in activity with cue pictures on the right
+                            is_cue_pic_activity = (c2_has_pic and not c1_has_pic and (c1_word_w_cm >= 6.5 or any("<blank>" in b.col1.lower() or "_" in b.col1 for b in tab2_group)))
 
-                            c1_total_w_cm = c1_word_w_cm + (opt_pic_w_cm + spacing_around_img_cm if c1_has_pic else 0.0)
-                            c2_total_w_cm = c2_word_w_cm + (opt_pic_w_cm + spacing_around_img_cm if c2_has_pic else 0.0)
-
-                            tab_min_cm = base_indent_cm + c1_total_w_cm + min_gap_cm
-                            tab_max_cm = printable_width_cm - c2_total_w_cm - 0.10
-
-                            if tab_max_cm >= tab_min_cm:
-                                col2_tab_pos_cm = tab_max_cm
+                            if is_cue_pic_activity:
+                                # Compact cue picture thumbnail for sentence activities
+                                opt_pic_w_cm = 2.0
+                                opt_pic_h_cm = 1.4
+                                self.current_tab2_pic_width_cm = opt_pic_w_cm
+                                self.current_tab2_pic_height_cm = opt_pic_h_cm
+                                col2_tab_pos_cm = printable_width_cm - opt_pic_w_cm
                             else:
-                                col2_tab_pos_cm = max(base_indent_cm + 4.0, tab_min_cm)
+                                # Standard picture matching layout (picture is the main exercise content)
+                                avail_w_for_img = printable_width_cm - base_indent_cm - c1_word_w_cm - c2_word_w_cm - spacing_around_img_cm - min_gap_cm
+                                opt_pic_w_cm = min(5.0, max(3.2, avail_w_for_img))
+                                opt_pic_h_cm = opt_pic_w_cm * 0.72
+                                self.current_tab2_pic_width_cm = opt_pic_w_cm
+                                self.current_tab2_pic_height_cm = opt_pic_h_cm
+
+                                c1_total_w_cm = c1_word_w_cm + (opt_pic_w_cm + spacing_around_img_cm if c1_has_pic else 0.0)
+                                c2_total_w_cm = c2_word_w_cm + (opt_pic_w_cm + spacing_around_img_cm if c2_has_pic else 0.0)
+
+                                tab_min_cm = base_indent_cm + c1_total_w_cm + min_gap_cm
+                                tab_max_cm = printable_width_cm - c2_total_w_cm - 0.10
+
+                                if tab_max_cm >= tab_min_cm:
+                                    col2_tab_pos_cm = tab_max_cm
+                                else:
+                                    col2_tab_pos_cm = max(base_indent_cm + 4.0, tab_min_cm)
 
                         else:
                             # Standard text matching layout
