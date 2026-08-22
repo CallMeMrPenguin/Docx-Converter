@@ -199,6 +199,15 @@ F. STRICT RULE: WHEN TO USE [TAB2] / [TAB3] / [TAB4] VS STANDARD [P0]/[P1]:
         [/NUM]
      3. 2-Column Picture Vocabulary & Word Completion grids (see section I below).
      4. 3-Column or 4-Column Short Items / Classification Lists (e.g. Countable/Uncountable, Part of Speech labeling):
+        - CRITICAL ROW-BY-ROW PAIRING: When reading multi-column lists from the original document (where items are numbered down columns 1..6, 7..12, 13..18):
+          Group items across each row:
+          - Row 1: #1 | #7 | #13
+          - Row 2: #2 | #8 | #14
+          - Row 3: #3 | #9 | #15
+          - Row 4: #4 | #10 | #16
+          - Row 5: #5 | #11 | #17
+          - Row 6: #6 | #12 | #18
+        - STRICT ANTI-LOOP MANDATE: NEVER repeat the first row or loop identical items! Output every single item with its unique word and number exactly once:
         [NUM]
         [TAB3] #1. beef _____ | #7. spinach _____ | #13. turmeric _____
         [TAB3] #2. apple _____ | #8. egg _____ | #14. pancake _____

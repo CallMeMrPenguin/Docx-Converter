@@ -1195,7 +1195,7 @@ class RendererBlocksMixin:
     def render_tab_multi(self, sel, doc, block: ULNBlock, idx_block: int, blocks: List[ULNBlock], printable_width_cm: float):
         """
         Renders 3-column (TAB3), 4-column (TAB4), or N-column (TAB) side-by-side items
-        using native Word paragraph tab stops with optimal gap calculations.
+        using native Word paragraph tab stops with optimal gap calculations and aligned blanks.
         """
         num_cols = len(block.cols) if block.cols else (3 if block.tag == "TAB3" else (4 if block.tag == "TAB4" else 3))
 
@@ -1213,43 +1213,72 @@ class RendererBlocksMixin:
         group_first_c1 = tab_group[0].cols[0] if (tab_group and tab_group[0].cols) else (block.cols[0] if block.cols else "")
         base_indent_cm = 0.5 if "P1" in group_first_c1 else (1.0 if "P2" in group_first_c1 else 0.0)
 
-        # 2. Measure max physical width of each column
-        col_max_widths_cm = []
-        for c_idx in range(num_cols):
-            clean_texts = []
-            for b in tab_group:
-                if c_idx < len(b.cols):
-                    raw_t = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.cols[c_idx], flags=re.IGNORECASE).replace('#', '').strip()
-                    clean_t = self.strip_markup_for_measurement(raw_t)
-                    clean_texts.append(clean_t)
-            max_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in clean_texts) if clean_texts else 30.0
-            col_max_widths_cm.append(pt_to_cm(max_w_pt) * 1.15)
+        # 2. Check if columns in this group contain answer blanks
+        has_blanks = any(
+            re.search(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', c)
+            for b in tab_group for c in b.cols
+        )
 
-        # 3. Calculate tab stop positions
         avail_w_cm = printable_width_cm - base_indent_cm
         even_step_cm = avail_w_cm / float(num_cols)
         min_gap_cm = 0.50  # 5.0 mm minimum gap
 
-        tab_stops_cm = [base_indent_cm]
-        use_even_spacing = True
+        col_starts_cm = [base_indent_cm + (i * even_step_cm) for i in range(num_cols)]
+        tab_stops_cm = []
 
-        for c_idx in range(num_cols - 1):
-            w_curr = col_max_widths_cm[c_idx]
-            if w_curr + min_gap_cm > even_step_cm:
-                use_even_spacing = False
-                break
+        if has_blanks:
+            # Measure max width of the word part (before blank) in each column
+            col_word_max_w_cm = []
+            for c_idx in range(num_cols):
+                max_w = 0.0
+                for b in tab_group:
+                    if c_idx < len(b.cols):
+                        raw_c = b.cols[c_idx]
+                        clean_no_ins = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', raw_c, flags=re.IGNORECASE).replace('#', '').strip()
+                        word_p = re.sub(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '', clean_no_ins).strip()
+                        w_pt = self.measure_text_width_pt(doc, word_p, self.font_name, self.font_size, is_bold=False)
+                        max_w = max(max_w, pt_to_cm(w_pt) * 1.15)
+                col_word_max_w_cm.append(max_w if max_w > 0 else 2.5)
 
-        if use_even_spacing:
-            for c_idx in range(1, num_cols):
-                tab_stops_cm.append(base_indent_cm + (c_idx * even_step_cm))
+            for c_idx in range(num_cols):
+                start_cm = col_starts_cm[c_idx]
+                next_start_cm = col_starts_cm[c_idx + 1] if (c_idx + 1 < num_cols) else printable_width_cm
+                blank_tab_cm = min(next_start_cm - 1.20, start_cm + col_word_max_w_cm[c_idx] + 0.40)
+
+                if c_idx > 0:
+                    tab_stops_cm.append(start_cm)
+                tab_stops_cm.append(blank_tab_cm)
         else:
-            curr_pos = base_indent_cm
-            for c_idx in range(1, num_cols):
-                w_prev = col_max_widths_cm[c_idx - 1]
-                curr_pos += max(even_step_cm, w_prev + min_gap_cm)
-                tab_stops_cm.append(curr_pos)
+            # Measure max full width of each column
+            col_max_widths_cm = []
+            for c_idx in range(num_cols):
+                clean_texts = []
+                for b in tab_group:
+                    if c_idx < len(b.cols):
+                        raw_t = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.cols[c_idx], flags=re.IGNORECASE).replace('#', '').strip()
+                        clean_t = self.strip_markup_for_measurement(raw_t)
+                        clean_texts.append(clean_t)
+                max_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in clean_texts) if clean_texts else 30.0
+                col_max_widths_cm.append(pt_to_cm(max_w_pt) * 1.15)
 
-        # 4. Apply paragraph formatting
+            use_even_spacing = True
+            for c_idx in range(num_cols - 1):
+                w_curr = col_max_widths_cm[c_idx]
+                if w_curr + min_gap_cm > even_step_cm:
+                    use_even_spacing = False
+                    break
+
+            if use_even_spacing:
+                for c_idx in range(1, num_cols):
+                    tab_stops_cm.append(base_indent_cm + (c_idx * even_step_cm))
+            else:
+                curr_pos = base_indent_cm
+                for c_idx in range(1, num_cols):
+                    w_prev = col_max_widths_cm[c_idx - 1]
+                    curr_pos += max(even_step_cm, w_prev + min_gap_cm)
+                    tab_stops_cm.append(curr_pos)
+
+        # Apply paragraph formatting
         sel.ParagraphFormat.LeftIndent = 0
         sel.ParagraphFormat.FirstLineIndent = 0
         sel.ParagraphFormat.SpaceBefore = 2
@@ -1258,44 +1287,77 @@ class RendererBlocksMixin:
         sel.ParagraphFormat.PageBreakBefore = False
         sel.ParagraphFormat.TabStops.ClearAll()
 
-        for c_idx in range(1, num_cols):
-            sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(tab_stops_cm[c_idx]), Alignment=0)
+        for ts in sorted(tab_stops_cm):
+            if ts > 0:
+                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(ts), Alignment=0)
 
-        # 5. Render each column
+        # Render each column in the current row
         for c_idx, col_raw in enumerate(block.cols):
             if c_idx > 0:
                 sel.TypeText("\t")
 
-            # Extract question number prefix if starting with number
-            m_num = re.match(r'^\s*#?(\d+[\.\)])\s*(.*)$', col_raw)
-            if m_num:
-                num_prefix = m_num.group(1)
-                num_body = m_num.group(2)
+            clean_col = col_raw.strip()
+            # Extract number prefix (e.g. 1. , #7. , 13. )
+            m_num = re.match(r'^\s*#?(\d+[\.\)])\s*(.*)$', clean_col)
+            num_prefix = m_num.group(1) if m_num else ""
+            body_content = m_num.group(2) if m_num else clean_col
 
-                sel.Font.Name = self.font_name
-                sel.Font.Size = self.font_size
-                sel.Font.Bold = 1
-                sel.Font.Italic = 0
-                sel.Font.Underline = 0
-                q_color_int = parse_color_to_rgb_int(self.question_color)
-                if q_color_int is not None:
-                    sel.Font.Color = q_color_int
-                else:
+            # If this column has an answer blank (e.g. _____ or <blank>), separate word from blank
+            if has_blanks and re.search(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', body_content):
+                word_part = re.sub(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '', body_content).strip()
+
+                if num_prefix:
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 1
+                    sel.Font.Italic = 0
+                    sel.Font.Underline = 0
+                    q_color_int = parse_color_to_rgb_int(self.question_color)
+                    if q_color_int is not None:
+                        sel.Font.Color = q_color_int
+                    else:
+                        sel.Font.Color = 0
+                    sel.TypeText(f"{num_prefix} ")
+                    sel.Font.Bold = 0
                     sel.Font.Color = 0
-                sel.TypeText(f"{num_prefix} ")
-                sel.Font.Bold = 0
-                sel.Font.Color = 0
 
                 from uln_parser import parse_inline_spans as _pis
-                body_spans = _pis(num_body)
+                body_spans = _pis(word_part)
                 self.write_inline_spans(sel, body_spans)
+
+                # Tab to the aligned blank position
+                sel.TypeText("\t")
+                sel.Font.Bold = 0
+                sel.Font.Italic = 0
+                sel.Font.Underline = 0
+                sel.Font.Color = 0
+                sel.TypeText("______")
             else:
-                c_spans = block.cols_spans[c_idx] if (block.cols_spans and c_idx < len(block.cols_spans)) else []
-                if c_spans:
-                    self.write_inline_spans(sel, c_spans)
-                else:
+                if num_prefix:
+                    sel.Font.Name = self.font_name
+                    sel.Font.Size = self.font_size
+                    sel.Font.Bold = 1
+                    sel.Font.Italic = 0
+                    sel.Font.Underline = 0
+                    q_color_int = parse_color_to_rgb_int(self.question_color)
+                    if q_color_int is not None:
+                        sel.Font.Color = q_color_int
+                    else:
+                        sel.Font.Color = 0
+                    sel.TypeText(f"{num_prefix} ")
+                    sel.Font.Bold = 0
+                    sel.Font.Color = 0
+
                     from uln_parser import parse_inline_spans as _pis
-                    self.write_inline_spans(sel, _pis(col_raw))
+                    body_spans = _pis(body_content)
+                    self.write_inline_spans(sel, body_spans)
+                else:
+                    c_spans = block.cols_spans[c_idx] if (block.cols_spans and c_idx < len(block.cols_spans)) else []
+                    if c_spans:
+                        self.write_inline_spans(sel, c_spans)
+                    else:
+                        from uln_parser import parse_inline_spans as _pis
+                        self.write_inline_spans(sel, _pis(col_raw))
 
         sel.TypeParagraph()
         self.last_rendered_tag = "TAB3" if num_cols == 3 else f"TAB{num_cols}"
