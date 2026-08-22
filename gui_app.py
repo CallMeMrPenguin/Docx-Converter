@@ -211,31 +211,6 @@ class ULNFormatterApp:
         btn_clear_img = tk.Button(img_btn_bar, text="🗑️ Clear", command=self.clear_images, bg="#64748b", fg="#ffffff", font=("Segoe UI", 8), relief="flat", pady=2)
         btn_clear_img.pack(side="right", padx=(2, 0))
 
-        # Action Buttons on Sidebar
-        btn_compile_side = tk.Button(
-            sidebar,
-            text="🚀 COMPILE TO DOCX",
-            command=self.compile_docx,
-            bg="#16a34a",
-            fg="#ffffff",
-            activebackground="#15803d",
-            activeforeground="#ffffff",
-            font=("Segoe UI", 11, "bold"),
-            relief="flat",
-            pady=8,
-            cursor="hand2"
-        )
-        btn_compile_side.pack(fill="x", pady=(10, 4))
-
-        btn_docx_side = tk.Button(sidebar, text="📥 Nhập từ file DOCX...", command=self.open_docx_picker, bg="#0284c7", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=4, cursor="hand2")
-        btn_docx_side.pack(fill="x", pady=2)
-
-        btn_prompt_side = tk.Button(sidebar, text="📜 Xem / Sửa AI Prompt...", command=self.open_prompt_editor, bg="#0369a1", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=4, cursor="hand2")
-        btn_prompt_side.pack(fill="x", pady=2)
-
-        btn_sample = tk.Button(sidebar, text="📄 Load Sample ULN", command=self.load_sample, bg="#475569", fg="#ffffff", font=("Segoe UI", 9, "bold"), relief="flat", pady=4, cursor="hand2")
-        btn_sample.pack(fill="x", pady=2)
-
         # Right Text Area (Editor)
         editor_frame = ttk.LabelFrame(main_container, text=" Raw ULN Text Input (Paste or Edit) ", padding=10)
         editor_frame.pack(side="right", fill="both", expand=True)
@@ -288,6 +263,9 @@ class ULNFormatterApp:
 
         btn_import = tk.Button(btn_bar, text="📁 File .txt", command=self.import_file, bg="#334155", fg="#38bdf8", activebackground="#475569", activeforeground="#38bdf8", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=3, cursor="hand2")
         btn_import.pack(side="left", padx=2)
+
+        btn_sample = tk.Button(btn_bar, text="📄 Mẫu ULN", command=self.load_sample, bg="#475569", fg="#ffffff", activebackground="#334155", activeforeground="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", padx=8, pady=3, cursor="hand2")
+        btn_sample.pack(side="left", padx=2)
 
         # Heading Quick Action Buttons (Alt+1..6)
         hdr_bar = tk.Frame(btn_bar, bg="#1e293b")
