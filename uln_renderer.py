@@ -20,7 +20,9 @@ from renderer_utils import (
     extract_question_prefix_and_body,
     split_line_into_option_items,
     apply_title_case_to_text,
-    apply_sentence_case_to_text
+    apply_sentence_case_to_text,
+    SUPPORTED_IMAGE_EXTENSIONS,
+    ensure_word_compatible_image
 )
 from renderer_blocks import RendererBlocksMixin
 
@@ -78,22 +80,31 @@ class ULNWordRenderer(RendererBlocksMixin):
 
 
     def get_next_image_path(self, pic: Optional[PicInfo] = None) -> Optional[str]:
-        """Returns next user-queued image in order, or falls back to test pic directory."""
+        """Returns next user-queued image in order, or falls back to test pic directory, converted if needed."""
+        found_path = None
         if self.user_img_idx < len(self.user_images):
             imgPath = self.user_images[self.user_img_idx]
             self.user_img_idx += 1
             if os.path.exists(imgPath):
-                return imgPath
+                found_path = imgPath
 
-        if pic and pic.filepath and os.path.exists(pic.filepath):
-            return pic.filepath
+        if not found_path and pic and pic.filepath and os.path.exists(pic.filepath):
+            found_path = pic.filepath
 
-        test_pic_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test pic"))
-        if os.path.exists(test_pic_dir):
-            pics = [os.path.join(test_pic_dir, f) for f in os.listdir(test_pic_dir) if f.lower().endswith(('.png', '.jpg', '.jpeg'))]
-            if pics:
-                idx = abs(hash(pic.description if pic else "img")) % len(pics)
-                return pics[idx]
+        if not found_path:
+            test_pic_dir = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "test pic"))
+            if os.path.exists(test_pic_dir):
+                pics = [
+                    os.path.join(test_pic_dir, f)
+                    for f in os.listdir(test_pic_dir)
+                    if f.lower().endswith(SUPPORTED_IMAGE_EXTENSIONS)
+                ]
+                if pics:
+                    idx = abs(hash(pic.description if pic else "img")) % len(pics)
+                    found_path = pics[idx]
+
+        if found_path:
+            return ensure_word_compatible_image(found_path)
 
         return None
 

@@ -378,7 +378,14 @@ class ULNFormatterApp:
     def add_images(self):
         files = filedialog.askopenfilenames(
             title="Select Images for [PIC] Tags (In Order)",
-            filetypes=[("Image Files", "*.png;*.jpg;*.jpeg;*.gif;*.bmp"), ("All Files", "*.*")]
+            filetypes=[
+                ("All Supported Images", "*.png;*.jpg;*.jpeg;*.avif;*.avifs;*.webp;*.heic;*.heif;*.jfif;*.bmp;*.dib;*.gif;*.tiff;*.tif;*.ico;*.svg;*.wmf;*.emf"),
+                ("AVIF Images (*.avif)", "*.avif;*.avifs"),
+                ("WebP Images (*.webp)", "*.webp"),
+                ("HEIC/HEIF Images (*.heic, *.heif)", "*.heic;*.heif"),
+                ("Standard Images (*.png, *.jpg, *.jpeg, *.jfif)", "*.png;*.jpg;*.jpeg;*.jfif"),
+                ("All Files (*.*)", "*.*")
+            ]
         )
         if files:
             for f in files:

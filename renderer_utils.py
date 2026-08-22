@@ -1,5 +1,70 @@
+import os
 import re
+import hashlib
+import tempfile
 from typing import List, Optional, Tuple
+
+SUPPORTED_IMAGE_EXTENSIONS = (
+    '.png', '.jpg', '.jpeg', '.avif', '.avifs', '.webp', '.heic', '.heif',
+    '.jfif', '.bmp', '.dib', '.gif', '.tiff', '.tif', '.ico', '.svg', '.wmf', '.emf'
+)
+
+_pillow_plugins_registered = False
+
+def register_image_plugins():
+    global _pillow_plugins_registered
+    if _pillow_plugins_registered:
+        return
+    try:
+        import pillow_avif  # noqa: F401
+    except Exception:
+        pass
+    try:
+        import pillow_heif
+        pillow_heif.register_heif_opener()
+    except Exception:
+        pass
+    _pillow_plugins_registered = True
+
+def ensure_word_compatible_image(image_path: str) -> Optional[str]:
+    """
+    Ensures an image is in a format natively supported by MS Word COM (PNG/JPEG/BMP).
+    If the image is AVIF, WebP, HEIC/HEIF, TIFF, ICO, or any non-standard format,
+    it automatically converts it to a high-quality temporary PNG file and returns the converted PNG path.
+    """
+    if not image_path or not os.path.exists(image_path):
+        return None
+
+    ext = os.path.splitext(image_path)[1].lower()
+    native_word_exts = {'.png', '.jpg', '.jpeg', '.bmp', '.gif'}
+
+    if ext in native_word_exts:
+        return os.path.abspath(image_path)
+
+    register_image_plugins()
+    try:
+        from PIL import Image
+
+        stat = os.stat(image_path)
+        cache_key = hashlib.md5(f"{os.path.abspath(image_path)}_{stat.st_mtime}_{stat.st_size}".encode('utf-8')).hexdigest()
+        temp_dir = os.path.join(tempfile.gettempdir(), "docx_converter_img_cache")
+        os.makedirs(temp_dir, exist_ok=True)
+        cached_png = os.path.join(temp_dir, f"{cache_key}.png")
+
+        if os.path.exists(cached_png) and os.path.getsize(cached_png) > 0:
+            return cached_png
+
+        with Image.open(image_path) as img:
+            if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
+                conv_img = img.convert('RGBA')
+            else:
+                conv_img = img.convert('RGB')
+            conv_img.save(cached_png, format='PNG')
+
+        return cached_png
+    except Exception as e:
+        print(f"[ULNRenderer] Warning converting image {image_path} to PNG: {e}")
+        return os.path.abspath(image_path)
 
 def cm_to_pt(cm: float) -> float:
     return float(cm) * 28.346456692913385
