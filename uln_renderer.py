@@ -166,8 +166,9 @@ class ULNWordRenderer(RendererBlocksMixin):
 
             # Check if span is an inline [PIC...] tag
             if text.startswith("[PIC:") or text.strip().upper() == "[PIC]":
-                pic_info = parse_pic_tag(text) or PicInfo(description="Activity Picture", pos="center", size="medium")
+                pic_info = parse_pic_tag(text) or PicInfo(description="Activity Picture", pos="center", size="small")
                 self.render_pic(sel, None, pic_info)
+                sel.TypeText(" ")
                 continue
 
             is_bold = 1 if (span.bold or default_bold) else 0
@@ -681,6 +682,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                             sel.TypeParagraph()
 
             elif tag == "TAB2":
+                self.current_block_tag = "TAB2"
                 group_start = idx_block
                 while group_start > 0 and blocks[group_start - 1].tag == "TAB2":
                     group_start -= 1
@@ -879,8 +881,6 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                         from uln_parser import parse_inline_spans as _pis
                         self.write_inline_spans(sel, _pis(opt_body))
-                    elif block.pic:
-                        self.render_pic(sel, doc, block.pic)
                     else:
                         self.write_inline_spans(sel, block.col2_spans)
 

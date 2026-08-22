@@ -29,21 +29,33 @@ class RendererBlocksMixin:
         if target_path and os.path.exists(target_path):
             try:
                 shape = sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
+                try:
+                    shape.LockAspectRatio = -1
+                except Exception:
+                    pass
+
                 is_in_table = False
                 try:
                     is_in_table = bool(sel.Information(12))  # wdWithInTable = 12
                 except Exception:
                     pass
 
-                if is_in_table or pic.size == "small":
-                    shape.Width = cm_to_pt(3.2)
-                    shape.Height = cm_to_pt(2.4)
+                # When inside TAB2 (2-column layout), table cell, or small size: REDUCE TO HALF SIZE (~3.0cm x 2.0cm)
+                is_in_tab2 = (getattr(self, 'current_block_tag', None) == "TAB2" or getattr(self, 'last_rendered_tag', None) == "TAB2")
+
+                if is_in_tab2 or is_in_table or pic.size == "small":
+                    shape.Width = cm_to_pt(3.0)
+                    if shape.Height > cm_to_pt(2.2):
+                        shape.Height = cm_to_pt(2.2)
                 elif pic.size == "large":
-                    shape.Width = cm_to_pt(10.0)
-                    shape.Height = cm_to_pt(6.5)
+                    shape.Width = cm_to_pt(9.0)
+                    if shape.Height > cm_to_pt(6.0):
+                        shape.Height = cm_to_pt(6.0)
                 else:
-                    shape.Width = cm_to_pt(6.0)
-                    shape.Height = cm_to_pt(4.0)
+                    # Standalone medium picture
+                    shape.Width = cm_to_pt(4.5)
+                    if shape.Height > cm_to_pt(3.2):
+                        shape.Height = cm_to_pt(3.2)
                 return
             except Exception as e:
                 print(f"[ULNRenderer] Warning adding picture {target_path}: {e}")
