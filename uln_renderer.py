@@ -69,16 +69,21 @@ class ULNWordRenderer(RendererBlocksMixin):
         """
         Determines the effective list NumberFormat string:
         - Ensures a proper single space between prefix word and %1 (e.g. 'Question ' -> 'Question %1.').
+        - For parenthesis prefixes (e.g. '(' -> '(%1)'), preserves tight bracket fit without unwanted space.
         - If delimiter was selected in GUI settings (and is non-default, e.g. ':', ')', '-'), use GUI delimiter.
           Otherwise use extracted delimiter from text or global default.
         """
-        pref = extracted_pref if (extracted_pref and extracted_pref.strip()) else (self.question_prefix or "")
-        if pref and pref.strip():
-            pref = f"{pref.strip()} "
+        raw_pref = extracted_pref if (extracted_pref and extracted_pref.strip()) else (self.question_prefix or "")
+        if raw_pref and raw_pref.strip():
+            p_strip = raw_pref.strip()
+            if p_strip.endswith("("):
+                pref = p_strip
+            else:
+                pref = f"{p_strip} "
         else:
             pref = ""
 
-        if self.question_delimiter and self.question_delimiter != ".":
+        if self.question_delimiter and self.question_delimiter != "." and "(" not in pref:
             delim = self.question_delimiter
         else:
             delim = extracted_delim if (extracted_delim and extracted_delim.strip()) else (self.question_delimiter or ".")
@@ -723,8 +728,9 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                     pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
                     if q_num is not None and c_body.strip():
+                        pref_str = pref if pref else ""
                         delim_char = delim if delim else "."
-                        num_prefix_str = f"{q_num}{delim_char} "
+                        num_prefix_str = f"{pref_str}{q_num}{delim_char} "
                         sel.Font.Name = self.font_name
                         sel.Font.Size = self.font_size
                         sel.Font.Bold = 1
@@ -995,8 +1001,9 @@ class ULNWordRenderer(RendererBlocksMixin):
                         pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
                         if q_num is not None:
                             # Write formatted question number directly (bold number + dot) to ensure exact positioning
+                            pref_str = pref if pref else ""
                             delim_char = delim if delim else "."
-                            num_prefix_str = f"{q_num}{delim_char} "
+                            num_prefix_str = f"{pref_str}{q_num}{delim_char} "
                             sel.Font.Name = self.font_name
                             sel.Font.Size = self.font_size
                             sel.Font.Bold = 1
@@ -1021,8 +1028,9 @@ class ULNWordRenderer(RendererBlocksMixin):
 
                         pref2, delim2, q_num2, c2_body = extract_question_prefix_and_body(block.col2)
                         if q_num2 is not None:
+                            pref_str2 = pref2 if pref2 else ""
                             delim_char2 = delim2 if delim2 else "."
-                            num_prefix_str2 = f"{q_num2}{delim_char2} "
+                            num_prefix_str2 = f"{pref_str2}{q_num2}{delim_char2} "
                             sel.Font.Name = self.font_name
                             sel.Font.Size = self.font_size
                             sel.Font.Bold = 1
