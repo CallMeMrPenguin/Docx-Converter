@@ -698,14 +698,9 @@ class ULNWordRenderer(RendererBlocksMixin):
             elif tag in ["P1", "P2"]:
                 pref, delim, q_num, content_to_render = extract_question_prefix_and_body(block.content)
                 is_dlg_speaker = bool(re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', content_to_render, re.IGNORECASE))
-                is_prev_numbered_dlg = (idx_block > 0 and blocks[idx_block - 1].tag == "P0" and extract_question_prefix_and_body(blocks[idx_block - 1].content)[2] is not None)
 
                 if q_num is not None:
                     left_indent_cm = 0.0
-                elif is_dlg_speaker and is_prev_numbered_dlg:
-                    left_indent_cm = 0.63  # Matches Word's native numbered list tab stop (18 pt) under "1. A:"
-                elif is_dlg_speaker:
-                    left_indent_cm = 0.0   # Standard conversation dialogue (Tom / Doctor) flush left
                 else:
                     left_indent_cm = 0.5 if tag == "P1" else 1.0
 
