@@ -210,15 +210,26 @@ class ULNWordRenderer(RendererBlocksMixin):
             if re.match(r'^_{30,}$', text):
                 text = '_' * 35
 
-            # If text contains <blank> or [BLANK], handle answer blank in pure black
-            if re.search(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', text):
-                parts = re.split(r'(<(?:blank|BLANK)>|\[(?:blank|BLANK)\])', text)
+            # If text contains (number), (#number), or <blank>/[BLANK], format them cleanly inline
+            if re.search(r'\(\s*#?\d+\s*\)|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', text):
+                parts = re.split(r'(\(\s*#?\d+\s*\)|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])', text)
                 for part in parts:
-                    if re.match(r'^(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\])$', part, re.IGNORECASE):
+                    if not part:
+                        continue
+                    if re.match(r'^\(\s*#?\d+\s*\)$', part):
+                        clean_paren = re.sub(r'#|\s', '', part)
+                        f.Bold = 1
+                        q_col = parse_color_to_rgb_int(self.question_color)
+                        # Default question blue #2563eb if question_color is black/none
+                        f.Color = q_col if (q_col is not None and q_col != 0) else 15426341
+                        sel.TypeText(clean_paren)
+                        f.Bold = is_bold
+                        f.Color = 0
+                    elif re.match(r'^(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\])$', part, re.IGNORECASE):
                         f.Color = 0
                         f.Underline = 0
                         sel.TypeText('___________')
-                    elif part:
+                    else:
                         sel.TypeText(part.upper() if is_upper else part)
             else:
                 sel.TypeText(text.upper() if is_upper else text)
