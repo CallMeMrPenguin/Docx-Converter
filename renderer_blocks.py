@@ -492,11 +492,12 @@ class RendererBlocksMixin:
         extra_buffer_pt = cm_to_pt(0.20)   # 2.0 mm corner buffer
         gap_pt = cm_to_pt(0.80)            # 8.0 mm inter-column gap
 
-        # If items are exceptionally long sentences (>85% page width), use single column
-        if max_item_w_pt >= (printable_width_pt * 0.85):
+        # If items are exceptionally long sentences (>72% page width), use single column sized to median
+        if max_item_w_pt >= (printable_width_pt * 0.72):
             sorted_w = sorted(item_widths_pt)
-            target_w = sorted_w[-2] if len(sorted_w) >= 2 else sorted_w[-1]
-            box_w = min(printable_width_pt * 0.90, max(printable_width_pt * 0.65, target_w + (2 * pad_horiz_pt) + extra_buffer_pt))
+            median_w = sorted_w[len(sorted_w) // 2]
+            target_w = max(median_w, sorted_w[int(len(sorted_w) * 0.55)])
+            box_w = min(printable_width_pt * 0.76, max(printable_width_pt * 0.50, target_w + (2 * pad_horiz_pt) + extra_buffer_pt))
             return 1, [[w] for w in words], box_w, [0.0]
 
         items_with_w = list(zip(words, item_widths_pt))
@@ -632,18 +633,18 @@ class RendererBlocksMixin:
             extra_buffer_pt = cm_to_pt(0.20) # 2.0 mm corner clearance buffer
 
             total_pad_pt = pad_left_pt + pad_right_pt + extra_buffer_pt
-            est_content_w = max_line_w_pt + total_pad_pt
 
-            if est_content_w <= (printable_width_pt * 0.90):
-                box_width_pt = max(80.0, est_content_w)
+            if (max_line_w_pt + total_pad_pt) <= (printable_width_pt * 0.72):
+                box_width_pt = max(80.0, max_line_w_pt + total_pad_pt)
                 is_full_width = False
             else:
-                # When lines are long and wrap, size the box to the longest non-extreme line
+                # Multi-line text boxes with wrapping lines: size proportionally to median line width
                 sorted_w = sorted(line_widths_pt)
-                target_w = sorted_w[-2] if len(sorted_w) >= 2 else sorted_w[-1]
+                median_w = sorted_w[len(sorted_w) // 2]
+                target_w = max(median_w, sorted_w[int(len(sorted_w) * 0.55)])
                 target_content_w = target_w + total_pad_pt
-                box_width_pt = min(printable_width_pt * 0.90, max(printable_width_pt * 0.65, target_content_w))
-                is_full_width = (box_width_pt >= printable_width_pt * 0.98)
+                box_width_pt = min(printable_width_pt * 0.76, max(printable_width_pt * 0.50, target_content_w))
+                is_full_width = False
 
             left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
