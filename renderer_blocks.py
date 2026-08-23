@@ -494,7 +494,10 @@ class RendererBlocksMixin:
 
         # If items are exceptionally long sentences (>85% page width), use single column
         if max_item_w_pt >= (printable_width_pt * 0.85):
-            return 1, [[w] for w in words], printable_width_pt, [0.0]
+            sorted_w = sorted(item_widths_pt)
+            target_w = sorted_w[-2] if len(sorted_w) >= 2 else sorted_w[-1]
+            box_w = min(printable_width_pt * 0.90, max(printable_width_pt * 0.65, target_w + (2 * pad_horiz_pt) + extra_buffer_pt))
+            return 1, [[w] for w in words], box_w, [0.0]
 
         items_with_w = list(zip(words, item_widths_pt))
 
@@ -628,16 +631,21 @@ class RendererBlocksMixin:
             pad_bottom_pt = 0.0            # 0.0 pt bottom margin
             extra_buffer_pt = cm_to_pt(0.20) # 2.0 mm corner clearance buffer
 
-            est_content_w = max_line_w_pt + pad_left_pt + pad_right_pt + extra_buffer_pt
+            total_pad_pt = pad_left_pt + pad_right_pt + extra_buffer_pt
+            est_content_w = max_line_w_pt + total_pad_pt
 
-            if est_content_w >= (printable_width_pt * 0.85):
-                box_width_pt = printable_width_pt
-                left_offset_pt = 0.0
-                is_full_width = True
-            else:
-                box_width_pt = min(printable_width_pt, max(80.0, est_content_w))
-                left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
+            if est_content_w <= (printable_width_pt * 0.90):
+                box_width_pt = max(80.0, est_content_w)
                 is_full_width = False
+            else:
+                # When lines are long and wrap, size the box to the longest non-extreme line
+                sorted_w = sorted(line_widths_pt)
+                target_w = sorted_w[-2] if len(sorted_w) >= 2 else sorted_w[-1]
+                target_content_w = target_w + total_pad_pt
+                box_width_pt = min(printable_width_pt * 0.90, max(printable_width_pt * 0.65, target_content_w))
+                is_full_width = (box_width_pt >= printable_width_pt * 0.98)
+
+            left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             # Vertical Height: (Total Visual Lines * Font Line Height) + Space Between Lines + Descender clearance buffer
             num_lines = len(lines)

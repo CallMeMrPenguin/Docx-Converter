@@ -235,7 +235,22 @@ class ULNWordRenderer(RendererBlocksMixin):
             tab_pos_cm = left_indent_cm + (col_width_cm * c)
             sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(tab_pos_cm), Alignment=0)
 
-        return col_width_cm
+    def is_in_multiple_choice_question(self, blocks: List[ULNBlock], curr_idx: int) -> bool:
+        """
+        Scans forward from curr_idx to determine if an [OPT] block follows within the current question/dialogue.
+        Stops scanning when a new numbered question, section header (H1-H6), BOX, TABLE, or PIC_GRID is reached.
+        """
+        for k in range(curr_idx + 1, len(blocks)):
+            b = blocks[k]
+            if b.tag == "OPT":
+                return True
+            if b.tag in ("H1", "H2", "H3", "H4", "H5", "H6", "BOX", "TABLE", "PIC_GRID"):
+                break
+            if b.tag == "P0":
+                pref, delim, q_num, _ = extract_question_prefix_and_body(b.content)
+                if q_num is not None:
+                    break
+        return False
 
     def render(self, blocks: List[ULNBlock], doc, word):
         """Renders parsed ULNBlocks into the active document purely driven by structural AST tags."""
@@ -372,7 +387,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                 is_ins_block = block.is_instruction or any(s.is_instruction for s in block.spans)
                 
                 # Check if this P0 is followed by an OPT block, Dialogue continuation, BOX, or Sentence Rewrite blank line
-                has_next_opt = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag == "OPT")
+                has_next_opt = self.is_in_multiple_choice_question(blocks, idx_block)
                 has_next_box = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag == "BOX")
                 has_next_dlg = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P0"] and bool(re.search(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', blocks[idx_block + 1].content, re.IGNORECASE)))
                 has_next_rewrite_blank = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P2"] and (
@@ -630,6 +645,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                         pass
 
                 has_next_dlg = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P0"] and bool(re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', blocks[idx_block + 1].content, re.IGNORECASE)))
+                has_next_opt = self.is_in_multiple_choice_question(blocks, idx_block)
 
                 if is_dlg_speaker:
                     sel.ParagraphFormat.SpaceBefore = 1
