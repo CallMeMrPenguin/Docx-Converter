@@ -131,7 +131,7 @@ class TypographyMixin:
         lines_count = 1
 
         for w in words:
-            w_pt = self.measure_text_width_pt(doc, w, font_name, font_size, is_bold=is_bold) * 1.15
+            w_pt = self.measure_text_width_pt(doc, w, font_name, font_size, is_bold=is_bold) * 1.02
             if curr_line_w == 0.0:
                 curr_line_w = w_pt
             elif curr_line_w + space_w + w_pt <= avail_width_pt:

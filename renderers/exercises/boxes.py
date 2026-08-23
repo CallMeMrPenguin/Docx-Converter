@@ -8,6 +8,19 @@ from renderers.common.units_and_colors import cm_to_pt
 class BoxesRendererMixin:
     """Renders framed callout boxes, grammar formula boxes, and optimized Word Bank shapes ([BOX])."""
 
+    def clean_box_item(self, text: str) -> str:
+        """Strips inline ULN phonetic/formatting markup tags so text displays clean words in Word Bank."""
+        if not text:
+            return ""
+        # 1. Extract inner text from [text]{u/upper/sub/...}
+        t = re.sub(r'\[(.*?)\]\{(?:u|b|i|upper|sub|[a-zA-Z0-9#:,]+)\}', r'\1', text)
+        # 2. Strip markdown bold/italic asterisks
+        t = re.sub(r'\*\*(.*?)\*\*', r'\1', t)
+        t = re.sub(r'\*(.*?)\*', r'\1', t)
+        # 3. Replace <blank> / [BLANK] with underscores
+        t = re.sub(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '___________', t)
+        return t.strip()
+
     def optimize_word_bank_layout(self, doc, words: List[str], printable_width_pt: float) -> Tuple[int, List[List[str]], float, List[float]]:
         """
         Optimally arranges Word Bank items across columns and rows to produce the most
@@ -22,20 +35,22 @@ class BoxesRendererMixin:
         font_size = getattr(self, "font_size", 12.0)
 
         clean_words = [self.strip_markup_for_measurement(w) for w in words]
-        item_widths_pt = [self.measure_text_width_pt(doc, cw, font_name, font_size, is_bold=True) * 1.08 for cw in clean_words]
+        item_widths_pt = [self.measure_text_width_pt(doc, cw, font_name, font_size, is_bold=True) * 1.04 for cw in clean_words]
         max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
 
         pad_horiz_pt = cm_to_pt(0.20)      # 2.0 mm padding
         extra_buffer_pt = cm_to_pt(0.25)   # 2.5 mm corner buffer
-        gap_pt = cm_to_pt(0.80)            # 8.0 mm inter-column gap
+        gap_pt = cm_to_pt(0.65)            # 6.5 mm inter-column gap
 
-        # If items are long sentences / dialogue options (>50% page width or avg len > 35 chars)
         avg_len = sum(len(cw) for cw in clean_words) / len(clean_words) if clean_words else 0
-        if max_item_w_pt >= (printable_width_pt * 0.50) or avg_len >= 35:
+
+        # If items are long sentences / dialogue options (A. ... | B. ...), use 1 column with clean tight width
+        is_sentence_options = any(re.match(r'^[A-Z]\.\s+', cw) for cw in clean_words) or (max_item_w_pt >= (printable_width_pt * 0.55)) or (avg_len >= 38)
+        if is_sentence_options:
             if max_item_w_pt >= (printable_width_pt * 0.70):
                 box_w = printable_width_pt
             else:
-                box_w = min(printable_width_pt, max(printable_width_pt * 0.50, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt))
+                box_w = min(printable_width_pt, max(printable_width_pt * 0.50, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt + cm_to_pt(0.40)))
             return 1, [[w] for w in words], box_w, [0.0]
 
         items_with_w = list(zip(words, item_widths_pt))
@@ -52,7 +67,7 @@ class BoxesRendererMixin:
 
             arrangements = []
 
-            # 1. Alphabetical Column-Major (standard dictionary flow: Col 1 top-to-bottom, then Col 2...)
+            # 1. Alphabetical Column-Major
             alpha_items = sorted(items_with_w, key=lambda x: self.strip_markup_for_measurement(x[0]).lower())
             grid_col_major = [[] for _ in range(num_rows)]
             for i, item in enumerate(alpha_items):
@@ -79,7 +94,7 @@ class BoxesRendererMixin:
             grid_balanced = [r for r in grid_balanced if r]
             arrangements.append(grid_balanced)
 
-            # 3. Alphabetical Row-Major (A, B, C, D left-to-right)
+            # 3. Alphabetical Row-Major
             grid_row_major = []
             for r in range(num_rows):
                 chunk = alpha_items[r*c : (r+1)*c]
@@ -108,7 +123,6 @@ class BoxesRendererMixin:
 
                 needed_w = sum(col_max_w) + ((actual_c - 1) * gap_pt) + (2 * pad_horiz_pt) + extra_buffer_pt
                 if needed_w <= printable_width_pt:
-                    # Score: heavily favor fewer rows (R), then favor compact balanced width
                     score = num_rows * 1000 + needed_w
                     if score < best_score:
                         best_score = score
@@ -168,7 +182,7 @@ class BoxesRendererMixin:
 
             pad_left_pt = cm_to_pt(0.20)   # Exactly 2.0 mm left margin
             pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm right margin
-            extra_buffer_pt = cm_to_pt(0.20) # 2.0 mm corner clearance buffer
+            extra_buffer_pt = cm_to_pt(0.25) # 2.5 mm corner clearance buffer
 
             total_pad_pt = pad_left_pt + pad_right_pt + extra_buffer_pt
 
@@ -186,9 +200,9 @@ class BoxesRendererMixin:
             left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             num_lines = len(lines)
-            exact_line_h_pt = font_size * 1.28
-            space_between_pt = 2.0
-            descender_clearance_pt = max(6.0, font_size * 0.40)
+            exact_line_h_pt = font_size * 1.20
+            space_between_pt = 1.5
+            descender_clearance_pt = 3.0
             avail_inner_w = box_width_pt - pad_left_pt - pad_right_pt - extra_buffer_pt
             total_visual_lines = sum(self.calculate_item_visual_lines(doc, l, avail_inner_w, is_bold=True) for l in lines)
             box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + descender_clearance_pt + 4.0
@@ -196,8 +210,8 @@ class BoxesRendererMixin:
             try:
                 shape = doc.Shapes.AddShape(5, 0, 0, box_width_pt, box_height_pt)
                 tf = shape.TextFrame
-                tf.MarginTop = 0
-                tf.MarginBottom = 0
+                tf.MarginTop = 2.0
+                tf.MarginBottom = 2.0
                 tf.MarginLeft = pad_left_pt
                 tf.MarginRight = pad_right_pt
                 try:
@@ -218,11 +232,11 @@ class BoxesRendererMixin:
                 tr.Font.Size = font_size
                 tr.Font.Bold = 1
                 tr.Font.Color = 0
-                tr.Text = "\n".join(lines)
+                tr.Text = "\n".join(self.clean_box_item(l) for l in lines)
 
                 for p_idx in range(1, tr.Paragraphs.Count + 1):
                     pf = tr.Paragraphs(p_idx).Range.ParagraphFormat
-                    pf.SpaceBefore = 2.0 if p_idx > 1 else 0
+                    pf.SpaceBefore = 1.5 if p_idx > 1 else 0
                     pf.SpaceAfter = 0
                     pf.LineSpacingRule = 0
                     pf.Alignment = 0
@@ -243,7 +257,7 @@ class BoxesRendererMixin:
 
             cols, lines_bank, box_width_pt, tab_stops_pt = self.optimize_word_bank_layout(doc, words, printable_width_pt)
             pad_horiz_pt = cm_to_pt(0.20)
-            extra_buffer_pt = cm_to_pt(0.20)
+            extra_buffer_pt = cm_to_pt(0.25)
             left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             avail_inner_w = box_width_pt - (2 * pad_horiz_pt) - extra_buffer_pt
@@ -271,16 +285,16 @@ class BoxesRendererMixin:
                     total_visual_lines += row_v_lines
 
             num_rows = len(lines_bank)
-            exact_line_h_pt = font_size * 1.28
-            space_between_pt = 2.0
-            descender_clearance_pt = max(6.0, font_size * 0.40)
+            exact_line_h_pt = font_size * 1.20
+            space_between_pt = 1.5
+            descender_clearance_pt = 3.0
             box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + descender_clearance_pt + 4.0
 
             try:
                 shape = doc.Shapes.AddShape(5, 0, 0, box_width_pt, box_height_pt)
                 tf = shape.TextFrame
-                tf.MarginTop = 0
-                tf.MarginBottom = 0
+                tf.MarginTop = 2.0
+                tf.MarginBottom = 2.0
                 tf.MarginLeft = pad_horiz_pt
                 tf.MarginRight = pad_horiz_pt
                 try:
@@ -296,7 +310,7 @@ class BoxesRendererMixin:
                 shape.Line.Weight = 1.0
                 shape.Line.ForeColor.RGB = 0
 
-                lines_text = ["\t".join(chunk) for chunk in lines_bank]
+                lines_text = ["\t".join(self.clean_box_item(it) for it in chunk) for chunk in lines_bank]
                 tr = tf.TextRange
                 tr.Font.Name = font_name
                 tr.Font.Size = font_size
@@ -306,25 +320,13 @@ class BoxesRendererMixin:
 
                 for p_idx in range(1, tr.Paragraphs.Count + 1):
                     pf = tr.Paragraphs(p_idx).Range.ParagraphFormat
-                    pf.SpaceBefore = 2.0 if p_idx > 1 else 0
+                    pf.SpaceBefore = 1.5 if p_idx > 1 else 0
                     pf.SpaceAfter = 0
                     pf.LineSpacingRule = 0
                     pf.Alignment = 0
                     pf.TabStops.ClearAll()
                     for t_pt in tab_stops_pt[1:]:
                         pf.TabStops.Add(Position=t_pt, Alignment=0)
-
-                    # Bold the letter/number prefix (e.g. A., B., C., 1.)
-                    p_range = tr.Paragraphs(p_idx).Range
-                    p_text = p_range.Text.strip()
-                    m_pref = re.match(r'^\s*([A-Za-z]\.|\d+\.)\s*', p_text)
-                    if m_pref:
-                        try:
-                            pref_len = len(m_pref.group(0).strip())
-                            p_start = p_range.Start
-                            doc.Range(p_start, p_start + pref_len).Font.Bold = 1
-                        except Exception:
-                            pass
 
                 try:
                     shape.ConvertToInlineShape()
