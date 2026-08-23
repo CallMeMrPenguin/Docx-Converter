@@ -154,8 +154,8 @@ class McqOptionsRendererMixin:
             sel.ParagraphFormat.FirstLineIndent = 0
 
         if getattr(self, "is_inside_num_container", False):
-            sel.ParagraphFormat.SpaceBefore = 2
-            sel.ParagraphFormat.SpaceAfter = 2
+            sel.ParagraphFormat.SpaceBefore = 0
+            sel.ParagraphFormat.SpaceAfter = 0
             sel.ParagraphFormat.LineSpacing = getattr(self, "font_size", 12.0) * 1.16
         else:
             sel.ParagraphFormat.SpaceBefore = 3

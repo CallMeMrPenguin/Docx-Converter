@@ -726,8 +726,8 @@ class TabColumnsRendererMixin:
                     sel.ParagraphFormat.TabStops.ClearAll()
 
                     if getattr(self, "is_inside_num_container", False):
-                        sel.ParagraphFormat.SpaceBefore = 2 if r == 0 else 0
-                        sel.ParagraphFormat.SpaceAfter = 2 if is_last_row else 0
+                        sel.ParagraphFormat.SpaceBefore = 0
+                        sel.ParagraphFormat.SpaceAfter = 0
                         sel.ParagraphFormat.LineSpacing = font_size * 1.16
                     else:
                         sel.ParagraphFormat.SpaceBefore = (space_before_tab2 if idx == 0 else 2) if r == 0 else 0
