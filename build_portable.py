@@ -56,6 +56,8 @@ def build_portable():
         "--hidden-import", "gui_prompt_editor",
         "--hidden-import", "gui_update_modal",
         "--hidden-import", "gui_docx_picker",
+        "--hidden-import", "gui_image_preview",
+        "--collect-all", "renderers",
         os.path.join(base_dir, "gui_app.py")
     ]
 
