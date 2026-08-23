@@ -287,16 +287,18 @@ class TableRendererMixin:
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.RightIndent = 0
             sel.ParagraphFormat.FirstLineIndent = 0
-            sel.ParagraphFormat.SpaceBefore = 8
-            sel.ParagraphFormat.SpaceAfter = 4
+            sel.ParagraphFormat.SpaceBefore = 0
+            sel.ParagraphFormat.SpaceAfter = 0
             sel.ParagraphFormat.Alignment = 0
-            sel.TypeParagraph()
+            try:
+                sel.Range.ListFormat.RemoveNumbers()
+            except Exception:
+                pass
         except Exception:
             try:
                 tbl.Select()
                 sel = doc.Application.Selection
                 sel.Collapse(0)  # wdCollapseEnd = 0
-                sel.TypeParagraph()
             except Exception:
                 pass
 
