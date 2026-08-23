@@ -93,8 +93,8 @@ class PicturesRendererMixin:
             sel.ParagraphFormat.RightIndent = 0
             sel.ParagraphFormat.FirstLineIndent = 0
             sel.ParagraphFormat.Alignment = 0
-            sel.ParagraphFormat.SpaceBefore = 8 if idx_row == 0 else 4
-            sel.ParagraphFormat.SpaceAfter = 2
+            sel.ParagraphFormat.SpaceBefore = 8 if idx_row == 0 else 6
+            sel.ParagraphFormat.SpaceAfter = 6
             sel.ParagraphFormat.LineSpacingRule = 0
             sel.ParagraphFormat.KeepWithNext = True
 
