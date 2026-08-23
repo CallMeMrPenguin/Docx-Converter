@@ -9,46 +9,47 @@ from renderers.common.units_and_colors import cm_to_pt, pt_to_cm, parse_color_to
 class TabColumnsRendererMixin:
     """Renders multi-column paragraph tab stops: [TAB2], [TAB3], [TAB4], and [TAB]."""
 
-    def _insert_sign_picture_shape(self, doc, anchor, pic_info: PicInfo, left_pt: float, width_pt: float, height_pt: float):
-        """Helper to insert picture shape or placeholder aligned to anchor."""
+    def _insert_sign_picture_shape(self, sel, doc, pic_info: PicInfo, left_pt: float, width_pt: float, height_pt: float):
+        """Helper to insert picture shape or placeholder securely anchored to current paragraph."""
         get_next_path = getattr(self, "get_next_image_path", None)
         target_path = get_next_path(pic_info) if get_next_path else None
         font_name = getattr(self, "font_name", "Times New Roman")
 
         if target_path and os.path.exists(target_path):
             try:
-                shp = doc.Shapes.AddPicture(
-                    FileName=os.path.abspath(target_path),
-                    LinkToFile=False,
-                    SaveWithDocument=True,
-                    Anchor=anchor
-                )
+                norm_path = os.path.normpath(os.path.abspath(target_path))
+                inline_shp = sel.InlineShapes.AddPicture(norm_path)
+                shp = inline_shp.ConvertToShape()
                 shp.RelativeHorizontalPosition = 0  # wdRelativeHorizontalPositionMargin = 0
                 shp.RelativeVerticalPosition = 2    # wdRelativeVerticalPositionParagraph = 2
                 shp.Left = left_pt
-                shp.Top = 0
+                shp.Top = 0.0
                 shp.Width = width_pt
                 shp.Height = height_pt
-                shp.WrapFormat.Type = 3  # wdWrapSquare = 3
+                shp.WrapFormat.Type = 3  # wdWrapNone = 3 (In front of text, 0 collision)
                 shp.LockAnchor = True
                 return
             except Exception as e:
-                print(f"[ULNRenderer] Warning adding sign picture: {e}")
+                print(f"[ULNRenderer] Warning adding sign picture via ConvertToShape: {e}")
 
         # Fallback Placeholder Box
         try:
+            curr_para_rng = sel.Paragraphs(1).Range
             shp = doc.Shapes.AddShape(
                 5,  # msoShapeRoundedRectangle = 5
                 left_pt,
-                0,
+                0.0,
                 width_pt,
                 height_pt,
-                Anchor=anchor
+                curr_para_rng
             )
             shp.RelativeHorizontalPosition = 0
             shp.RelativeVerticalPosition = 2
             shp.Left = left_pt
-            shp.Top = 0
+            shp.Top = 0.0
+            shp.Width = width_pt
+            shp.Height = height_pt
+            shp.WrapFormat.Type = 3  # wdWrapNone = 3
             shp.Fill.ForeColor.RGB = 16316664  # Soft light grey
             shp.Line.ForeColor.RGB = 8421504   # Medium grey border
             shp.Line.Weight = 0.75
@@ -154,11 +155,11 @@ class TabColumnsRendererMixin:
     def render_side_by_side_pic_mcq(self, sel, doc, word, tab_block: ULNBlock, opt_block: ULNBlock, printable_width_cm: float):
         """
         Renders a 2-column Picture MCQ question using 100% PURE native paragraph tab stops and indents (NO TABLES).
-        - Picture is ALWAYS positioned on the RIGHT side.
+        - Picture is ALWAYS positioned on the RIGHT side, anchored via ConvertToShape so it NEVER bunches up or drifts.
         - Uses synchronized uniform picture dimensions (width and height) across the entire exercise section.
         - Enforces minimum 5.0 mm, preferred 10.0 mm gap between text and picture.
         - Option text naturally wraps if long within RightIndent.
-        - Word native Numbered List is applied on question items.
+        - Word native Numbered List is applied with hanging indent, keeping option letters A., B., C., D. 100% vertically aligned.
         """
         font_name = getattr(self, "font_name", "Times New Roman")
         font_size = getattr(self, "font_size", 12.0)
@@ -230,13 +231,20 @@ class TabColumnsRendererMixin:
 
         opt_color_int = parse_color_to_rgb_int(opt_color)
 
+        # Standard hanging indent so options A, B, C are 100% vertically aligned
+        indent_pt = cm_to_pt(0.60)
+
+        # Calculate minimum vertical height needed for the question block to fit the picture
+        total_items_count = len(normalized_opts) + (1 if q_display_body else 0)
+        approx_text_block_h_pt = total_items_count * (font_size * 1.35) + 10.0
+        extra_space_after_pt = max(2.0, pic_h_pt - approx_text_block_h_pt + 6.0)
+
         # ── Render Text on LEFT with Picture on RIGHT ───────────────
         if q_display_body:
             # Line 1: Question sentence
-            start_q_pos = sel.Range.Start
-            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.LeftIndent = indent_pt
+            sel.ParagraphFormat.FirstLineIndent = -indent_pt
             sel.ParagraphFormat.RightIndent = right_margin_indent
-            sel.ParagraphFormat.FirstLineIndent = 0
             sel.ParagraphFormat.SpaceBefore = 8
             sel.ParagraphFormat.SpaceAfter = 3
             sel.ParagraphFormat.KeepWithNext = True
@@ -244,26 +252,26 @@ class TabColumnsRendererMixin:
             if q_num is not None:
                 num_fmt = self.get_effective_number_format(pref, delim)
                 self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                sel.ParagraphFormat.LeftIndent = 0
+                sel.ParagraphFormat.LeftIndent = indent_pt
+                sel.ParagraphFormat.FirstLineIndent = -indent_pt
                 sel.ParagraphFormat.RightIndent = right_margin_indent
 
             self.write_inline_spans(sel, parse_inline_spans(q_display_body))
+            self._insert_sign_picture_shape(sel, doc, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
             sel.TypeParagraph()
-            end_q_pos = sel.Range.Start - 1
-            first_para_rng = doc.Range(start_q_pos, end_q_pos)
-            self._insert_sign_picture_shape(doc, first_para_rng, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
 
             try:
                 sel.Range.ListFormat.RemoveNumbers()
             except Exception:
                 pass
 
-            for let, body in normalized_opts:
-                sel.ParagraphFormat.LeftIndent = cm_to_pt(0.50)
+            for idx_opt, (let, body) in enumerate(normalized_opts):
+                is_last_opt = (idx_opt == len(normalized_opts) - 1)
+                sel.ParagraphFormat.LeftIndent = indent_pt + cm_to_pt(0.35)
                 sel.ParagraphFormat.RightIndent = right_margin_indent
                 sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 2
-                sel.ParagraphFormat.SpaceAfter = 2
+                sel.ParagraphFormat.SpaceAfter = extra_space_after_pt if is_last_opt else 2
                 sel.ParagraphFormat.KeepWithNext = True
 
                 sel.Font.Name = font_name
@@ -282,26 +290,28 @@ class TabColumnsRendererMixin:
         else:
             # Options-only: Line 1 has Native Numbered List + Option A
             for idx_opt, (let, body) in enumerate(normalized_opts):
+                is_last_opt = (idx_opt == len(normalized_opts) - 1)
                 sel.ParagraphFormat.RightIndent = right_margin_indent
-                sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 8 if idx_opt == 0 else 2
-                sel.ParagraphFormat.SpaceAfter = 2
+                sel.ParagraphFormat.SpaceAfter = extra_space_after_pt if is_last_opt else 2
                 sel.ParagraphFormat.KeepWithNext = True
 
                 if idx_opt == 0:
-                    start_q_pos = sel.Range.Start
-                    sel.ParagraphFormat.LeftIndent = 0
+                    sel.ParagraphFormat.LeftIndent = indent_pt
+                    sel.ParagraphFormat.FirstLineIndent = -indent_pt
                     if q_num is not None:
                         num_fmt = self.get_effective_number_format(pref, delim)
                         self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                        sel.ParagraphFormat.LeftIndent = 0
+                        sel.ParagraphFormat.LeftIndent = indent_pt
+                        sel.ParagraphFormat.FirstLineIndent = -indent_pt
                         sel.ParagraphFormat.RightIndent = right_margin_indent
                 else:
                     try:
                         sel.Range.ListFormat.RemoveNumbers()
                     except Exception:
                         pass
-                    sel.ParagraphFormat.LeftIndent = cm_to_pt(0.65)
+                    sel.ParagraphFormat.LeftIndent = indent_pt
+                    sel.ParagraphFormat.FirstLineIndent = 0
 
                 sel.Font.Name = font_name
                 sel.Font.Size = font_size
@@ -314,12 +324,11 @@ class TabColumnsRendererMixin:
                 sel.Font.Color = 0
 
                 self.write_inline_spans(sel, parse_inline_spans(body))
-                sel.TypeParagraph()
 
                 if idx_opt == 0:
-                    end_q_pos = sel.Range.Start - 1
-                    first_para_rng = doc.Range(start_q_pos, end_q_pos)
-                    self._insert_sign_picture_shape(doc, first_para_rng, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
+                    self._insert_sign_picture_shape(sel, doc, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
+
+                sel.TypeParagraph()
 
         sel.ParagraphFormat.LeftIndent = 0
         sel.ParagraphFormat.RightIndent = 0
