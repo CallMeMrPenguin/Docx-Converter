@@ -140,14 +140,10 @@ class TabColumnsRendererMixin:
 
         needed_text_w_pt = max(max_opt_w_pt + cm_to_pt(0.50), q_w_pt)
 
-        # 4. Calculate dynamic picture sizing
-        max_pic_w_pt = max(cm_to_pt(2.5), printable_width_pt - needed_text_w_pt - min_gap_pt)
-        num_lines = 1 + len(normalized_opts)
-        exact_line_h_pt = font_size * 1.28
-        total_text_h_pt = (num_lines * exact_line_h_pt) + ((num_lines - 1) * 3.0)
-
-        pic_h_pt = max(cm_to_pt(2.5), total_text_h_pt)
-        pic_w_pt = min(max_pic_w_pt, max(pic_h_pt, max_pic_w_pt * 0.90))
+        # 4. Standard clean picture sizing (compact 2.0cm x 2.0cm square)
+        pic_w_pt = cm_to_pt(2.0)
+        pic_h_pt = cm_to_pt(2.0)
+        min_gap_pt = cm_to_pt(0.50)
 
         # 5. Render Question & Options
         opt_color_int = parse_color_to_rgb_int(opt_color)
@@ -208,8 +204,10 @@ class TabColumnsRendererMixin:
             anchor_q = sel.Range.Duplicate
             self._insert_sign_picture_shape(doc, anchor_q, pic_info, 0, pic_w_pt, pic_h_pt)
 
+            opts_left_indent_pt = pic_w_pt + min_gap_pt
+
             if q_display_body:
-                sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt
+                sel.ParagraphFormat.LeftIndent = opts_left_indent_pt
                 sel.ParagraphFormat.RightIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 6
@@ -231,7 +229,7 @@ class TabColumnsRendererMixin:
                 sel.TypeParagraph()
 
                 for let, body in normalized_opts:
-                    sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt + cm_to_pt(0.50)
+                    sel.ParagraphFormat.LeftIndent = opts_left_indent_pt + cm_to_pt(0.50)
                     sel.ParagraphFormat.RightIndent = 0
                     sel.ParagraphFormat.FirstLineIndent = 0
                     sel.ParagraphFormat.SpaceBefore = 2
@@ -251,14 +249,12 @@ class TabColumnsRendererMixin:
                     self.write_inline_spans(sel, parse_inline_spans(body))
                     sel.TypeParagraph()
             else:
-                # No question body text: merge question number with option A on line 1
-                num_indent_pt = self.measure_text_width_pt(doc, num_prefix_str, font_name, font_size, is_bold=True) if num_prefix_str else 0.0
-
+                # No question body text: line 1 has "1. A. Option A", lines 2+ have "B. Option B"
                 for idx_opt, (let, body) in enumerate(normalized_opts):
                     if idx_opt == 0:
-                        sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt
+                        sel.ParagraphFormat.LeftIndent = opts_left_indent_pt
                     else:
-                        sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt + num_indent_pt
+                        sel.ParagraphFormat.LeftIndent = opts_left_indent_pt + cm_to_pt(0.50)
 
                     sel.ParagraphFormat.RightIndent = 0
                     sel.ParagraphFormat.FirstLineIndent = 0

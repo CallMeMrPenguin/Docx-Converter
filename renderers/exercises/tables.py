@@ -26,6 +26,20 @@ class TableRendererMixin:
         )
         has_pic = (total_pics > 0)
 
+        # Detect specialized 2-Column Sign Grid Table (e.g. 12 sign MCQs across 6 rows x 2 cols)
+        is_sign_grid_table = (
+            num_cols == 2
+            and total_pics >= 2
+            and any(
+                ("[PIC" in c.content.upper() or parse_pic_tag(c.content) is not None)
+                for r in tdata.rows for c in r.cells
+            )
+        )
+
+        if is_sign_grid_table:
+            self.render_sign_grid_table(sel, doc, tdata, printable_width_cm)
+            return
+
         # Only use floating side-diagram layout if it is a single MCQ question with a side diagram
         is_single_diagram_mcq = (
             tdata.borderless
@@ -294,5 +308,89 @@ class TableRendererMixin:
                 sel.TypeParagraph()
             except Exception:
                 pass
+
+        self.last_rendered_tag = "TABLE"
+
+    def render_sign_grid_table(self, sel, doc, tdata, printable_width_cm: float):
+        """
+        Renders a specialized 2-column Traffic Sign Grid Table (e.g. 12 sign MCQs across 6 rows x 2 cols).
+        Each cell contains:
+        - Question number (Bold, Blue)
+        - Picture placeholder [ 🖼️ ] (width 1.8cm, height 1.8cm)
+        - Options a., b., c. aligned neatly via tab stops.
+        """
+        num_rows = len(tdata.rows)
+        num_cols = 2
+        col_w_pt = cm_to_pt(printable_width_cm / 2.0)
+        font_name = getattr(self, "font_name", "Times New Roman")
+        font_size = getattr(self, "font_size", 10.5)
+
+        table = doc.Tables.Add(Range=sel.Range, NumRows=num_rows, NumColumns=num_cols)
+        table.Borders.Enable = True
+        table.Borders.InsideLineStyle = 1  # wdLineStyleSingle
+        table.Borders.InsideLineWidth = 4  # wdLineWidth050pt
+        table.Borders.InsideColor = 8421504  # Medium grey
+        table.Borders.OutsideLineStyle = 1
+        table.Borders.OutsideLineWidth = 4
+        table.Borders.OutsideColor = 8421504
+
+        for col_idx in range(1, 3):
+            table.Columns(col_idx).Width = col_w_pt
+
+        for r_idx, row in enumerate(tdata.rows):
+            for c_idx, cell_item in enumerate(row.cells):
+                if c_idx >= 2:
+                    break
+                cell = table.Cell(r_idx + 1, c_idx + 1)
+                cell.TopPadding = 4
+                cell.BottomPadding = 4
+                cell.LeftPadding = 4
+                cell.RightPadding = 4
+                cell.VerticalAlignment = 1  # wdCellAlignVerticalCenter
+
+                raw_content = cell_item.content.strip()
+                lines = [line.strip() for line in re.split(r'\\n|\n', raw_content) if line.strip()]
+                if not lines:
+                    continue
+
+                m_q = re.match(r'^(?:#?(\d+)[\.\)]?)\s*(?:\[PIC(?::([^\]]+))?\])?(.*)$', lines[0], re.IGNORECASE)
+                q_num = m_q.group(1) if m_q else str(r_idx * 2 + c_idx + 1)
+                pic_desc = m_q.group(2) if (m_q and m_q.group(2)) else "Sign"
+
+                opt_lines = lines[1:]
+                c_range = cell.Range
+                text_lines = []
+                for idx_o, opt in enumerate(opt_lines):
+                    if idx_o == 0:
+                        text_lines.append(f"{q_num}.\t[ 🖼️ {pic_desc[:10]} ]\t{opt}")
+                    else:
+                        text_lines.append(f"\t\t{opt}")
+
+                c_range.Text = "\r".join(text_lines)
+                c_range.Font.Name = font_name
+                c_range.Font.Size = font_size
+
+                for p in c_range.Paragraphs:
+                    p.TabStops.ClearAll()
+                    p.TabStops.Add(Position=cm_to_pt(0.6), Alignment=0)
+                    p.TabStops.Add(Position=cm_to_pt(2.5), Alignment=0)
+                    p.SpaceBefore = 1
+                    p.SpaceAfter = 1
+                    p.LineSpacingRule = 0
+
+        try:
+            tbl_end = table.Range.End
+            rng_after = doc.Range(tbl_end, tbl_end)
+            rng_after.Select()
+            sel = doc.Application.Selection
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.RightIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.ParagraphFormat.SpaceBefore = 8
+            sel.ParagraphFormat.SpaceAfter = 4
+            sel.ParagraphFormat.Alignment = 0
+            sel.TypeParagraph()
+        except Exception:
+            pass
 
         self.last_rendered_tag = "TABLE"
