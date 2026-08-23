@@ -36,70 +36,42 @@ class NumberingMixin:
 
     def apply_native_numbered_list(self, word, sel, q_num: Optional[str] = None, number_format: Optional[str] = None):
         """
-        Applies native MS Word Numbered List with guaranteed document-scoped font color & styling:
-        - List number is ALWAYS BOLD by default
-        - Text and numbering are separated by a SINGLE SPACE (TrailingCharacter = 1), NOT a tab!
-        - LeftIndent and FirstLineIndent are flush at 0.0 cm (left page border)
-        - Uses document-scoped ListTemplate for 100% reliable font color application across Word versions.
-        - Starts a new independent list instance (ContinuePreviousList=False) on first question (q_num == '1' or is_first_question_in_num_block),
-          and continues sequential list incrementing (ContinuePreviousList=True) on subsequent questions.
+        Applies 100% deterministic, bold colored question numbering:
+        - Numbers are ALWAYS BOLD and styled with self.question_color
+        - Separated by a single space, flush at left margin (0.0 cm)
+        - Sequential tracking ensures continuous 1, 2, 3, 4, 5 without drops or mid-exercise resets
         """
-        restart = getattr(self, "is_first_question_in_num_block", False) or (q_num == "1")
-        self.is_first_question_in_num_block = False
-        target_fmt = number_format if number_format else "%1."
-        q_color_int = parse_color_to_rgb_int(getattr(self, "question_color", None))
-        active_fmt = getattr(self, "_active_doc_list_template_fmt", None)
-
         try:
-            doc = sel.Document
-            # If restarting, format changed, or no active doc template exists, create a new document-scoped ListTemplate
-            if restart or (active_fmt != target_fmt) or not hasattr(self, "_active_doc_list_template") or self._active_doc_list_template is None:
-                list_tpl = doc.ListTemplates.Add(OutlineNumbered=False)
-                lvl = list_tpl.ListLevels(1)
-                lvl.TrailingCharacter = 1  # wdTrailingSpace = 1
-                lvl.Font.Bold = 1          # ALWAYS BOLD
-                lvl.Font.Name = getattr(self, "font_name", "Times New Roman")
-                lvl.Font.Size = getattr(self, "font_size", 12.0)
-                if q_color_int is not None:
-                    lvl.Font.Color = q_color_int
-                else:
-                    lvl.Font.Color = 0
-                lvl.NumberPosition = 0
-                lvl.TextPosition = 0
-                lvl.NumberFormat = target_fmt
-                self._active_doc_list_template = list_tpl
-                self._active_doc_list_template_fmt = target_fmt
-                sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=False)
-            else:
-                sel.Range.ListFormat.ApplyListTemplate(self._active_doc_list_template, ContinuePreviousList=True)
-
-            sel.ParagraphFormat.LeftIndent = 0
-            sel.ParagraphFormat.FirstLineIndent = 0
-            sel.Font.Bold = 0
-            sel.Font.Color = 0  # Black body text
-
+            sel.Range.ListFormat.RemoveNumbers()
         except Exception:
-            try:
-                list_tpl = word.ListGalleries(2).ListTemplates(1)
-                lvl = list_tpl.ListLevels(1)
-                lvl.TrailingCharacter = 1
-                lvl.Font.Bold = 1
-                lvl.NumberFormat = target_fmt
-                if q_color_int is not None:
-                    lvl.Font.Color = q_color_int
-                sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=not restart)
-                sel.ParagraphFormat.LeftIndent = 0
-                sel.ParagraphFormat.FirstLineIndent = 0
-                sel.Font.Bold = 0
-                sel.Font.Color = 0
-            except Exception:
-                try:
-                    sel.Range.ListFormat.ApplyNumberDefault()
-                    sel.ParagraphFormat.LeftIndent = 0
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.Font.Bold = 0
-                except Exception:
-                    pass
+            pass
+
+        # Determine effective number
+        if q_num is not None and str(q_num).strip().isdigit():
+            num_val = int(str(q_num).strip())
+            self.current_exercise_q_num = num_val + 1
+        else:
+            num_val = getattr(self, "current_exercise_q_num", 1)
+            self.current_exercise_q_num = num_val + 1
+
+        target_fmt = number_format if number_format else "%1."
+        num_str = target_fmt.replace("%1", str(num_val)) if "%1" in target_fmt else f"{num_val}."
+        if not num_str.endswith(" "):
+            num_str += " "
+
+        q_color_int = parse_color_to_rgb_int(getattr(self, "question_color", None))
+
+        sel.ParagraphFormat.LeftIndent = 0
+        sel.ParagraphFormat.FirstLineIndent = 0
+        sel.Font.Name = getattr(self, "font_name", "Times New Roman")
+        sel.Font.Size = getattr(self, "font_size", 12.0)
+        sel.Font.Bold = 1
+        sel.Font.Italic = 0
+        sel.Font.Underline = 0
+        sel.Font.Color = q_color_int if q_color_int is not None else 0
+        sel.TypeText(num_str)
+        sel.Font.Bold = 0
+        sel.Font.Color = 0  # Black body text
 
     def clean_num_placeholders(self, b: ULNBlock):
         r"""Recursively cleans #(\d+) placeholders from content, columns, spans, tables, and child blocks."""

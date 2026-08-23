@@ -22,16 +22,16 @@ class BoxesRendererMixin:
         font_size = getattr(self, "font_size", 12.0)
 
         clean_words = [self.strip_markup_for_measurement(w) for w in words]
-        item_widths_pt = [self.measure_text_width_pt(doc, cw, font_name, font_size, is_bold=False) * 1.04 for cw in clean_words]
+        item_widths_pt = [self.measure_text_width_pt(doc, cw, font_name, font_size, is_bold=True) * 1.08 for cw in clean_words]
         max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
 
         pad_horiz_pt = cm_to_pt(0.20)      # 2.0 mm padding
-        extra_buffer_pt = cm_to_pt(0.20)   # 2.0 mm corner buffer
+        extra_buffer_pt = cm_to_pt(0.25)   # 2.5 mm corner buffer
         gap_pt = cm_to_pt(0.80)            # 8.0 mm inter-column gap
 
-        # If items are long sentences / dialogue options (>50% page width or avg len > 40 chars)
+        # If items are long sentences / dialogue options (>50% page width or avg len > 35 chars)
         avg_len = sum(len(cw) for cw in clean_words) / len(clean_words) if clean_words else 0
-        if max_item_w_pt >= (printable_width_pt * 0.50) or avg_len >= 40:
+        if max_item_w_pt >= (printable_width_pt * 0.50) or avg_len >= 35:
             if max_item_w_pt >= (printable_width_pt * 0.70):
                 box_w = printable_width_pt
             else:
@@ -300,7 +300,7 @@ class BoxesRendererMixin:
                 tr = tf.TextRange
                 tr.Font.Name = font_name
                 tr.Font.Size = font_size
-                tr.Font.Bold = 0
+                tr.Font.Bold = 1
                 tr.Font.Color = 0
                 tr.Text = "\n".join(lines_text)
 
