@@ -67,12 +67,11 @@ class TabColumnsRendererMixin:
 
     def render_side_by_side_pic_mcq(self, sel, doc, word, tab_block: ULNBlock, opt_block: ULNBlock, printable_width_cm: float):
         """
-        Renders a 2-column Picture MCQ question where the picture is placed in Column 1 (Left)
-        or Column 2 (Right), and the Question + Options (A, B, C, D) are stacked in the opposite column.
-        - Matches picture height dynamically to the total vertical height of the options block.
-        - Keeps option letters (A., B., C., D.) strictly vertically aligned in a column using dedicated Tab Stops.
-        - Correctly anchors floating Shape to the specific question paragraph so images never group at page top.
-        - Formats question numbering cleanly and uniformly.
+        Renders a 2-column Picture MCQ question using a rock-solid borderless 1-row 2-column Table.
+        - Cell 1 (Left) or Cell 2 (Right): Picture as an INLINE shape, locked in place, never jumps/drifts.
+        - Cell 2 or Cell 1: Question & Options with native MS Word Numbered List applied on Question 1, 2, 3...
+        - Matches picture height dynamically to the options block height (pic_h_cm).
+        - Options (A., B., C., D.) are strictly vertically aligned.
         """
         font_name = getattr(self, "font_name", "Times New Roman")
         font_size = getattr(self, "font_size", 12.0)
@@ -120,249 +119,192 @@ class TabColumnsRendererMixin:
 
         # 2. Extract question number and body
         pref, delim, q_num, c_body = extract_question_prefix_and_body(q_raw)
-        if q_num is not None:
-            pref_str = pref if pref else ""
-            delim_char = delim if delim else "."
-            num_prefix_str = f"{pref_str}{q_num}{delim_char}"
-            q_display_body = c_body.strip()
-        else:
-            num_prefix_str = ""
-            q_display_body = q_raw.strip()
+        q_display_body = c_body.strip() if c_body else ""
 
-        # 3. Compute dynamic picture height matching the options block height
+        # 3. Dynamic Picture Dimensions matching options block
         num_opts = len(normalized_opts)
         total_lines = num_opts + (1 if q_display_body else 0)
         pic_h_cm = max(1.8, min(4.5, total_lines * 0.72))
         pic_w_cm = min(2.5, pic_h_cm)
         pic_w_pt = cm_to_pt(pic_w_cm)
         pic_h_pt = cm_to_pt(pic_h_cm)
-        min_gap_pt = cm_to_pt(0.40)
-        opts_left_indent_pt = pic_w_pt + min_gap_pt
+
+        pic_col_w_pt = pic_w_pt + cm_to_pt(0.35)
+        text_col_w_pt = printable_width_pt - pic_col_w_pt
 
         opt_color_int = parse_color_to_rgb_int(opt_color)
-        q_color_int = parse_color_to_rgb_int(question_color)
-        if q_color_int is None:
-            q_color_int = 0
 
-        # Tab stop offset for Option letters (A., B., C.)
-        tab_opt_offset_pt = cm_to_pt(0.70)
-
-        if is_pic_right:
-            # ── Picture on RIGHT ──────────────────────────────────────
-            pic_left_pt = printable_width_pt - pic_w_pt
-            right_margin_indent = pic_w_pt + min_gap_pt
-            first_para_rng = None
-
-            if q_display_body:
-                sel.ParagraphFormat.LeftIndent = 0
-                sel.ParagraphFormat.RightIndent = right_margin_indent
-                sel.ParagraphFormat.FirstLineIndent = 0
-                sel.ParagraphFormat.SpaceBefore = 8
-                sel.ParagraphFormat.SpaceAfter = 3
-                sel.ParagraphFormat.KeepWithNext = True
-
-                if q_num is not None:
-                    num_fmt = self.get_effective_number_format(pref, delim)
-                    self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                    sel.ParagraphFormat.LeftIndent = 0
-                    sel.ParagraphFormat.RightIndent = right_margin_indent
-
-                self.write_inline_spans(sel, parse_inline_spans(q_display_body))
-                first_para_rng = sel.Paragraphs(1).Range
-                sel.TypeParagraph()
-
-                try:
-                    sel.Range.ListFormat.RemoveNumbers()
-                except Exception:
-                    pass
-
-                for let, body in normalized_opts:
-                    sel.ParagraphFormat.LeftIndent = cm_to_pt(0.50)
-                    sel.ParagraphFormat.RightIndent = right_margin_indent
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.SpaceBefore = 2
-                    sel.ParagraphFormat.SpaceAfter = 2
-                    sel.ParagraphFormat.KeepWithNext = True
-
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
-                    sel.TypeText(f"{let}. ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    self.write_inline_spans(sel, parse_inline_spans(body))
-                    sel.TypeParagraph()
-
-            else:
-                # Options-only: Line 1 has "#N.\tA. Body", Lines 2+ have "\tB. Body"
-                for idx_opt, (let, body) in enumerate(normalized_opts):
-                    sel.ParagraphFormat.LeftIndent = 0
-                    sel.ParagraphFormat.RightIndent = right_margin_indent
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.SpaceBefore = 8 if idx_opt == 0 else 2
-                    sel.ParagraphFormat.SpaceAfter = 2
-                    sel.ParagraphFormat.KeepWithNext = True
-
-                    sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=tab_opt_offset_pt, Alignment=0)
-
-                    try:
-                        sel.Range.ListFormat.RemoveNumbers()
-                    except Exception:
-                        pass
-
-                    if idx_opt == 0 and num_prefix_str:
-                        sel.Font.Name = font_name
-                        sel.Font.Size = font_size
-                        sel.Font.Bold = 1
-                        sel.Font.Italic = 0
-                        sel.Font.Underline = 0
-                        sel.Font.Color = q_color_int
-                        sel.TypeText(num_prefix_str)
-                        sel.Font.Bold = 0
-                        sel.Font.Color = 0
-
-                    sel.TypeText("\t")
-
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
-                    sel.TypeText(f"{let}. ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    self.write_inline_spans(sel, parse_inline_spans(body))
-
-                    if idx_opt == 0:
-                        first_para_rng = sel.Paragraphs(1).Range
-
-                    sel.TypeParagraph()
-
-            if first_para_rng is not None:
-                self._insert_sign_picture_shape(doc, first_para_rng, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
-
-        else:
-            # ── Picture on LEFT ───────────────────────────────────────
-            pic_left_pt = 0
-            first_para_rng = None
-
-            if q_display_body:
-                sel.ParagraphFormat.LeftIndent = opts_left_indent_pt
-                sel.ParagraphFormat.RightIndent = 0
-                sel.ParagraphFormat.FirstLineIndent = 0
-                sel.ParagraphFormat.SpaceBefore = 8
-                sel.ParagraphFormat.SpaceAfter = 3
-                sel.ParagraphFormat.KeepWithNext = True
-
-                if num_prefix_str:
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    sel.Font.Color = q_color_int
-                    sel.TypeText(f"{num_prefix_str} ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                self.write_inline_spans(sel, parse_inline_spans(q_display_body))
-                first_para_rng = sel.Paragraphs(1).Range
-                sel.TypeParagraph()
-
-                try:
-                    sel.Range.ListFormat.RemoveNumbers()
-                except Exception:
-                    pass
-
-                for let, body in normalized_opts:
-                    sel.ParagraphFormat.LeftIndent = opts_left_indent_pt + cm_to_pt(0.50)
-                    sel.ParagraphFormat.RightIndent = 0
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.SpaceBefore = 2
-                    sel.ParagraphFormat.SpaceAfter = 2
-                    sel.ParagraphFormat.KeepWithNext = True
-
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
-                    sel.TypeText(f"{let}. ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    self.write_inline_spans(sel, parse_inline_spans(body))
-                    sel.TypeParagraph()
-
-            else:
-                # Options-only: Line 1 has "#N.\tA. Body", Lines 2+ have "\tB. Body"
-                tab_opt_absolute_pt = opts_left_indent_pt + tab_opt_offset_pt
-
-                for idx_opt, (let, body) in enumerate(normalized_opts):
-                    sel.ParagraphFormat.LeftIndent = opts_left_indent_pt
-                    sel.ParagraphFormat.RightIndent = 0
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.SpaceBefore = 8 if idx_opt == 0 else 2
-                    sel.ParagraphFormat.SpaceAfter = 2
-                    sel.ParagraphFormat.KeepWithNext = True
-
-                    sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=tab_opt_absolute_pt, Alignment=0)
-
-                    try:
-                        sel.Range.ListFormat.RemoveNumbers()
-                    except Exception:
-                        pass
-
-                    if idx_opt == 0 and num_prefix_str:
-                        sel.Font.Name = font_name
-                        sel.Font.Size = font_size
-                        sel.Font.Bold = 1
-                        sel.Font.Italic = 0
-                        sel.Font.Underline = 0
-                        sel.Font.Color = q_color_int
-                        sel.TypeText(num_prefix_str)
-                        sel.Font.Bold = 0
-                        sel.Font.Color = 0
-
-                    sel.TypeText("\t")
-
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
-                    sel.TypeText(f"{let}. ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    self.write_inline_spans(sel, parse_inline_spans(body))
-
-                    if idx_opt == 0:
-                        first_para_rng = sel.Paragraphs(1).Range
-
-                    sel.TypeParagraph()
-
-            if first_para_rng is not None:
-                self._insert_sign_picture_shape(doc, first_para_rng, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
-
-        sel.ParagraphFormat.LeftIndent = 0
-        sel.ParagraphFormat.RightIndent = 0
-        sel.ParagraphFormat.FirstLineIndent = 0
-        sel.ParagraphFormat.TabStops.ClearAll()
+        # 4. Insert 1-row, 2-col borderless Table
+        tbl = doc.Tables.Add(Range=sel.Range, NumRows=1, NumColumns=2)
+        tbl.Borders.Enable = False
+        tbl.AllowAutoFit = False
         try:
-            sel.Range.ListFormat.RemoveNumbers()
+            tbl.TopPadding = cm_to_pt(0.04)
+            tbl.BottomPadding = cm_to_pt(0.04)
+            tbl.LeftPadding = 0
+            tbl.RightPadding = 0
+            tbl.Rows(1).AllowBreakAcrossPages = False
         except Exception:
             pass
+
+        pic_col_idx = 2 if is_pic_right else 1
+        text_col_idx = 1 if is_pic_right else 2
+
+        # Set column widths
+        try:
+            tbl.Columns(pic_col_idx).Width = pic_col_w_pt
+            tbl.Columns(text_col_idx).Width = text_col_w_pt
+        except Exception:
+            pass
+
+        # ── CELL: PICTURE (Inline Shape) ───────────────────────────
+        cell_pic = tbl.Cell(1, pic_col_idx)
+        try:
+            cell_pic.VerticalAlignment = 1  # wdCellAlignVerticalCenter
+        except Exception:
+            pass
+        cell_pic.Range.Select()
+        sel_pic = doc.Application.Selection
+        sel_pic.ParagraphFormat.LeftIndent = 0
+        sel_pic.ParagraphFormat.RightIndent = 0
+        sel_pic.ParagraphFormat.FirstLineIndent = 0
+        sel_pic.ParagraphFormat.SpaceBefore = 0
+        sel_pic.ParagraphFormat.SpaceAfter = 0
+        sel_pic.ParagraphFormat.Alignment = 1 if is_pic_right else 0
+
+        try:
+            sel_pic.Range.ListFormat.RemoveNumbers()
+        except Exception:
+            pass
+
+        target_path = self.get_next_image_path(pic_info) if hasattr(self, "get_next_image_path") else None
+        if target_path and os.path.exists(target_path):
+            try:
+                shp = sel_pic.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
+                shp.LockAspectRatio = 0
+                shp.Width = pic_w_pt
+                shp.Height = pic_h_pt
+            except Exception as e:
+                print(f"[ULNRenderer] Warning adding inline picture: {e}")
+        else:
+            sel_pic.Font.Name = font_name
+            sel_pic.Font.Size = 9.0
+            sel_pic.Font.Italic = 1
+            sel_pic.Font.Bold = 1
+            sel_pic.TypeText(f"[ 🖼️ {pic_info.description or 'SIGN'} ]")
+
+        # ── CELL: QUESTION & OPTIONS ────────────────────────────────
+        cell_text = tbl.Cell(1, text_col_idx)
+        try:
+            cell_text.VerticalAlignment = 1  # wdCellAlignVerticalCenter
+        except Exception:
+            pass
+        cell_text.Range.Select()
+        sel_txt = doc.Application.Selection
+
+        if q_display_body:
+            # Question sentence
+            sel_txt.ParagraphFormat.LeftIndent = 0
+            sel_txt.ParagraphFormat.RightIndent = 0
+            sel_txt.ParagraphFormat.FirstLineIndent = 0
+            sel_txt.ParagraphFormat.SpaceBefore = 0
+            sel_txt.ParagraphFormat.SpaceAfter = 3
+
+            if q_num is not None:
+                num_fmt = self.get_effective_number_format(pref, delim)
+                self.apply_native_numbered_list(word, sel_txt, q_num=q_num, number_format=num_fmt)
+
+            self.write_inline_spans(sel_txt, parse_inline_spans(q_display_body))
+            sel_txt.TypeParagraph()
+
+            try:
+                sel_txt.Range.ListFormat.RemoveNumbers()
+            except Exception:
+                pass
+
+            for idx_opt, (let, body) in enumerate(normalized_opts):
+                sel_txt.ParagraphFormat.LeftIndent = cm_to_pt(0.50)
+                sel_txt.ParagraphFormat.RightIndent = 0
+                sel_txt.ParagraphFormat.FirstLineIndent = 0
+                sel_txt.ParagraphFormat.SpaceBefore = 1
+                sel_txt.ParagraphFormat.SpaceAfter = 1
+
+                sel_txt.Font.Name = font_name
+                sel_txt.Font.Size = font_size
+                sel_txt.Font.Bold = 1
+                sel_txt.Font.Italic = 0
+                sel_txt.Font.Underline = 0
+                sel_txt.Font.Color = opt_color_int if opt_color_int is not None else 0
+                sel_txt.TypeText(f"{let}. ")
+                sel_txt.Font.Bold = 0
+                sel_txt.Font.Color = 0
+
+                self.write_inline_spans(sel_txt, parse_inline_spans(body))
+                if idx_opt < len(normalized_opts) - 1:
+                    sel_txt.TypeParagraph()
+
+        else:
+            # Options only: Line 1 has Native Numbered List + Option A
+            # Lines 2+ have Options B, C, D indented identically
+            sel_txt.ParagraphFormat.LeftIndent = 0
+            sel_txt.ParagraphFormat.RightIndent = 0
+            sel_txt.ParagraphFormat.FirstLineIndent = 0
+            sel_txt.ParagraphFormat.SpaceBefore = 0
+            sel_txt.ParagraphFormat.SpaceAfter = 1
+
+            if q_num is not None:
+                num_fmt = self.get_effective_number_format(pref, delim)
+                self.apply_native_numbered_list(word, sel_txt, q_num=q_num, number_format=num_fmt)
+
+            for idx_opt, (let, body) in enumerate(normalized_opts):
+                if idx_opt > 0:
+                    sel_txt.TypeParagraph()
+                    try:
+                        sel_txt.Range.ListFormat.RemoveNumbers()
+                    except Exception:
+                        pass
+                    sel_txt.ParagraphFormat.LeftIndent = cm_to_pt(0.65)
+                    sel_txt.ParagraphFormat.FirstLineIndent = 0
+                    sel_txt.ParagraphFormat.SpaceBefore = 1
+                    sel_txt.ParagraphFormat.SpaceAfter = 1
+
+                sel_txt.Font.Name = font_name
+                sel_txt.Font.Size = font_size
+                sel_txt.Font.Bold = 1
+                sel_txt.Font.Italic = 0
+                sel_txt.Font.Underline = 0
+                sel_txt.Font.Color = opt_color_int if opt_color_int is not None else 0
+                sel_txt.TypeText(f"{let}. ")
+                sel_txt.Font.Bold = 0
+                sel_txt.Font.Color = 0
+
+                self.write_inline_spans(sel_txt, parse_inline_spans(body))
+
+        # ── EXIT TABLE ──────────────────────────────────────────────
+        try:
+            tbl_end = tbl.Range.End
+            rng_after = doc.Range(tbl_end, tbl_end)
+            rng_after.Select()
+            sel = doc.Application.Selection
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.RightIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.ParagraphFormat.SpaceBefore = 3
+            sel.ParagraphFormat.SpaceAfter = 1
+            try:
+                sel.Range.ListFormat.RemoveNumbers()
+            except Exception:
+                pass
+            sel.TypeParagraph()
+        except Exception:
+            try:
+                tbl.Select()
+                sel = doc.Application.Selection
+                sel.Collapse(0)  # wdCollapseEnd
+                sel.TypeParagraph()
+            except Exception:
+                pass
+
         self.last_rendered_tag = "OPT"
 
     def render_tab2_group(self, sel, doc, word, tab2_group: List[ULNBlock], printable_width_cm: float):
