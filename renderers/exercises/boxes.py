@@ -47,10 +47,8 @@ class BoxesRendererMixin:
         # If items are long sentences / dialogue options (A. ... | B. ...), use 1 column with clean tight width
         is_sentence_options = any(re.match(r'^[A-Z]\.\s+', cw) for cw in clean_words) or (max_item_w_pt >= (printable_width_pt * 0.55)) or (avg_len >= 38)
         if is_sentence_options:
-            if max_item_w_pt >= (printable_width_pt * 0.70):
-                box_w = printable_width_pt
-            else:
-                box_w = min(printable_width_pt, max(printable_width_pt * 0.50, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt + cm_to_pt(0.40)))
+            needed_w = max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt + cm_to_pt(0.35)
+            box_w = min(printable_width_pt, max(printable_width_pt * 0.40, needed_w))
             return 1, [[w] for w in words], box_w, [0.0]
 
         items_with_w = list(zip(words, item_widths_pt))
@@ -203,7 +201,8 @@ class BoxesRendererMixin:
             avail_inner_w = box_width_pt - pad_left_pt - pad_right_pt - extra_buffer_pt
             total_visual_lines = sum(self.calculate_item_visual_lines(doc, l, avail_inner_w, is_bold=True) for l in lines)
             extra_wrapped_lines = max(0, total_visual_lines - num_lines)
-            box_height_pt = (num_lines * (font_size * 1.25)) + (extra_wrapped_lines * (font_size * 1.16)) + (font_size * 0.40) + 2.0
+            wrap_buffer_pt = cm_to_pt(0.20) if extra_wrapped_lines > 0 else 0.0
+            box_height_pt = (num_lines * (font_size * 1.25)) + (extra_wrapped_lines * (font_size * 1.25)) + (font_size * 0.40) + wrap_buffer_pt + 2.0
 
             try:
                 shape = doc.Shapes.AddShape(5, 0, 0, box_width_pt, box_height_pt)
@@ -284,7 +283,8 @@ class BoxesRendererMixin:
 
             num_rows = len(lines_bank)
             extra_wrapped_lines = max(0, total_visual_lines - num_rows)
-            box_height_pt = (num_rows * (font_size * 1.25)) + (extra_wrapped_lines * (font_size * 1.16)) + (font_size * 0.40) + 2.0
+            wrap_buffer_pt = cm_to_pt(0.20) if extra_wrapped_lines > 0 else 0.0
+            box_height_pt = (num_rows * (font_size * 1.25)) + (extra_wrapped_lines * (font_size * 1.25)) + (font_size * 0.40) + wrap_buffer_pt + 2.0
 
             try:
                 shape = doc.Shapes.AddShape(5, 0, 0, box_width_pt, box_height_pt)

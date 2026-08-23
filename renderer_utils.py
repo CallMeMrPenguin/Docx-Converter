@@ -145,49 +145,36 @@ def extract_question_prefix_and_body(text: str) -> Tuple[Optional[str], Optional
 
     s = text.strip()
 
-    pattern = re.compile(
-        r'^\s*'
-        r'((?:\[(?:ins|b|i|u|hl|ans|q|opt|box|p0|p1|p2|gap)\]|<(?:b|i|u|strong|em|span)[^>]*>|\*\*|\*|_|\{u\})*)'
-        r'((?:Question|Câu|Task|Activity|Ex|Exercise|Part|Section|Item|Sentence|Dialogue|Problem|Bài)\s+)?'
-        r'(?:(\(|\[)\s*)?'
-        r'#?\s*(\d+)'
-        r'([\.\:\)\/\-]|(?:\.\)|\:\)|\.\/|\:\-))?'
-        r'(?:\s*(\)|\]))?'
-        r'([\.\:\)\/\-])?'
-        r'((?:\[\/(?:ins|b|i|u|hl|ans|q|opt|box|p0|p1|p2|gap)\]|<\/(?:b|i|u|strong|em|span)>|\*\*|\*|_|\{\/u\})*)'
-        r'[\s\:\.\-]*'
-        r'(.*)$',
-        re.IGNORECASE | re.DOTALL
-    )
+    lead_tags_m = re.match(r'^((?:\[(?:ins|b|i|u|hl|ans|q|opt|box|p0|p1|p2|gap)\]|<(?:b|i|u|strong|em|span)[^>]*>|\*\*|\*|_|\{u\})*)\s*', s, re.IGNORECASE)
+    lead_tags = lead_tags_m.group(1) if lead_tags_m else ''
+    s_work = s[len(lead_tags):].strip() if lead_tags else s
 
-    m = pattern.match(s)
-    if not m:
+    pref_word_m = re.match(r'^(Question|Câu|Task|Activity|Ex|Exercise|Part|Section|Item|Sentence|Dialogue|Problem|Bài)\s+', s_work, re.IGNORECASE)
+    pref_word = pref_word_m.group(1) if pref_word_m else ''
+    if pref_word:
+        s_work = s_work[pref_word_m.end():].strip()
+
+    num_m = re.match(r'^(#\s*)?(?:(\(|\[)\s*)?(#\s*)?(\d+)([\.\:\/\-])?(?:\s*(\)|\]))?([\.\:\/\-])?\s*(.*)$', s_work, re.DOTALL)
+    if not num_m:
         return None, None, None, text
 
-    lead_tags = m.group(1) or ''
-    prefix_word = m.group(2).strip() if m.group(2) else ''
-    open_paren = m.group(3) or ''
-    q_num = m.group(4)
-    inner_delim = m.group(5) or ''
-    close_paren = m.group(6) or ''
-    outer_delim = m.group(7) or ''
-    trail_tags = m.group(8) or ''
-    raw_body = m.group(9).strip()
+    has_hash = bool(num_m.group(1) or num_m.group(3) or ('#' in lead_tags))
+    open_p = num_m.group(2) or ''
+    q_num = num_m.group(4)
+    inner_d = num_m.group(5) or ''
+    close_p = num_m.group(6) or ''
+    outer_d = num_m.group(7) or ''
+    raw_body = num_m.group(8) or ''
 
-    # Safety check: If no explicit '#' was in the original text prefix, ensure it has either
-    # a prefix word (Question, Câu, etc.), or parentheses ((1)), or a standard delimiter (., :, ), /, -)
-    has_hash = ('#' in text[:m.start(9) if raw_body else len(text)])
-    has_prefix_word = bool(prefix_word)
-    has_paren = bool(open_paren and close_paren)
-    has_delim = bool(inner_delim or outer_delim)
+    has_paren = bool(open_p and close_p)
+    has_delim = bool(inner_d or outer_d or close_p)
 
-    if not (has_hash or has_prefix_word or has_paren or has_delim):
+    if not (has_hash or pref_word or has_paren or has_delim):
         return None, None, None, text
 
     # Balance/clean body text with formatting tags
-    body = raw_body
+    body = raw_body.strip()
     if body:
-        # Check if trailing markdown tags exist in body that match lead_tags
         if '**' in lead_tags and re.search(r'\*\*(?:\[\/(?:ins|b|i|u|hl)\])*$', body) and not re.match(r'^(?:\[(?:ins|b|i|u|hl)\])*\*\*', body):
             m_lead = re.match(r'^(?:\[(?:ins|b|i|u|hl)\])+', body, re.IGNORECASE)
             if m_lead:
@@ -211,36 +198,32 @@ def extract_question_prefix_and_body(text: str) -> Tuple[Optional[str], Optional
         # Clean orphan leading punctuation
         body = re.sub(r'^(?:[:\.\-\)])\s*', '', body).strip()
 
-    if open_paren == '(' and close_paren == ')':
-        full_prefix = f'{prefix_word} (' if prefix_word else '('
-        delim_char = f'{inner_delim}){outer_delim}' if outer_delim else (f'{inner_delim})' if inner_delim else ')')
+    if open_p == '(' and close_p == ')':
+        full_prefix = f'{pref_word} (' if pref_word else '('
+        delim_char = f'{inner_d}){outer_d}' if outer_d else (f'{inner_d})' if inner_d else ')')
         return full_prefix, delim_char, q_num, body
-    elif open_paren == '[' and close_paren == ']':
-        full_prefix = f'{prefix_word} [' if prefix_word else '['
-        delim_char = f'{inner_delim}]{outer_delim}' if outer_delim else (f'{inner_delim}]' if inner_delim else ']')
+    elif open_p == '[' and close_p == ']':
+        full_prefix = f'{pref_word} [' if pref_word else '['
+        delim_char = f'{inner_d}]{outer_d}' if outer_d else (f'{inner_d}]' if inner_d else ']')
+        return full_prefix, delim_char, q_num, body
+    elif close_p == ')':
+        full_prefix = f'{pref_word} ' if pref_word else ''
+        delim_char = ')'
+        return full_prefix, delim_char, q_num, body
+    elif close_p == ']':
+        full_prefix = f'{pref_word} ' if pref_word else ''
+        delim_char = ']'
         return full_prefix, delim_char, q_num, body
     else:
-        raw_delim = outer_delim or inner_delim
-        if ':' in raw_delim:
-            delim_char = ':'
-        elif '.' in raw_delim:
-            delim_char = '.'
-        elif ')' in raw_delim:
-            delim_char = ')'
-        elif '/' in raw_delim:
-            delim_char = '/'
-        elif '-' in raw_delim:
-            delim_char = '-'
-        else:
-            delim_char = '.'
-
-        full_prefix = f'{prefix_word} ' if prefix_word else ''
+        raw_delim = outer_d or inner_d
+        delim_char = raw_delim if raw_delim else '.'
+        full_prefix = f'{pref_word} ' if pref_word else ''
         return full_prefix, delim_char, q_num, body
 
 def split_line_into_option_items(line_text: str) -> List[str]:
     """
     Splits line text into multi-column items automatically by detecting:
-    1. Explicit \\t characters
+    1. Explicit \t characters
     2. Multiple sequential option choices like A. text B. text C. text D. text or a. b. c. d. or 1. 2. 3. 4.
     """
     if not line_text:

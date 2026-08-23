@@ -21,14 +21,16 @@ class NumberingMixin:
         raw_pref = extracted_pref if (extracted_pref and extracted_pref.strip()) else (q_pref or "")
         if raw_pref and raw_pref.strip():
             p_strip = raw_pref.strip()
-            if p_strip.endswith("("):
+            if p_strip.endswith("(") or p_strip.endswith("["):
                 pref = p_strip
             else:
                 pref = f"{p_strip} "
         else:
             pref = ""
 
-        if q_delim and q_delim != "." and "(" not in pref:
+        if "(" in pref or "[" in pref:
+            delim = extracted_delim if (extracted_delim and extracted_delim.strip()) else (")" if "(" in pref else "]")
+        elif q_delim and q_delim != ".":
             delim = q_delim
         else:
             delim = extracted_delim if (extracted_delim and extracted_delim.strip()) else (q_delim or ".")
