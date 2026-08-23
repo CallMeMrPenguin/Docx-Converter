@@ -514,17 +514,17 @@ class TabColumnsRendererMixin:
                 clean_t = self.strip_markup_for_measurement(raw_t)
                 c1_clean_texts.append(clean_t)
             max_c1_w_pt = max((self.measure_text_width_pt(doc, t, font_name, font_size, is_bold=False) for t in c1_clean_texts), default=100.0)
-            c1_word_w_cm = pt_to_cm(max_c1_w_pt) * 1.01
+            c1_word_w_cm = pt_to_cm(max_c1_w_pt) * 1.04
 
             c2_clean_texts = []
             for b in tab2_group:
                 clean_c2 = self.strip_markup_for_measurement(b.col2.strip())
                 c2_clean_texts.append(clean_c2)
             max_c2_w_pt = max((self.measure_text_width_pt(doc, t, font_name, font_size, is_bold=False) for t in c2_clean_texts), default=50.0)
-            c2_word_w_cm = pt_to_cm(max_c2_w_pt) * 1.01
+            c2_word_w_cm = pt_to_cm(max_c2_w_pt) * 1.04
 
             min_gap_cm = 0.50  # Strict 5mm minimum gap
-            safety_margin_cm = 0.20
+            safety_margin_cm = 0.35
 
             tab_min_cm = base_indent_cm + c1_word_w_cm + min_gap_cm
             tab_max_cm = printable_width_cm - c2_word_w_cm - safety_margin_cm
@@ -535,12 +535,57 @@ class TabColumnsRendererMixin:
                 slack = tab_max_cm - tab_min_cm
                 col2_tab_pos_cm = tab_min_cm + (slack * 0.50)
             else:
-                # Case B: Total width exceeds printable width; shrink gap to 5mm and split proportionally:
+                # Case B: Wrapping required. Evaluate layout strategies with line-budget simulation:
+                def simulate_layout(pos_cm):
+                    c1_avail_pt = max(cm_to_pt(1.5), cm_to_pt(pos_cm - base_indent_cm - min_gap_cm))
+                    c2_avail_pt = max(cm_to_pt(1.5), cm_to_pt(printable_width_cm - pos_cm - safety_margin_cm))
+                    tot_rows = 0
+                    extra_c1 = 0
+                    extra_c2 = 0
+                    for b in tab2_group:
+                        pref_s, delim_s, q_num_s, c1_b = extract_question_prefix_and_body(b.col1)
+                        num_w = self.measure_text_width_pt(doc, f"{pref_s or ''}{q_num_s}{delim_s or '.'} ", font_name, font_size, is_bold=True) if q_num_s is not None else 0.0
+                        l1 = len(self.wrap_text_into_lines(doc, (c1_b.strip() if q_num_s is not None else b.col1.strip()), c1_avail_pt - num_w))
+
+                        m_opt = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z])[\.\)](?:\*\*|\*|\]|\}|\{u\}|\))*)\s+(.*)$', b.col2.strip())
+                        opt_w = self.measure_text_width_pt(doc, f"{m_opt.group(1).upper()}. ", font_name, font_size, is_bold=True) if m_opt else 0.0
+                        body2 = m_opt.group(2).strip() if m_opt else b.col2.strip()
+                        l2 = len(self.wrap_text_into_lines(doc, body2, c2_avail_pt - opt_w))
+
+                        tot_rows += max(l1, l2, 1)
+                        extra_c1 += max(0, l1 - 1)
+                        extra_c2 += max(0, l2 - 1)
+                    return tot_rows, extra_c1, extra_c2
+
+                # 1. Proportional Shared Wrapping Candidate
                 total_w = c1_word_w_cm + c2_word_w_cm
                 avail_for_both = printable_width_cm - base_indent_cm - min_gap_cm
                 prop = c1_word_w_cm / total_w if total_w > 0 else 0.50
                 clamped_prop = max(0.25, min(0.75, prop))
-                col2_tab_pos_cm = base_indent_cm + (avail_for_both * clamped_prop) + min_gap_cm
+                pos_prop = base_indent_cm + (avail_for_both * clamped_prop) + min_gap_cm
+                pos_prop = max(base_indent_cm + 2.5, min(printable_width_cm - 2.5, pos_prop))
+                rows_prop, extra_c1_prop, extra_c2_prop = simulate_layout(pos_prop)
+
+                # 2. Strategy 1: Prevent Col 1 wrap (Allocate full width to Col 1)
+                pos_no_c1 = min(printable_width_cm - 3.0, max(base_indent_cm + 2.5, tab_min_cm))
+                rows_no_c1, extra_c1_no_c1, extra_c2_no_c1 = simulate_layout(pos_no_c1)
+
+                # 3. Strategy 2: Prevent Col 2 wrap (Allocate full width to Col 2)
+                pos_no_c2 = max(base_indent_cm + 2.5, min(printable_width_cm - 3.0, tab_max_cm))
+                rows_no_c2, extra_c1_no_c2, extra_c2_no_c2 = simulate_layout(pos_no_c2)
+
+                # Evaluate decisions:
+                col2_tab_pos_cm = pos_prop
+                if extra_c1_prop < extra_c2_prop:
+                    # Column 1 was wrapping fewer lines than Column 2.
+                    # If unwrapping Column 1 does NOT create more total lines than proportional, unwrap Column 1 completely!
+                    if rows_no_c1 <= rows_prop:
+                        col2_tab_pos_cm = pos_no_c1
+                elif extra_c2_prop < extra_c1_prop:
+                    # Column 2 was wrapping fewer lines than Column 1.
+                    # If unwrapping Column 2 does NOT create more total lines than proportional, unwrap Column 2 completely!
+                    if rows_no_c2 <= rows_prop:
+                        col2_tab_pos_cm = pos_no_c2
 
             col2_tab_pos_cm = max(base_indent_cm + 2.0, min(printable_width_cm - 2.0, col2_tab_pos_cm))
         else:
