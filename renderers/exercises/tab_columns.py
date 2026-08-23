@@ -514,34 +514,35 @@ class TabColumnsRendererMixin:
                 clean_t = self.strip_markup_for_measurement(raw_t)
                 c1_clean_texts.append(clean_t)
             max_c1_w_pt = max((self.measure_text_width_pt(doc, t, font_name, font_size, is_bold=False) for t in c1_clean_texts), default=100.0)
-            c1_word_w_cm = pt_to_cm(max_c1_w_pt) * 1.05
+            c1_word_w_cm = pt_to_cm(max_c1_w_pt) * 1.01
 
             c2_clean_texts = []
             for b in tab2_group:
                 clean_c2 = self.strip_markup_for_measurement(b.col2.strip())
                 c2_clean_texts.append(clean_c2)
             max_c2_w_pt = max((self.measure_text_width_pt(doc, t, font_name, font_size, is_bold=False) for t in c2_clean_texts), default=50.0)
-            c2_word_w_cm = pt_to_cm(max_c2_w_pt) * 1.05
+            c2_word_w_cm = pt_to_cm(max_c2_w_pt) * 1.01
 
-            min_gap_cm = 0.50
+            min_gap_cm = 0.50  # Strict 5mm minimum gap
+            safety_margin_cm = 0.20
+
             tab_min_cm = base_indent_cm + c1_word_w_cm + min_gap_cm
-            tab_max_cm = printable_width_cm - c2_word_w_cm - 0.10
+            tab_max_cm = printable_width_cm - c2_word_w_cm - safety_margin_cm
 
             if tab_max_cm >= tab_min_cm:
-                col2_tab_pos_cm = max(tab_min_cm, (base_indent_cm + printable_width_cm) / 2.0)
-                if col2_tab_pos_cm > tab_max_cm:
-                    col2_tab_pos_cm = tab_max_cm
+                # Case A: Both columns can fit on single line without wrapping.
+                # Maximize distance between columns by allocating available slack without pushing Col 2 past tab_max_cm:
+                slack = tab_max_cm - tab_min_cm
+                col2_tab_pos_cm = tab_min_cm + (slack * 0.50)
             else:
+                # Case B: Total width exceeds printable width; shrink gap to 5mm and split proportionally:
                 total_w = c1_word_w_cm + c2_word_w_cm
-                if total_w > 0:
-                    prop = c1_word_w_cm / total_w
-                    clamped_prop = max(0.40, min(0.60, prop))
-                    col2_tab_pos_cm = base_indent_cm + ((printable_width_cm - base_indent_cm) * clamped_prop)
-                else:
-                    col2_tab_pos_cm = (base_indent_cm + printable_width_cm) / 2.0
+                avail_for_both = printable_width_cm - base_indent_cm - min_gap_cm
+                prop = c1_word_w_cm / total_w if total_w > 0 else 0.50
+                clamped_prop = max(0.25, min(0.75, prop))
+                col2_tab_pos_cm = base_indent_cm + (avail_for_both * clamped_prop) + min_gap_cm
 
-            if col2_tab_pos_cm >= printable_width_cm - 1.5:
-                col2_tab_pos_cm = printable_width_cm - 2.5
+            col2_tab_pos_cm = max(base_indent_cm + 2.0, min(printable_width_cm - 2.0, col2_tab_pos_cm))
         else:
             col2_tab_pos_cm = printable_width_cm
 
@@ -622,8 +623,8 @@ class TabColumnsRendererMixin:
 
             else:
                 # ── Standard 2-Column Matching Layout with Strictly Contained Visual Wrapping ──
-                col1_avail_pt = max(cm_to_pt(2.0), cm_to_pt(col2_tab_pos_cm - base_indent_cm) - cm_to_pt(0.35))
-                col2_avail_pt = max(cm_to_pt(2.0), cm_to_pt(printable_width_cm - col2_tab_pos_cm) - cm_to_pt(0.15))
+                col1_avail_pt = max(cm_to_pt(1.5), cm_to_pt(col2_tab_pos_cm - base_indent_cm) - cm_to_pt(0.20))
+                col2_avail_pt = max(cm_to_pt(1.5), cm_to_pt(printable_width_cm - col2_tab_pos_cm) - cm_to_pt(0.05))
 
                 pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
                 num_prefix_str = ""
