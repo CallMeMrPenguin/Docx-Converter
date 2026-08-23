@@ -48,11 +48,12 @@ class NumberingMixin:
         self.is_first_question_in_num_block = False
         target_fmt = number_format if number_format else "%1."
         q_color_int = parse_color_to_rgb_int(getattr(self, "question_color", None))
+        active_fmt = getattr(self, "_active_doc_list_template_fmt", None)
 
         try:
             doc = sel.Document
-            # If restarting or no active doc template exists, create a new document-scoped ListTemplate
-            if restart or not hasattr(self, "_active_doc_list_template") or self._active_doc_list_template is None:
+            # If restarting, format changed, or no active doc template exists, create a new document-scoped ListTemplate
+            if restart or (active_fmt != target_fmt) or not hasattr(self, "_active_doc_list_template") or self._active_doc_list_template is None:
                 list_tpl = doc.ListTemplates.Add(OutlineNumbered=False)
                 lvl = list_tpl.ListLevels(1)
                 lvl.TrailingCharacter = 1  # wdTrailingSpace = 1
@@ -67,6 +68,7 @@ class NumberingMixin:
                 lvl.TextPosition = 0
                 lvl.NumberFormat = target_fmt
                 self._active_doc_list_template = list_tpl
+                self._active_doc_list_template_fmt = target_fmt
                 sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=False)
             else:
                 sel.Range.ListFormat.ApplyListTemplate(self._active_doc_list_template, ContinuePreviousList=True)

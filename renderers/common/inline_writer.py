@@ -61,21 +61,38 @@ class InlineWriterMixin:
             if re.match(r'^_{30,}$', text):
                 text = '_' * 35
 
-            # If text contains (number), (#number), or <blank>/[BLANK], format them cleanly inline
-            if re.search(r'\(\s*#?\d+\s*\)|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', text):
-                parts = re.split(r'(\(\s*#?\d+\s*\)|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])', text)
+            # If text contains (number), (#number), [number], [#number], #number, or <blank>/[BLANK], format them cleanly inline
+            inline_token_pat = r'(\(\s*#?\d+\s*[\.\:\)]*\)|\[\s*#?\d+\s*[\.\:\)]*\]|(?:^|(?<=\s))#\s*\d+[\.\:\)\/\-]*(?=\s|$)|<(?:blank|BLANK)>|\[(?:blank|BLANK)\])'
+            if re.search(inline_token_pat, text):
+                parts = re.split(inline_token_pat, text)
+                base_color = force_color if force_color is not None else (parse_color_to_rgb_int(span.color) if span.color else (parse_color_to_rgb_int(instruction_color) if (span.is_instruction and instruction_color) else 0))
                 for part in parts:
                     if not part:
                         continue
-                    if re.match(r'^\(\s*#?\d+\s*\)$', part):
+                    if re.match(r'^\(\s*#?\d+\s*[\.\:\)]*\)$', part):
                         clean_paren = re.sub(r'#|\s', '', part)
                         f.Bold = 1
                         q_col = parse_color_to_rgb_int(question_color)
-                        # Default question blue #2563eb if question_color is black/none
-                        f.Color = q_col if (q_col is not None and q_col != 0) else 15426341
+                        f.Color = q_col if q_col is not None else 0
                         sel.TypeText(clean_paren)
                         f.Bold = is_bold
-                        f.Color = 0
+                        f.Color = base_color if base_color is not None else 0
+                    elif re.match(r'^\[\s*#?\d+\s*[\.\:\)]*\]$', part):
+                        clean_bracket = re.sub(r'#|\s', '', part)
+                        f.Bold = 1
+                        q_col = parse_color_to_rgb_int(question_color)
+                        f.Color = q_col if q_col is not None else 0
+                        sel.TypeText(clean_bracket)
+                        f.Bold = is_bold
+                        f.Color = base_color if base_color is not None else 0
+                    elif re.match(r'^#\s*\d+[\.\:\)\/\-]*$', part):
+                        clean_num = re.sub(r'^#\s*', '', part)
+                        f.Bold = 1
+                        q_col = parse_color_to_rgb_int(question_color)
+                        f.Color = q_col if q_col is not None else 0
+                        sel.TypeText(clean_num)
+                        f.Bold = is_bold
+                        f.Color = base_color if base_color is not None else 0
                     elif re.match(r'^(?:<(?:blank|BLANK)>|\[(?:blank|BLANK)\])$', part, re.IGNORECASE):
                         f.Color = 0
                         f.Underline = 0

@@ -142,13 +142,10 @@ class TabColumnsRendererMixin:
             if total_lines_for_q > max_visual_lines:
                 max_visual_lines = total_lines_for_q
 
-        # Calculate uniform picture size matching the max visual lines
-        uniform_h_cm = max(2.20, min(5.50, max_visual_lines * 0.72))
-        uniform_w_cm = min(3.20, uniform_h_cm)
-
-        # Gap calculation: maintain minimum 5.0 mm, preferring 10.0 mm (1.0 cm)
-        rem_gap_space = printable_width_cm - uniform_w_cm - 8.0
-        gap_cm = max(0.50, min(1.00, rem_gap_space)) if rem_gap_space < 1.00 else 1.00
+        # Calculate uniform picture size matching standard 17.5x25mm sign dimensions
+        uniform_w_cm = 2.50
+        uniform_h_cm = 1.75
+        gap_cm = 0.50
 
         return uniform_w_cm, uniform_h_cm, gap_cm
 
@@ -215,13 +212,11 @@ class TabColumnsRendererMixin:
         if grp_w is not None and grp_h is not None:
             pic_w_cm = grp_w
             pic_h_cm = grp_h
-            gap_cm = grp_gap if grp_gap is not None else 1.00
+            gap_cm = grp_gap if grp_gap is not None else 0.50
         else:
-            num_opts = len(normalized_opts)
-            total_lines = num_opts + (1 if q_display_body else 0)
-            pic_h_cm = max(2.2, min(5.0, total_lines * 0.72))
-            pic_w_cm = min(3.2, pic_h_cm)
-            gap_cm = 1.00
+            pic_w_cm = 2.50
+            pic_h_cm = 1.75
+            gap_cm = 0.50
 
         pic_w_pt = cm_to_pt(pic_w_cm)
         pic_h_pt = cm_to_pt(pic_h_cm)
@@ -236,8 +231,8 @@ class TabColumnsRendererMixin:
 
         # Calculate minimum vertical height needed for the question block to fit the picture
         total_items_count = len(normalized_opts) + (1 if q_display_body else 0)
-        approx_text_block_h_pt = total_items_count * (font_size * 1.35) + 10.0
-        extra_space_after_pt = max(2.0, pic_h_pt - approx_text_block_h_pt + 6.0)
+        approx_text_block_h_pt = total_items_count * (font_size * 1.35) + 4.0
+        extra_space_after_pt = max(4.0, pic_h_pt - approx_text_block_h_pt + 8.0)
 
         # ── Render Text on LEFT with Picture on RIGHT ───────────────
         if q_display_body:
@@ -358,6 +353,152 @@ class TabColumnsRendererMixin:
 
         group_first_c1 = tab2_group[0].col1 if tab2_group else ""
         base_indent_cm = 0.5 if "P1" in group_first_c1 else (1.0 if "P2" in group_first_c1 else 0.0)
+
+        # 1. Determine if this TAB2 group contains Pictures
+        has_pic_in_c1 = any(
+            bool(re.search(r'\[PIC(?::.*?)?\]', b.col1, re.IGNORECASE) or parse_pic_tag(b.col1) is not None)
+            for b in tab2_group
+        )
+        has_pic_in_c2 = any(
+            bool(re.search(r'\[PIC(?::.*?)?\]', b.col2, re.IGNORECASE) or parse_pic_tag(b.col2) is not None)
+            for b in tab2_group
+        )
+
+        if has_pic_in_c1:
+            # ── 2-Column Layout: Picture on Left (Col 1), Text on Right (Col 2) ──
+            pic_w_cm = 2.50  # 25 mm width
+            pic_h_cm = 1.75  # 17.5 mm height (17.5x25mm)
+            min_gap_cm = 0.50  # Strict 5 mm gap between image and text
+
+            # Measure question number prefix widths
+            num_widths = []
+            for b in tab2_group:
+                pref, delim, q_num, _ = extract_question_prefix_and_body(b.col1)
+                if q_num is not None:
+                    pref_str = pref if pref else ""
+                    delim_char = delim if delim else "."
+                    num_str = f"{pref_str}{q_num}{delim_char} "
+                    w_pt = self.measure_text_width_pt(doc, num_str, font_name, font_size, is_bold=True)
+                    num_widths.append(pt_to_cm(w_pt) * 1.10)
+                else:
+                    num_widths.append(0.0)
+
+            max_num_w_cm = max(num_widths, default=0.70)
+            col1_total_w_cm = base_indent_cm + max_num_w_cm + pic_w_cm + 0.15
+            col2_pos_cm = col1_total_w_cm + min_gap_cm
+
+            for idx, block in enumerate(tab2_group):
+                last_tag = getattr(self, "last_rendered_tag", None)
+                sel.ParagraphFormat.SpaceBefore = 14 if (last_tag == "BOX" and idx == 0) else 3
+                sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.PageBreakBefore = False
+
+                # Hanging indent: guarantees multi-line wrapped text in Col 2 NEVER jumps into Col 1
+                sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_pos_cm)
+                sel.ParagraphFormat.FirstLineIndent = -cm_to_pt(col2_pos_cm - base_indent_cm)
+                sel.ParagraphFormat.RightIndent = 0
+                sel.ParagraphFormat.TabStops.ClearAll()
+                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_pos_cm), Alignment=0)
+
+                # Line 1: Question Number Prefix
+                pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
+                if q_num is not None:
+                    pref_str = pref if pref else ""
+                    delim_char = delim if delim else "."
+                    num_prefix_str = f"{pref_str}{q_num}{delim_char} "
+                    sel.Font.Name = font_name
+                    sel.Font.Size = font_size
+                    sel.Font.Bold = 1
+                    sel.Font.Italic = 0
+                    sel.Font.Underline = 0
+                    q_color_int = parse_color_to_rgb_int(question_color)
+                    sel.Font.Color = q_color_int if q_color_int is not None else 0
+                    sel.TypeText(num_prefix_str)
+                    sel.Font.Bold = 0
+                    sel.Font.Color = 0
+
+                # Line 1: Sign Picture (InlineShape, sized 17.5x25mm)
+                pic_info = parse_pic_tag(block.col1) or parse_pic_tag(c1_body) or PicInfo(description="Sign", pos="center", size="small")
+                self.current_tab2_pic_width_cm = pic_w_cm
+                self.current_tab2_pic_height_cm = pic_h_cm
+                self.render_pic(sel, doc, pic_info)
+                self.current_tab2_pic_width_cm = None
+                self.current_tab2_pic_height_cm = None
+
+                # Advance to Column 2
+                sel.TypeText("\t")
+
+                # Column 2 Text (processes inline blanks e.g. <blank> -> ___________)
+                c2_text = block.col2.strip()
+                c2_spans = parse_inline_spans(c2_text)
+                self.write_inline_spans(sel, c2_spans)
+                sel.TypeParagraph()
+
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.ParagraphFormat.TabStops.ClearAll()
+            self.last_rendered_tag = "TAB2"
+            return
+
+        elif has_pic_in_c2:
+            # ── 2-Column Layout: Text on Left (Col 1), Picture on Right (Col 2) ──
+            pic_w_cm = 2.50
+            pic_h_cm = 1.75
+            min_gap_cm = 0.50
+            col_pic_pos_cm = printable_width_cm - pic_w_cm
+            right_indent_cm = pic_w_cm + min_gap_cm
+
+            for idx, block in enumerate(tab2_group):
+                last_tag = getattr(self, "last_rendered_tag", None)
+                sel.ParagraphFormat.SpaceBefore = 14 if (last_tag == "BOX" and idx == 0) else 3
+                sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.PageBreakBefore = False
+
+                sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
+                sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.RightIndent = cm_to_pt(right_indent_cm)
+                sel.ParagraphFormat.TabStops.ClearAll()
+                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col_pic_pos_cm), Alignment=0)
+
+                pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
+                if q_num is not None:
+                    pref_str = pref if pref else ""
+                    delim_char = delim if delim else "."
+                    num_prefix_str = f"{pref_str}{q_num}{delim_char} "
+                    sel.Font.Name = font_name
+                    sel.Font.Size = font_size
+                    sel.Font.Bold = 1
+                    sel.Font.Italic = 0
+                    sel.Font.Underline = 0
+                    q_color_int = parse_color_to_rgb_int(question_color)
+                    sel.Font.Color = q_color_int if q_color_int is not None else 0
+                    sel.TypeText(num_prefix_str)
+                    sel.Font.Bold = 0
+                    sel.Font.Color = 0
+
+                    c1_spans = parse_inline_spans(c1_body.strip())
+                    self.write_inline_spans(sel, c1_spans)
+                else:
+                    self.write_inline_spans(sel, block.col1_spans)
+
+                sel.TypeText("\t")
+
+                pic_info = parse_pic_tag(block.col2) or PicInfo(description="Sign", pos="right", size="small")
+                self.current_tab2_pic_width_cm = pic_w_cm
+                self.current_tab2_pic_height_cm = pic_h_cm
+                self.render_pic(sel, doc, pic_info)
+                self.current_tab2_pic_width_cm = None
+                self.current_tab2_pic_height_cm = None
+                sel.TypeParagraph()
+
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.ParagraphFormat.RightIndent = 0
+            sel.ParagraphFormat.TabStops.ClearAll()
+            self.last_rendered_tag = "TAB2"
+            return
 
         # 1. Determine if this TAB2 group is Question + Answer Blank
         has_any_blank = any(
