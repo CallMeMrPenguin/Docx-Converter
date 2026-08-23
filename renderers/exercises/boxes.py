@@ -1,3 +1,4 @@
+import re
 import math
 from typing import List, Tuple, Optional
 from uln_parser import ULNBlock, parse_inline_spans
@@ -21,19 +22,20 @@ class BoxesRendererMixin:
         font_size = getattr(self, "font_size", 12.0)
 
         clean_words = [self.strip_markup_for_measurement(w) for w in words]
-        item_widths_pt = [self.measure_text_width_pt(doc, cw, font_name, font_size, is_bold=True) * 1.15 for cw in clean_words]
+        item_widths_pt = [self.measure_text_width_pt(doc, cw, font_name, font_size, is_bold=False) * 1.04 for cw in clean_words]
         max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
 
         pad_horiz_pt = cm_to_pt(0.20)      # 2.0 mm padding
         extra_buffer_pt = cm_to_pt(0.20)   # 2.0 mm corner buffer
         gap_pt = cm_to_pt(0.80)            # 8.0 mm inter-column gap
 
-        # If items are exceptionally long sentences (>72% page width), use single column sized to median
-        if max_item_w_pt >= (printable_width_pt * 0.72):
-            sorted_w = sorted(item_widths_pt)
-            median_w = sorted_w[len(sorted_w) // 2]
-            target_w = max(median_w, sorted_w[int(len(sorted_w) * 0.55)])
-            box_w = min(printable_width_pt * 0.76, max(printable_width_pt * 0.50, target_w + (2 * pad_horiz_pt) + extra_buffer_pt))
+        # If items are long sentences / dialogue options (>50% page width or avg len > 40 chars)
+        avg_len = sum(len(cw) for cw in clean_words) / len(clean_words) if clean_words else 0
+        if max_item_w_pt >= (printable_width_pt * 0.50) or avg_len >= 40:
+            if max_item_w_pt >= (printable_width_pt * 0.70):
+                box_w = printable_width_pt
+            else:
+                box_w = min(printable_width_pt, max(printable_width_pt * 0.50, max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt))
             return 1, [[w] for w in words], box_w, [0.0]
 
         items_with_w = list(zip(words, item_widths_pt))
@@ -298,7 +300,7 @@ class BoxesRendererMixin:
                 tr = tf.TextRange
                 tr.Font.Name = font_name
                 tr.Font.Size = font_size
-                tr.Font.Bold = 1
+                tr.Font.Bold = 0
                 tr.Font.Color = 0
                 tr.Text = "\n".join(lines_text)
 
@@ -311,6 +313,18 @@ class BoxesRendererMixin:
                     pf.TabStops.ClearAll()
                     for t_pt in tab_stops_pt[1:]:
                         pf.TabStops.Add(Position=t_pt, Alignment=0)
+
+                    # Bold the letter/number prefix (e.g. A., B., C., 1.)
+                    p_range = tr.Paragraphs(p_idx).Range
+                    p_text = p_range.Text.strip()
+                    m_pref = re.match(r'^\s*([A-Za-z]\.|\d+\.)\s*', p_text)
+                    if m_pref:
+                        try:
+                            pref_len = len(m_pref.group(0).strip())
+                            p_start = p_range.Start
+                            doc.Range(p_start, p_start + pref_len).Font.Bold = 1
+                        except Exception:
+                            pass
 
                 try:
                     shape.ConvertToInlineShape()
