@@ -51,6 +51,7 @@ class ULNBlock:
     table_data: Optional[ULNTableData] = None
     children: List['ULNBlock'] = field(default_factory=list)
     is_instruction: bool = False
+    sub_tag: Optional[str] = None
 
 
 def parse_pic_tag(text: str) -> Optional[PicInfo]:
@@ -400,7 +401,13 @@ class ULNParser:
                         for q_l in raw_q_text.splitlines():
                             clean_l = q_l.strip()
                             if clean_l:
-                                blocks.append(ULNBlock(tag="QUOTE", content=clean_l, spans=parse_inline_spans(clean_l)))
+                                m_sub = re.match(r'^\s*\[(P0|P1|P2|INS)\]\s*(.*)$', clean_l, flags=re.IGNORECASE)
+                                if m_sub:
+                                    s_tag = m_sub.group(1).upper()
+                                    body_c = m_sub.group(2).strip()
+                                    blocks.append(ULNBlock(tag="QUOTE", content=body_c, sub_tag=s_tag, spans=parse_inline_spans(body_c)))
+                                else:
+                                    blocks.append(ULNBlock(tag="QUOTE", content=clean_l, sub_tag=None, spans=parse_inline_spans(clean_l)))
                         continue
                     else:
                         in_quote = True
@@ -413,8 +420,13 @@ class ULNParser:
                     for q_l in quote_lines:
                         clean_l = q_l.strip()
                         if clean_l:
-                            clean_l = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', clean_l, flags=re.IGNORECASE)
-                            blocks.append(ULNBlock(tag="QUOTE", content=clean_l, spans=parse_inline_spans(clean_l)))
+                            m_sub = re.match(r'^\s*\[(P0|P1|P2|INS)\]\s*(.*)$', clean_l, flags=re.IGNORECASE)
+                            if m_sub:
+                                s_tag = m_sub.group(1).upper()
+                                body_c = m_sub.group(2).strip()
+                                blocks.append(ULNBlock(tag="QUOTE", content=body_c, sub_tag=s_tag, spans=parse_inline_spans(body_c)))
+                            else:
+                                blocks.append(ULNBlock(tag="QUOTE", content=clean_l, sub_tag=None, spans=parse_inline_spans(clean_l)))
                     quote_lines = []
                 else:
                     quote_lines.append(line)

@@ -978,15 +978,30 @@ class ULNWordRenderer(RendererBlocksMixin):
 
             elif tag == "QUOTE":
                 raw_c = block.content.strip()
-                is_subhead = (len(raw_c) <= 60 and (raw_c.startswith('*') or raw_c.startswith('**') or raw_c.startswith('_')))
-                space_before_quote = 14 if (self.last_rendered_tag == "BOX") else (6 if is_subhead else 0)
+                sub = getattr(block, "sub_tag", None)
+
+                # Determine if this line is a Title/Heading or Body paragraph:
+                # 1. Explicit [P0]: Passage title or flush-left line (FirstLineIndent = 0)
+                # 2. Explicit [P1]: Passage body paragraph (FirstLineIndent = 0.75cm, Justified)
+                # 3. Fallback inference if untagged:
+                if sub == "P0":
+                    is_p0_title = True
+                elif sub in ("P1", "P2"):
+                    is_p0_title = False
+                else:
+                    is_p0_title = (len(raw_c) <= 70 and (raw_c.startswith('*') or raw_c.startswith('**') or raw_c.startswith('_')))
+
+                space_before_quote = 14 if (self.last_rendered_tag == "BOX") else (6 if is_p0_title else 0)
+
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.RightIndent = 0
-                sel.ParagraphFormat.FirstLineIndent = 0 if is_subhead else cm_to_pt(0.75)
+                sel.ParagraphFormat.FirstLineIndent = 0 if is_p0_title else cm_to_pt(0.75)
                 sel.ParagraphFormat.SpaceBefore = space_before_quote
-                sel.ParagraphFormat.SpaceAfter = 2 if is_subhead else 4
-                sel.ParagraphFormat.KeepWithNext = is_subhead
-                sel.ParagraphFormat.Alignment = 0 if is_subhead else 3  # Left for subhead, Justified for body
+                sel.ParagraphFormat.SpaceAfter = 3 if is_p0_title else 4
+                sel.ParagraphFormat.KeepWithNext = is_p0_title
+                # Alignment: Left (0) for P0 titles/headings, Justified (3) for P1 body paragraphs
+                sel.ParagraphFormat.Alignment = 0 if is_p0_title else 3
+
                 self.write_inline_spans(sel, block.spans, default_italic=False)
                 sel.TypeParagraph()
                 sel.ParagraphFormat.RightIndent = 0

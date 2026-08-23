@@ -124,9 +124,14 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
   - For Framed Word Banks: Separate vocabulary items using pipes `|`. The compiler will auto-calculate columns into a balanced framed word bank.
     - Example: `[BOX] photosynthesis | chlorophyll | sunlight [/BOX]`
 
-- [QUOTE] ... [/QUOTE] : Indented, JUSTIFIED text block for ALL reading passages, short/long comprehension texts, stories, articles, or dialogues.
+- [QUOTE] ... [/QUOTE] : Container for reading passages, stories, articles, emails, or comprehension texts.
+  - STRUCTURE & INDENTATION INSIDE [QUOTE]:
+    - `[P0]` : Used for Passage Titles, Subheadings, Author lines, or Flush-Left lines (First line indent: 0 cm, Left-aligned, SpaceBefore: 6pt, SpaceAfter: 3pt, KeepWithNext: True).
+      Example: `[P0] **The Importance of Hobbies**`
+    - `[P1]` : Used for Standard Reading Passage Body Paragraphs (First line indent: 0.75 cm, Justified text alignment, SpaceBefore: 0pt, SpaceAfter: 4pt).
+      Example: `[P1] Hobbies play an important role in our lives. They help us relax...`
+    - Note: If lines inside [QUOTE] are untagged, the compiler automatically detects titles/bold headings as [P0] and body paragraphs as [P1].
   - MANDATORY RULE FOR ALL READING PASSAGES: Any reading passage, article, story, comprehension text, or long/short passage MUST ALWAYS be wrapped in `[QUOTE] ... [/QUOTE]`. NEVER put reading passages inside a `[BOX]`, even if the original source document puts a border/box around it.
-  - Formatting in Word: First line indent: 0.75 cm, Justified text alignment, no empty line gaps between paragraphs.
 
 - [PIC_GRID] ... [/PIC_GRID] : 4-column picture grid container (4 pictures per row).
   - Inside `[PIC_GRID]`, separate items using pipes `|`.
@@ -340,13 +345,15 @@ I. PICTURE VOCABULARY & WORD COMPLETION GRIDS (2-COLUMN PICTURE EXERCISES):
 J. READING PASSAGES, STORIES & COMPREHENSION TEXTS (STRICT QUOTE MANDATE):
    - ABSOLUTE PROHIBITION ON BOXING READING TEXTS: Any reading text, short passage, long article, email, blog post, story, or reading comprehension passage MUST NEVER be placed into a [BOX], regardless of whether the provided source image or document encloses it in a box or border!
    - MANDATORY TAG: ALL reading passages MUST be classified and wrapped using `[QUOTE] ... [/QUOTE]`.
-   - Paragraphs within a reading passage should be written as natural paragraphs inside `[QUOTE] ... [/QUOTE]`.
+   - FORMATTING TIGHTLY WITH [P0] AND [P1] INSIDE [QUOTE]:
+     - Use `[P0]` for the Passage Title/Heading (starts flush at left with 0 cm indent and KeepWithNext).
+     - Use `[P1]` for each Body Paragraph (automatically indented 0.75 cm at the first line and justified).
    - Example:
      [P0] [ins]**VIII. Read the passage and choose the best answer.**
      [QUOTE]
-     Hobbies play an important role in our lives. They help us relax after long hours of stressful work and study. Among various hobbies, reading books is considered one of the most beneficial activities.
-
-     When you read a book, you not only expand your knowledge about different cultures and historical events, but also improve your vocabulary and concentration. Moreover, reading helps develop critical thinking and problem-solving skills.
+     [P0] **The Importance of Hobbies**
+     [P1] Hobbies play an important role in our lives. They help us relax after long hours of stressful work and study. Among various hobbies, reading books is considered one of the most beneficial activities.
+     [P1] When you read a book, you not only expand your knowledge about different cultures and historical events, but also improve your vocabulary and concentration. Moreover, reading helps develop critical thinking and problem-solving skills.
      [/QUOTE]
 
      [NUM]
