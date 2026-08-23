@@ -200,15 +200,15 @@ class BoxesRendererMixin:
             left_offset_pt = max(0.0, (printable_width_pt - box_width_pt) / 2.0)
 
             num_lines = len(lines)
-            exact_line_h_pt = font_size * 1.28
-            space_between_pt = 2.0
+            exact_line_h_pt = font_size * 1.04
+            space_between_pt = 1.0
             last_line_str = lines[-1] if lines else ""
             has_descenders = bool(re.search(r'[gpyjq,;]', last_line_str))
             descender_clearance_pt = (font_size * 0.38) if has_descenders else 1.5
-            wrap_buffer_pt = cm_to_pt(0.20)  # +2.0 mm buffer for multi-line boxes
             avail_inner_w = box_width_pt - pad_left_pt - pad_right_pt - extra_buffer_pt
             total_visual_lines = sum(self.calculate_item_visual_lines(doc, l, avail_inner_w, is_bold=True) for l in lines)
-            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + descender_clearance_pt + wrap_buffer_pt + 3.0
+            extra_wrapped_lines = max(0, total_visual_lines - num_lines)
+            box_height_pt = (num_lines * exact_line_h_pt) + (extra_wrapped_lines * (font_size * 1.16)) + ((num_lines - 1) * space_between_pt) + descender_clearance_pt + 1.5
 
             try:
                 shape = doc.Shapes.AddShape(5, 0, 0, box_width_pt, box_height_pt)
@@ -239,7 +239,7 @@ class BoxesRendererMixin:
 
                 for p_idx in range(1, tr.Paragraphs.Count + 1):
                     pf = tr.Paragraphs(p_idx).Range.ParagraphFormat
-                    pf.SpaceBefore = 1.5 if p_idx > 1 else 0
+                    pf.SpaceBefore = 1.0 if p_idx > 1 else 0
                     pf.SpaceAfter = 0
                     pf.LineSpacingRule = 0
                     pf.Alignment = 0
@@ -288,13 +288,13 @@ class BoxesRendererMixin:
                     total_visual_lines += row_v_lines
 
             num_rows = len(lines_bank)
-            exact_line_h_pt = font_size * 1.28
-            space_between_pt = 2.0
+            exact_line_h_pt = font_size * 1.04
+            space_between_pt = 1.0
             last_line_str = " ".join(lines_bank[-1]) if lines_bank else ""
             has_descenders = bool(re.search(r'[gpyjq,;]', last_line_str))
             descender_clearance_pt = (font_size * 0.38) if has_descenders else 1.5
-            wrap_buffer_pt = cm_to_pt(0.20)  # +2.0 mm buffer for multi-line boxes
-            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + descender_clearance_pt + wrap_buffer_pt + 3.0
+            extra_wrapped_lines = max(0, total_visual_lines - num_rows)
+            box_height_pt = (num_rows * exact_line_h_pt) + (extra_wrapped_lines * (font_size * 1.16)) + ((num_rows - 1) * space_between_pt) + descender_clearance_pt + 1.5
 
             try:
                 shape = doc.Shapes.AddShape(5, 0, 0, box_width_pt, box_height_pt)

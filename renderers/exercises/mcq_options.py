@@ -153,9 +153,14 @@ class McqOptionsRendererMixin:
             sel.ParagraphFormat.LeftIndent = cm_to_pt(left_indent_cm)
             sel.ParagraphFormat.FirstLineIndent = 0
 
-        sel.ParagraphFormat.SpaceBefore = 3
-        sel.ParagraphFormat.SpaceAfter = 3
-        sel.ParagraphFormat.LineSpacingRule = 0
+        if getattr(self, "is_inside_num_container", False):
+            sel.ParagraphFormat.SpaceBefore = 2
+            sel.ParagraphFormat.SpaceAfter = 2
+            sel.ParagraphFormat.LineSpacing = getattr(self, "font_size", 12.0) * 1.16
+        else:
+            sel.ParagraphFormat.SpaceBefore = 3
+            sel.ParagraphFormat.SpaceAfter = 3
+            sel.ParagraphFormat.LineSpacingRule = 0
         sel.ParagraphFormat.Alignment = 0
         sel.ParagraphFormat.KeepWithNext = False
 

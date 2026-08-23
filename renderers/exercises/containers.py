@@ -35,10 +35,13 @@ class ContainersRendererMixin:
                 self.current_group_sign_pic_h_cm = s_h
                 self.current_group_sign_pic_gap_cm = s_gap
 
+        old_inside_num = getattr(self, "is_inside_num_container", False)
+        self.is_inside_num_container = True
         try:
             if hasattr(self, "render"):
                 self.render(block.children, doc, word, is_root=False)
         finally:
+            self.is_inside_num_container = old_inside_num
             self.current_group_opt_cols, self.current_group_max_item_len = old_cols, old_len
             self.current_group_sign_pic_w_cm = old_sign_w
             self.current_group_sign_pic_h_cm = old_sign_h

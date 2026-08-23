@@ -449,7 +449,12 @@ class ULNWordRenderer(RendererBlocksMixin):
                 is_numbered_q = (q_num_chk is not None)
                 is_dialogue_line = bool(re.search(r'(?:^|#\d+[\.\)]\s*)(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', block.content, re.IGNORECASE))
 
-                if is_ins_block or (is_numbered_q and (has_next_opt or has_next_dlg or has_next_rewrite_blank)) or has_next_box:
+                if getattr(self, "is_inside_num_container", False) and tag != "PIC_GRID":
+                    sel.ParagraphFormat.SpaceBefore = 2
+                    sel.ParagraphFormat.SpaceAfter = 2
+                    sel.ParagraphFormat.LineSpacing = self.font_size * 1.16
+                    sel.ParagraphFormat.KeepWithNext = bool(is_numbered_q and (has_next_opt or has_next_dlg or has_next_rewrite_blank))
+                elif is_ins_block or (is_numbered_q and (has_next_opt or has_next_dlg or has_next_rewrite_blank)) or has_next_box:
                     sel.ParagraphFormat.SpaceBefore = 14 if self.last_rendered_tag == "BOX" else (8 if is_ins_block else 6)
                     sel.ParagraphFormat.SpaceAfter = 4 if is_ins_block else 2
                     sel.ParagraphFormat.KeepWithNext = True
@@ -751,7 +756,12 @@ class ULNWordRenderer(RendererBlocksMixin):
                 has_next_dlg = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P0"] and bool(re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', blocks[idx_block + 1].content, re.IGNORECASE)))
                 has_next_opt = self.is_in_multiple_choice_question(blocks, idx_block)
 
-                if is_dlg_speaker:
+                if getattr(self, "is_inside_num_container", False) and tag != "PIC_GRID":
+                    sel.ParagraphFormat.SpaceBefore = 2
+                    sel.ParagraphFormat.SpaceAfter = 2
+                    sel.ParagraphFormat.LineSpacing = self.font_size * 1.16
+                    sel.ParagraphFormat.KeepWithNext = False
+                elif is_dlg_speaker:
                     sel.ParagraphFormat.SpaceBefore = 1
                     sel.ParagraphFormat.SpaceAfter = 2 if has_next_dlg else 6
                     sel.ParagraphFormat.KeepWithNext = has_next_dlg
