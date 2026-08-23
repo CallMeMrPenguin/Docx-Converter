@@ -692,9 +692,26 @@ class ULNWordRenderer(RendererBlocksMixin):
                         self.setup_tab_stops(sel, num_cols, left_indent_cm=0.0, printable_width_cm=printable_width_cm, max_item_len=max_item_len)
                         
                         from uln_parser import parse_inline_spans
+                        opt_color_int = parse_color_to_rgb_int(self.opt_color)
                         for idx_item, item in enumerate(items):
-                            spans = parse_inline_spans(item.strip())
-                            self.write_inline_spans(sel, spans)
+                            m_let = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z0-9][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s+(.*)$', item.strip())
+                            if m_let:
+                                let_part = m_let.group(1).rstrip('.)')
+                                body_part = m_let.group(2).strip()
+                                sel.Font.Name = self.font_name
+                                sel.Font.Size = self.font_size
+                                sel.Font.Bold = 1
+                                sel.Font.Italic = 0
+                                sel.Font.Underline = 0
+                                sel.Font.Color = opt_color_int if opt_color_int is not None else 0
+                                sel.TypeText(f"{let_part}. ")
+                                sel.Font.Bold = 0
+                                sel.Font.Color = 0
+                                spans = parse_inline_spans(body_part)
+                                self.write_inline_spans(sel, spans)
+                            else:
+                                spans = parse_inline_spans(item.strip())
+                                self.write_inline_spans(sel, spans)
                             if (idx_item + 1) % num_cols == 0 or idx_item == len(items) - 1:
                                 sel.TypeParagraph()
                             else:
@@ -866,9 +883,26 @@ class ULNWordRenderer(RendererBlocksMixin):
                             self.setup_tab_stops(sel, num_cols, left_indent_cm=left_indent_cm, printable_width_cm=printable_width_cm)
 
                             from uln_parser import parse_inline_spans
+                            opt_color_int = parse_color_to_rgb_int(self.opt_color)
                             for idx_item, item in enumerate(items):
-                                spans = parse_inline_spans(item.strip())
-                                self.write_inline_spans(sel, spans)
+                                m_let = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z0-9][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s+(.*)$', item.strip())
+                                if m_let:
+                                    let_part = m_let.group(1).rstrip('.)')
+                                    body_part = m_let.group(2).strip()
+                                    sel.Font.Name = self.font_name
+                                    sel.Font.Size = self.font_size
+                                    sel.Font.Bold = 1
+                                    sel.Font.Italic = 0
+                                    sel.Font.Underline = 0
+                                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
+                                    sel.TypeText(f"{let_part}. ")
+                                    sel.Font.Bold = 0
+                                    sel.Font.Color = 0
+                                    spans = parse_inline_spans(body_part)
+                                    self.write_inline_spans(sel, spans)
+                                else:
+                                    spans = parse_inline_spans(item.strip())
+                                    self.write_inline_spans(sel, spans)
                                 if (idx_item + 1) % num_cols == 0 or idx_item == len(items) - 1:
                                     sel.TypeParagraph()
                                 else:

@@ -37,27 +37,37 @@ HIGHLIGHT_NAME_TO_INDEX = {
 
 def parse_color_to_rgb_int(color_str: Optional[str]) -> Optional[int]:
     """
-    Parses color names ('red', 'blue', 'purple') or hex strings ('#FF0000', '#003399')
-    into Windows COM BGR/RGB integer format: B * 65536 + G * 256 + R.
+    Parses color names ('red', 'blue', 'purple'), combo dropdown strings ('Blue #2563eb', 'Red #dc2626'),
+    or hex strings ('#FF0000', '#003399', '#2563eb') into Windows COM BGR/RGB integer format: B * 65536 + G * 256 + R.
     """
     if not color_str:
         return None
-    c = color_str.strip().lower()
-    if c in COLOR_NAME_TO_RGB:
-        return COLOR_NAME_TO_RGB[c]
-    if c.startswith('#') and len(c) in (4, 7):
-        try:
-            if len(c) == 4:
-                r = int(c[1] * 2, 16)
-                g = int(c[2] * 2, 16)
-                b = int(c[3] * 2, 16)
-            else:
-                r = int(c[1:3], 16)
-                g = int(c[3:5], 16)
-                b = int(c[5:7], 16)
-            return r + (g << 8) + (b << 16)
-        except Exception:
-            return None
+    raw = str(color_str).strip()
+
+    # 1. Search for 6-digit hex code anywhere in string (e.g. "Blue #2563eb", "Default (Black) #000000", "#2563eb")
+    hex_match = re.search(r'#([0-9a-fA-F]{6})', raw)
+    if hex_match:
+        hex_val = hex_match.group(1).lower()
+        r = int(hex_val[0:2], 16)
+        g = int(hex_val[2:4], 16)
+        b = int(hex_val[4:6], 16)
+        return r + (g << 8) + (b << 16)
+
+    # 2. Search for 3-digit hex code (#F00)
+    hex3_match = re.search(r'#([0-9a-fA-F]{3})\b', raw)
+    if hex3_match:
+        h3 = hex3_match.group(1).lower()
+        r = int(h3[0] * 2, 16)
+        g = int(h3[1] * 2, 16)
+        b = int(h3[2] * 2, 16)
+        return r + (g << 8) + (b << 16)
+
+    # 3. Direct color name lookup
+    c = raw.lower()
+    for name, val in COLOR_NAME_TO_RGB.items():
+        if name in c:
+            return val
+
     return None
 
 def parse_highlight_to_index(hl_str: Optional[str]) -> Optional[int]:
