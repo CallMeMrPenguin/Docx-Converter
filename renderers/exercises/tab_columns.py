@@ -623,8 +623,8 @@ class TabColumnsRendererMixin:
 
             else:
                 # ── Standard 2-Column Matching Layout with Strictly Contained Visual Wrapping ──
-                col1_avail_pt = max(cm_to_pt(1.5), cm_to_pt(col2_tab_pos_cm - base_indent_cm) - cm_to_pt(0.20))
-                col2_avail_pt = max(cm_to_pt(1.5), cm_to_pt(printable_width_cm - col2_tab_pos_cm) - cm_to_pt(0.05))
+                col1_avail_pt = max(cm_to_pt(1.5), cm_to_pt(col2_tab_pos_cm - base_indent_cm - min_gap_cm))
+                col2_avail_pt = max(cm_to_pt(1.5), cm_to_pt(printable_width_cm - col2_tab_pos_cm) - cm_to_pt(0.35))
 
                 pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
                 num_prefix_str = ""

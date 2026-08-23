@@ -162,7 +162,7 @@ class TypographyMixin:
 
         for w in words:
             w_clean = self.strip_markup_for_measurement(w)
-            w_pt = self.measure_text_width_pt(doc, w_clean, font_name, font_size, is_bold=is_bold) * 1.01
+            w_pt = self.measure_text_width_pt(doc, w_clean, font_name, font_size, is_bold=is_bold) * 1.04
 
             if not curr_words:
                 curr_words.append(w)
