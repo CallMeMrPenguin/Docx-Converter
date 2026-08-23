@@ -202,16 +202,18 @@ class BoxesRendererMixin:
             num_lines = len(lines)
             exact_line_h_pt = font_size * 1.20
             space_between_pt = 1.5
-            descender_clearance_pt = 3.0
+            last_line_str = lines[-1] if lines else ""
+            has_descenders = bool(re.search(r'[gpyjq,;]', last_line_str))
+            descender_clearance_pt = (font_size * 0.38) if has_descenders else 1.5
             avail_inner_w = box_width_pt - pad_left_pt - pad_right_pt - extra_buffer_pt
             total_visual_lines = sum(self.calculate_item_visual_lines(doc, l, avail_inner_w, is_bold=True) for l in lines)
-            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + descender_clearance_pt + 4.0
+            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + descender_clearance_pt + 3.0
 
             try:
                 shape = doc.Shapes.AddShape(5, 0, 0, box_width_pt, box_height_pt)
                 tf = shape.TextFrame
-                tf.MarginTop = 2.0
-                tf.MarginBottom = 2.0
+                tf.MarginTop = 0
+                tf.MarginBottom = 0
                 tf.MarginLeft = pad_left_pt
                 tf.MarginRight = pad_right_pt
                 try:
@@ -287,14 +289,16 @@ class BoxesRendererMixin:
             num_rows = len(lines_bank)
             exact_line_h_pt = font_size * 1.20
             space_between_pt = 1.5
-            descender_clearance_pt = 3.0
-            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + descender_clearance_pt + 4.0
+            last_line_str = " ".join(lines_bank[-1]) if lines_bank else ""
+            has_descenders = bool(re.search(r'[gpyjq,;]', last_line_str))
+            descender_clearance_pt = (font_size * 0.38) if has_descenders else 1.5
+            box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + descender_clearance_pt + 3.0
 
             try:
                 shape = doc.Shapes.AddShape(5, 0, 0, box_width_pt, box_height_pt)
                 tf = shape.TextFrame
-                tf.MarginTop = 2.0
-                tf.MarginBottom = 2.0
+                tf.MarginTop = 0
+                tf.MarginBottom = 0
                 tf.MarginLeft = pad_horiz_pt
                 tf.MarginRight = pad_horiz_pt
                 try:

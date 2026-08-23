@@ -435,6 +435,8 @@ class ULNWordRenderer(RendererBlocksMixin):
                 is_ins_block = block.is_instruction or any(s.is_instruction for s in block.spans)
                 if is_ins_block:
                     self.current_exercise_q_num = 1
+                    self._exercise_list_template = None
+                    self.is_first_question_in_num_block = True
                 
                 # Check if this P0 is followed by an OPT block, Dialogue continuation, BOX, or Sentence Rewrite blank line
                 has_next_opt = self.is_in_multiple_choice_question(blocks, idx_block)
