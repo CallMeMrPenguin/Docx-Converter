@@ -140,6 +140,7 @@ Apply these syntax rules directly inside strings:
 - *text*            -> Italic text (applied ONLY to explicitly italicized text)
 - ***text***        -> Bold + Italic text (applied when text is BOTH bold and italic, e.g. ***Fast and Furious***)
 - [text]{u}         -> Underlined text (ONLY wrap the exact underlined target letters/words, e.g. `[e]{u}xciting`, `[ch]{u}ildren`)
+  - FAINT / BLURRY UNDERLINE INFERENCE MANDATE: If the underline in the source image is faint, blurry, broken, or low-contrast, the AI is explicitly authorized and required to determine and apply the best underlined position based on the linguistic context and phonetic/grammar target of the question (e.g. target sounds like `[ea]{u}`, `[ed]{u}`, `[ch]{u}`, `[th]{u}`, `[s]{u}`, `[es]{u}`, or specific tested grammar components). NEVER drop or omit the underline just because the scan is blurry.
 - [text]{u,b}       -> Underlined + Bold text
 - [text]{upper}     -> Uppercase / Small Caps formatting
 - [text]{color:NAME}-> Text color (e.g., [red]{color:red}, [#FF0000]{color:#FF0000})
@@ -182,6 +183,7 @@ C. CHOICE OPTION LINES — THE GOLDEN RULE:
      [P0] #3. Choose the word whose underlined part is pronounced differently:
      [OPT] [c]{u}at | [c]{u}ity | [c]{u}ar | [c]{u}up [/OPT]
      [/NUM]
+   - FAINT / LOW-CONTRAST UNDERLINE IN PRONUNCIATION & PHONETICS: When extracting pronunciation or error-finding exercises where the underline is faint, unclear, or washed out in the scan, the AI MUST deduce and apply the underline to the appropriate phoneme / letter group across all 4 options based on the common tested sound pattern (e.g., all 4 options test `-ed`, `-s/-es`, vowel digraphs `ea`, `oo`, `ou`, or consonants `ch`, `sh`, `th`).
 
 D. HORIZONTAL PICTURE CHOICE GRIDS:
    - For picture activities with multiple items, output picture choices in 4-column horizontal rows:
