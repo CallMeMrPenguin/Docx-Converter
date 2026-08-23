@@ -141,3 +141,42 @@ class TypographyMixin:
                 curr_line_w = w_pt
 
         return max(1, lines_count)
+
+    def wrap_text_into_lines(self, doc, text: str, max_w_pt: float, is_bold: bool = False) -> List[str]:
+        """
+        Splits a text string into wrapped lines that fit within max_w_pt using GDI text measurement.
+        """
+        if not text:
+            return [""]
+        words = text.strip().split()
+        if not words:
+            return [""]
+
+        font_name = getattr(self, "font_name", "Times New Roman")
+        font_size = getattr(self, "font_size", 12.0)
+
+        space_w = self.measure_text_width_pt(doc, " ", font_name, font_size, is_bold=is_bold)
+        lines = []
+        curr_words = []
+        curr_line_w = 0.0
+
+        for w in words:
+            w_clean = self.strip_markup_for_measurement(w)
+            w_pt = self.measure_text_width_pt(doc, w_clean, font_name, font_size, is_bold=is_bold) * 1.05
+
+            if not curr_words:
+                curr_words.append(w)
+                curr_line_w = w_pt
+            elif curr_line_w + space_w + w_pt <= max_w_pt:
+                curr_words.append(w)
+                curr_line_w += space_w + w_pt
+            else:
+                lines.append(" ".join(curr_words))
+                curr_words = [w]
+                curr_line_w = w_pt
+
+        if curr_words:
+            lines.append(" ".join(curr_words))
+
+        return lines if lines else [""]
+

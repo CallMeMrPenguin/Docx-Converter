@@ -267,7 +267,7 @@ class TabColumnsRendererMixin:
                 sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.SpaceBefore = 2
                 sel.ParagraphFormat.SpaceAfter = extra_space_after_pt if is_last_opt else 2
-                sel.ParagraphFormat.KeepWithNext = True
+                sel.ParagraphFormat.KeepWithNext = not is_last_opt
 
                 sel.Font.Name = font_name
                 sel.Font.Size = font_size
@@ -289,7 +289,7 @@ class TabColumnsRendererMixin:
                 sel.ParagraphFormat.RightIndent = right_margin_indent
                 sel.ParagraphFormat.SpaceBefore = 8 if idx_opt == 0 else 2
                 sel.ParagraphFormat.SpaceAfter = extra_space_after_pt if is_last_opt else 2
-                sel.ParagraphFormat.KeepWithNext = True
+                sel.ParagraphFormat.KeepWithNext = not is_last_opt
 
                 if idx_opt == 0:
                     sel.ParagraphFormat.LeftIndent = indent_pt
@@ -339,7 +339,7 @@ class TabColumnsRendererMixin:
         Renders 2-column items [TAB2] using 100% pure native Word Paragraph Tab Stops (NO TABLE).
         Handles:
         1. Blank lines (<blank> / ______): Right-aligned Tab Stop (Alignment=2) with RightIndent protection (5mm gap).
-        2. Matching questions (Col 1 | Col 2): Left-aligned Tab Stop (Alignment=0) calculated from max width of Column 1.
+        2. Matching questions (Col 1 | Col 2): Left-aligned Tab Stop (Alignment=0) with strict column-bound wrapping.
         3. Headers (Col A | Col B): Center-aligned Tab Stops (Alignment=1).
         4. Pictures in Column 1 or Column 2: Aligned via Tab Stops.
         """
@@ -514,14 +514,14 @@ class TabColumnsRendererMixin:
                 clean_t = self.strip_markup_for_measurement(raw_t)
                 c1_clean_texts.append(clean_t)
             max_c1_w_pt = max((self.measure_text_width_pt(doc, t, font_name, font_size, is_bold=False) for t in c1_clean_texts), default=100.0)
-            c1_word_w_cm = pt_to_cm(max_c1_w_pt) * 1.10
+            c1_word_w_cm = pt_to_cm(max_c1_w_pt) * 1.05
 
             c2_clean_texts = []
             for b in tab2_group:
                 clean_c2 = self.strip_markup_for_measurement(b.col2.strip())
                 c2_clean_texts.append(clean_c2)
             max_c2_w_pt = max((self.measure_text_width_pt(doc, t, font_name, font_size, is_bold=False) for t in c2_clean_texts), default=50.0)
-            c2_word_w_cm = pt_to_cm(max_c2_w_pt) * 1.10
+            c2_word_w_cm = pt_to_cm(max_c2_w_pt) * 1.05
 
             min_gap_cm = 0.50
             tab_min_cm = base_indent_cm + c1_word_w_cm + min_gap_cm
@@ -532,7 +532,13 @@ class TabColumnsRendererMixin:
                 if col2_tab_pos_cm > tab_max_cm:
                     col2_tab_pos_cm = tab_max_cm
             else:
-                col2_tab_pos_cm = max(base_indent_cm + 4.0, tab_min_cm)
+                total_w = c1_word_w_cm + c2_word_w_cm
+                if total_w > 0:
+                    prop = c1_word_w_cm / total_w
+                    clamped_prop = max(0.40, min(0.60, prop))
+                    col2_tab_pos_cm = base_indent_cm + ((printable_width_cm - base_indent_cm) * clamped_prop)
+                else:
+                    col2_tab_pos_cm = (base_indent_cm + printable_width_cm) / 2.0
 
             if col2_tab_pos_cm >= printable_width_cm - 1.5:
                 col2_tab_pos_cm = printable_width_cm - 2.5
@@ -543,13 +549,6 @@ class TabColumnsRendererMixin:
         for idx, block in enumerate(tab2_group):
             last_tag = getattr(self, "last_rendered_tag", None)
             space_before_tab2 = 14 if (last_tag == "BOX") else 3
-            sel.ParagraphFormat.SpaceBefore = space_before_tab2
-            sel.ParagraphFormat.SpaceAfter = 3
-            sel.ParagraphFormat.KeepWithNext = False
-            sel.ParagraphFormat.PageBreakBefore = False
-            sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
-            sel.ParagraphFormat.RightIndent = 0
-            sel.ParagraphFormat.FirstLineIndent = 0
 
             # Detect header row in TAB2 (e.g. A | B or Column A | Column B)
             is_header_row = (idx == 0 and len(block.col1.strip()) <= 15 and len(block.col2.strip()) <= 15 and not re.search(r'\d', block.col1) and not has_any_blank)
@@ -563,6 +562,10 @@ class TabColumnsRendererMixin:
 
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.SpaceBefore = space_before_tab2
+                sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.PageBreakBefore = False
                 sel.ParagraphFormat.TabStops.ClearAll()
                 sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col1_center_cm), Alignment=1)  # wdAlignTabCenter = 1
                 sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_center_cm), Alignment=1)  # wdAlignTabCenter = 1
@@ -575,14 +578,16 @@ class TabColumnsRendererMixin:
 
             elif col2_is_blank:
                 # ── Right-aligned Tab Stop (Alignment=2) with Protected RightIndent ──
-                # Blank width = 2.8 cm, Min gap = 0.50 cm (5.0 mm).
-                # RightIndent = 2.8cm + 0.50cm = 3.30cm restricts all text in Column 1 to wrap
-                # strictly before (printable_width_cm - 3.30cm), guaranteeing the text NEVER
-                # encroaches on Column 2 and always maintains at least a 5.0 mm physical gap!
                 blank_w_cm = 2.8
-                min_gap_cm = 0.50  # 5.0 mm strictly preserved
+                min_gap_cm = 0.50
                 right_indent_cm = blank_w_cm + min_gap_cm
 
+                sel.ParagraphFormat.SpaceBefore = space_before_tab2
+                sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.KeepWithNext = False
+                sel.ParagraphFormat.PageBreakBefore = False
+                sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
+                sel.ParagraphFormat.FirstLineIndent = 0
                 sel.ParagraphFormat.RightIndent = cm_to_pt(right_indent_cm)
                 sel.ParagraphFormat.TabStops.ClearAll()
                 sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
@@ -616,74 +621,130 @@ class TabColumnsRendererMixin:
                 sel.ParagraphFormat.RightIndent = 0
 
             else:
-                # ── Standard 2-Column Matching Layout ──
-                sel.ParagraphFormat.TabStops.ClearAll()
-                sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
+                # ── Standard 2-Column Matching Layout with Strictly Contained Visual Wrapping ──
+                col1_avail_pt = max(cm_to_pt(2.0), cm_to_pt(col2_tab_pos_cm - base_indent_cm) - cm_to_pt(0.35))
+                col2_avail_pt = max(cm_to_pt(2.0), cm_to_pt(printable_width_cm - col2_tab_pos_cm) - cm_to_pt(0.15))
 
                 pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
+                num_prefix_str = ""
                 if q_num is not None:
                     pref_str = pref if pref else ""
                     delim_char = delim if delim else "."
                     num_prefix_str = f"{pref_str}{q_num}{delim_char} "
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    q_color_int = parse_color_to_rgb_int(question_color)
-                    sel.Font.Color = q_color_int if q_color_int is not None else 0
-                    sel.TypeText(num_prefix_str)
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    c1_spans = parse_inline_spans(c1_body.strip())
-                    self.write_inline_spans(sel, c1_spans)
+                    num_w_pt = self.measure_text_width_pt(doc, num_prefix_str, font_name, font_size, is_bold=True)
+                    c1_body_avail_pt = max(cm_to_pt(1.5), col1_avail_pt - num_w_pt)
+                    c1_lines = self.wrap_text_into_lines(doc, c1_body.strip(), c1_body_avail_pt)
                 else:
-                    self.write_inline_spans(sel, block.col1_spans)
-
-                sel.TypeText("\t")
+                    c1_lines = self.wrap_text_into_lines(doc, block.col1.strip(), col1_avail_pt)
 
                 col2_trim = block.col2.strip()
                 m_opt = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z])[\.\)](?:\*\*|\*|\]|\}|\{u\}|\))*)\s+(.*)$', col2_trim)
                 pref2, delim2, q_num2, c2_body = extract_question_prefix_and_body(block.col2)
 
+                num_prefix_str2 = ""
+                opt_prefix_str = ""
                 if q_num2 is not None:
                     pref_str2 = pref2 if pref2 else ""
                     delim_char2 = delim2 if delim2 else "."
                     num_prefix_str2 = f"{pref_str2}{q_num2}{delim_char2} "
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    q_color_int = parse_color_to_rgb_int(question_color)
-                    sel.Font.Color = q_color_int if q_color_int is not None else 0
-                    sel.TypeText(num_prefix_str2)
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    c2_spans = parse_inline_spans(c2_body.strip())
-                    self.write_inline_spans(sel, c2_spans)
+                    num_w_pt2 = self.measure_text_width_pt(doc, num_prefix_str2, font_name, font_size, is_bold=True)
+                    c2_body_avail_pt = max(cm_to_pt(1.5), col2_avail_pt - num_w_pt2)
+                    c2_lines = self.wrap_text_into_lines(doc, c2_body.strip(), c2_body_avail_pt)
                 elif m_opt and not block.pic:
                     opt_let = f"{m_opt.group(1).upper()}."
+                    opt_prefix_str = f"{opt_let} "
                     opt_body = m_opt.group(2).strip()
-
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    opt_color_int = parse_color_to_rgb_int(opt_color)
-                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
-                    sel.TypeText(f"{opt_let} ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    self.write_inline_spans(sel, parse_inline_spans(opt_body))
+                    opt_w_pt = self.measure_text_width_pt(doc, opt_prefix_str, font_name, font_size, is_bold=True)
+                    c2_body_avail_pt = max(cm_to_pt(1.5), col2_avail_pt - opt_w_pt)
+                    c2_lines = self.wrap_text_into_lines(doc, opt_body, c2_body_avail_pt)
                 else:
-                    self.write_inline_spans(sel, block.col2_spans)
+                    c2_lines = self.wrap_text_into_lines(doc, col2_trim, col2_avail_pt)
 
-                sel.TypeParagraph()
+                num_visual_rows = max(len(c1_lines), len(c2_lines), 1)
+
+                for r in range(num_visual_rows):
+                    is_last_row = (r == num_visual_rows - 1)
+
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
+                    sel.ParagraphFormat.RightIndent = 0
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.TabStops.ClearAll()
+                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
+
+                    sel.ParagraphFormat.SpaceBefore = (space_before_tab2 if idx == 0 else 2) if r == 0 else 0
+                    sel.ParagraphFormat.SpaceAfter = 3 if is_last_row else 0
+                    sel.ParagraphFormat.KeepWithNext = not is_last_row
+
+                    # ── Column 1 Content ──
+                    if r < len(c1_lines):
+                        if r == 0 and num_prefix_str:
+                            sel.Font.Name = font_name
+                            sel.Font.Size = font_size
+                            sel.Font.Bold = 1
+                            sel.Font.Italic = 0
+                            sel.Font.Underline = 0
+                            q_color_int = parse_color_to_rgb_int(question_color)
+                            sel.Font.Color = q_color_int if q_color_int is not None else 0
+                            sel.TypeText(num_prefix_str)
+                            sel.Font.Bold = 0
+                            sel.Font.Color = 0
+
+                            c1_spans = parse_inline_spans(c1_lines[0])
+                            self.write_inline_spans(sel, c1_spans)
+                        elif r > 0 and num_prefix_str:
+                            sel.TypeText("   ")
+                            c1_spans = parse_inline_spans(c1_lines[r])
+                            self.write_inline_spans(sel, c1_spans)
+                        else:
+                            c1_spans = parse_inline_spans(c1_lines[r])
+                            self.write_inline_spans(sel, c1_spans)
+
+                    # Advance cursor directly to Column 2 via Tab Stop
+                    sel.TypeText("\t")
+
+                    # ── Column 2 Content ──
+                    if r < len(c2_lines):
+                        if r == 0 and opt_prefix_str:
+                            sel.Font.Name = font_name
+                            sel.Font.Size = font_size
+                            sel.Font.Bold = 1
+                            sel.Font.Italic = 0
+                            sel.Font.Underline = 0
+                            opt_color_int = parse_color_to_rgb_int(opt_color)
+                            sel.Font.Color = opt_color_int if opt_color_int is not None else 0
+                            sel.TypeText(opt_prefix_str)
+                            sel.Font.Bold = 0
+                            sel.Font.Color = 0
+
+                            c2_spans = parse_inline_spans(c2_lines[0])
+                            self.write_inline_spans(sel, c2_spans)
+                        elif r > 0 and opt_prefix_str:
+                            sel.TypeText("   ")
+                            c2_spans = parse_inline_spans(c2_lines[r])
+                            self.write_inline_spans(sel, c2_spans)
+                        elif r == 0 and num_prefix_str2:
+                            sel.Font.Name = font_name
+                            sel.Font.Size = font_size
+                            sel.Font.Bold = 1
+                            sel.Font.Italic = 0
+                            sel.Font.Underline = 0
+                            q_color_int = parse_color_to_rgb_int(question_color)
+                            sel.Font.Color = q_color_int if q_color_int is not None else 0
+                            sel.TypeText(num_prefix_str2)
+                            sel.Font.Bold = 0
+                            sel.Font.Color = 0
+
+                            c2_spans = parse_inline_spans(c2_lines[0])
+                            self.write_inline_spans(sel, c2_spans)
+                        elif r > 0 and num_prefix_str2:
+                            sel.TypeText("   ")
+                            c2_spans = parse_inline_spans(c2_lines[r])
+                            self.write_inline_spans(sel, c2_spans)
+                        else:
+                            c2_spans = parse_inline_spans(c2_lines[r])
+                            self.write_inline_spans(sel, c2_spans)
+
+                    sel.TypeParagraph()
 
         sel.ParagraphFormat.LeftIndent = 0
         sel.ParagraphFormat.FirstLineIndent = 0
