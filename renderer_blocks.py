@@ -1246,9 +1246,16 @@ class RendererBlocksMixin:
                 sel.TypeParagraph()
 
             elif col2_is_blank:
-                # ── Right-aligned Tab Stop (Alignment=2) at right margin ──
-                # This ensures the blank is ALWAYS flush with the right margin
-                # whether Column 1 is short (1 line) or long (2 lines)!
+                # ── Right-aligned Tab Stop (Alignment=2) with Protected RightIndent ──
+                # Blank width = 2.8 cm, Min gap = 0.50 cm (5.0 mm).
+                # RightIndent = 2.8cm + 0.50cm = 3.30cm restricts all text in Column 1 to wrap
+                # strictly before (printable_width_cm - 3.30cm), guaranteeing the text NEVER
+                # encroaches on Column 2 and always maintains at least a 5.0 mm physical gap!
+                blank_w_cm = 2.8
+                min_gap_cm = 0.50  # 5.0 mm strictly preserved
+                right_indent_cm = blank_w_cm + min_gap_cm
+
+                sel.ParagraphFormat.RightIndent = cm_to_pt(right_indent_cm)
                 sel.ParagraphFormat.TabStops.ClearAll()
                 sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(printable_width_cm), Alignment=2)
 
@@ -1279,6 +1286,7 @@ class RendererBlocksMixin:
                 sel.Font.Underline = 0
                 sel.TypeText("\t___________")
                 sel.TypeParagraph()
+                sel.ParagraphFormat.RightIndent = 0
 
             else:
                 # ── Standard 2-Column Matching Layout ──
