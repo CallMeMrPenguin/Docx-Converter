@@ -509,9 +509,186 @@ def open_exercise_pic_match_dialog(parent_app):
 
     # Cache for PhotoImages to prevent garbage collection
     photo_cache = []
+    card_registry = []
+
+    # Drag & Drop State
+    drag_data = {
+        "active": False,
+        "source_idx": None,
+        "ghost_win": None,
+        "target_idx": None,
+        "drag_start_y": 0,
+    }
+
+    def on_drag_start(event, from_idx):
+        if from_idx >= len(parent_app.user_image_paths):
+            return
+        drag_data["active"] = True
+        drag_data["source_idx"] = from_idx
+        drag_data["target_idx"] = from_idx
+        drag_data["drag_start_y"] = event.y_root
+
+        # Create floating semi-transparent drag preview window (Ghost)
+        try:
+            if drag_data["ghost_win"] and drag_data["ghost_win"].winfo_exists():
+                drag_data["ghost_win"].destroy()
+        except Exception:
+            pass
+
+        ghost = tk.Toplevel(win)
+        ghost.overrideredirect(True)
+        try:
+            ghost.attributes("-alpha", 0.90)
+            ghost.attributes("-topmost", True)
+        except Exception:
+            pass
+        ghost.configure(bg="#0f172a", highlightthickness=2, highlightbackground="#38bdf8")
+
+        img_p = parent_app.user_image_paths[from_idx]
+        f_name = os.path.basename(img_p)
+        g_thumb = load_and_scale_image(img_p, max_w=90, max_h=60)
+        if g_thumb:
+            g_photo, _, _, _, _ = g_thumb
+            ghost.photo = g_photo
+            lbl_g_img = tk.Label(ghost, image=g_photo, bg="#0f172a")
+            lbl_g_img.pack(padx=4, pady=(4, 0))
+
+        lbl_g_txt = tk.Label(
+            ghost,
+            text=f"Đang kéo [PIC #{from_idx + 1}]\n{f_name[:20]}...",
+            font=("Segoe UI", 8, "bold"),
+            bg="#1e293b",
+            fg="#38bdf8",
+            padx=6,
+            pady=3
+        )
+        lbl_g_txt.pack(fill="x", padx=2, pady=2)
+
+        ghost.geometry(f"+{event.x_root + 15}+{event.y_root + 15}")
+        drag_data["ghost_win"] = ghost
+
+    def on_drag_motion(event):
+        if not drag_data["active"]:
+            return
+        if drag_data["ghost_win"] and drag_data["ghost_win"].winfo_exists():
+            drag_data["ghost_win"].geometry(f"+{event.x_root + 15}+{event.y_root + 15}")
+
+        # Auto-scroll canvas when dragging near top or bottom edges
+        win_y = canvas.winfo_rooty()
+        win_h = canvas.winfo_height()
+        if event.y_root < win_y + 40:
+            canvas.yview_scroll(-1, "units")
+        elif event.y_root > win_y + win_h - 40:
+            canvas.yview_scroll(1, "units")
+
+        # Detect which question card the cursor is hovering over
+        hovered_idx = None
+        for c_info in card_registry:
+            c_widget = c_info["widget"]
+            try:
+                rx = c_widget.winfo_rootx()
+                ry = c_widget.winfo_rooty()
+                rw = c_widget.winfo_width()
+                rh = c_widget.winfo_height()
+                if rx <= event.x_root <= rx + rw and ry <= event.y_root <= ry + rh:
+                    hovered_idx = c_info["idx"]
+                    break
+            except Exception:
+                continue
+
+        drag_data["target_idx"] = hovered_idx
+
+        # Highlight target card with luminous border
+        for c_info in card_registry:
+            c_widget = c_info["widget"]
+            try:
+                if hovered_idx is not None and c_info["idx"] == hovered_idx:
+                    c_widget.configure(highlightbackground="#38bdf8", highlightthickness=2)
+                else:
+                    c_widget.configure(highlightbackground="#334155", highlightthickness=1)
+            except Exception:
+                pass
+
+    def on_drag_release(event):
+        if not drag_data["active"]:
+            return
+        drag_data["active"] = False
+
+        if drag_data["ghost_win"] and drag_data["ghost_win"].winfo_exists():
+            drag_data["ghost_win"].destroy()
+            drag_data["ghost_win"] = None
+
+        src_idx = drag_data["source_idx"]
+        tgt_idx = drag_data["target_idx"]
+
+        # Reset card highlights
+        for c_info in card_registry:
+            try:
+                c_info["widget"].configure(highlightbackground="#334155", highlightthickness=1)
+            except Exception:
+                pass
+
+        if src_idx is not None and tgt_idx is not None and src_idx != tgt_idx:
+            # Perform Image Swap / Move between src_idx and tgt_idx
+            num_imgs = len(parent_app.user_image_paths)
+            if 0 <= src_idx < num_imgs:
+                if 0 <= tgt_idx < num_imgs:
+                    parent_app.user_image_paths[src_idx], parent_app.user_image_paths[tgt_idx] = parent_app.user_image_paths[tgt_idx], parent_app.user_image_paths[src_idx]
+                else:
+                    # Target is unassigned card beyond user_image_paths length
+                    val = parent_app.user_image_paths[src_idx]
+                    parent_app.user_image_paths.pop(src_idx)
+                    while len(parent_app.user_image_paths) < tgt_idx:
+                        parent_app.user_image_paths.append("")
+                    parent_app.user_image_paths.insert(tgt_idx, val)
+                    parent_app.user_image_paths = [p for p in parent_app.user_image_paths if p]
+
+                if hasattr(parent_app, 'update_image_listbox'):
+                    parent_app.update_image_listbox(selected_index=min(tgt_idx, len(parent_app.user_image_paths) - 1))
+                refresh_list()
+                lbl_status.config(text=f"🔄 Đã chuyển ảnh từ vị trí #{src_idx + 1} sang Câu #{tgt_idx + 1} thành công!", fg="#38bdf8")
+
+    def choose_image_for_slot(slot_idx):
+        """Allows direct image selection from file picker specifically for this question slot."""
+        filetypes = [
+            ("All Supported Images", "*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tiff;*.webp;*.svg;*.wmf;*.emf"),
+            ("PNG Images", "*.png"),
+            ("JPEG Images", "*.jpg;*.jpeg"),
+            ("SVG Vector Images", "*.svg"),
+            ("All Files", "*.*")
+        ]
+        chosen = filedialog.askopenfilename(
+            title=f"Chọn ảnh cho Câu #{slot_idx + 1}",
+            filetypes=filetypes,
+            parent=win
+        )
+        if chosen and os.path.exists(chosen):
+            if slot_idx < len(parent_app.user_image_paths):
+                parent_app.user_image_paths[slot_idx] = chosen
+            else:
+                while len(parent_app.user_image_paths) < slot_idx:
+                    parent_app.user_image_paths.append("")
+                parent_app.user_image_paths.append(chosen)
+                parent_app.user_image_paths = [p for p in parent_app.user_image_paths if p]
+
+            if hasattr(parent_app, 'update_image_listbox'):
+                parent_app.update_image_listbox(selected_index=min(slot_idx, len(parent_app.user_image_paths) - 1))
+            refresh_list()
+            lbl_status.config(text=f"✅ Đã gán ảnh mới cho Câu #{slot_idx + 1}: {os.path.basename(chosen)}", fg="#4ade80")
+
+    def remove_image_at_slot(slot_idx):
+        """Removes image assigned to this question slot."""
+        if 0 <= slot_idx < len(parent_app.user_image_paths):
+            f_name = os.path.basename(parent_app.user_image_paths[slot_idx])
+            parent_app.user_image_paths.pop(slot_idx)
+            if hasattr(parent_app, 'update_image_listbox'):
+                parent_app.update_image_listbox(selected_index=min(slot_idx, len(parent_app.user_image_paths) - 1) if parent_app.user_image_paths else None)
+            refresh_list()
+            lbl_status.config(text=f"🗑️ Đã xóa ảnh '{f_name}' khỏi Câu #{slot_idx + 1}", fg="#f43f5e")
 
     def refresh_list():
         photo_cache.clear()
+        card_registry.clear()
         for widget in scrollable_frame.winfo_children():
             widget.destroy()
 
@@ -525,7 +702,7 @@ def open_exercise_pic_match_dialog(parent_app):
         if num_pics == 0:
             lbl_status.config(text=f"ℹ️ Bài tập hiện tại không có thẻ [PIC] nào. (Queue có {num_imgs} ảnh)", fg="#94a3b8")
         elif num_imgs == num_pics:
-            lbl_status.config(text=f"✅ Hoàn hảo! Khớp đủ {num_pics} / {num_pics} ảnh theo thứ tự câu hỏi.", fg="#4ade80")
+            lbl_status.config(text=f"✅ Hoàn hảo! Khớp đủ {num_pics} / {num_pics} ảnh theo thứ tự câu hỏi. (Kéo thả ảnh giữa các câu để đổi vị trí)", fg="#4ade80")
         elif num_imgs < num_pics:
             lbl_status.config(text=f"⚠️ Có {num_pics} thẻ [PIC] nhưng Queue mới chỉ có {num_imgs} ảnh (thiếu {num_pics - num_imgs} ảnh).", fg="#fbbf24")
         else:
@@ -547,75 +724,151 @@ def open_exercise_pic_match_dialog(parent_app):
             card = tk.Frame(scrollable_frame, bg="#1e293b", highlightthickness=1, highlightbackground="#334155", padx=10, pady=8)
             card.pack(fill="x", pady=5, padx=4)
 
-            # Left Box: Image & Controls
-            left_box = tk.Frame(card, bg="#1e293b", width=220)
+            # Register card for drag & drop target detection
+            card_registry.append({"widget": card, "idx": idx})
+
+            # Left Box: Image & Drag Controls
+            left_box = tk.Frame(card, bg="#1e293b", width=230)
             left_box.pack(side="left", fill="y", padx=(0, 12))
 
+            # Badge & Drag Handle Bar
+            badge_bar = tk.Frame(left_box, bg="#1e293b")
+            badge_bar.pack(fill="x", anchor="w")
+
             lbl_badge = tk.Label(
-                left_box,
+                badge_bar,
                 text=f"🖼️ [PIC #{it['pic_index']}]",
                 font=("Segoe UI", 9, "bold"),
                 bg="#1e293b",
                 fg="#38bdf8"
             )
-            lbl_badge.pack(anchor="w")
+            lbl_badge.pack(side="left")
+
+            lbl_drag_hint = tk.Label(
+                badge_bar,
+                text="⠿ Kéo thả",
+                font=("Segoe UI", 7, "bold"),
+                bg="#334155",
+                fg="#94a3b8",
+                padx=4,
+                pady=1,
+                cursor="fleur"
+            )
+            lbl_drag_hint.pack(side="right", padx=(4, 0))
 
             has_img = idx < len(images)
             if has_img:
                 img_path = images[idx]
                 fname = os.path.basename(img_path)
 
-                # Thumbnail Canvas
-                thumb_res = load_and_scale_image(img_path, max_w=120, max_h=80)
+                # Thumbnail Canvas with Drag & Drop Event Bindings
+                thumb_res = load_and_scale_image(img_path, max_w=130, max_h=85)
                 if thumb_res:
                     photo, ow, oh, fmt, sz = thumb_res
                     photo_cache.append(photo)
-                    c_thumb = tk.Canvas(left_box, width=120, height=80, bg="#0f172a", highlightthickness=1, highlightbackground="#475569", cursor="hand2")
+                    c_thumb = tk.Canvas(left_box, width=130, height=85, bg="#0f172a", highlightthickness=1, highlightbackground="#475569", cursor="fleur")
                     c_thumb.pack(pady=4)
-                    c_thumb.create_image(60, 40, image=photo, anchor="center")
-                    c_thumb.bind("<Button-1>", lambda e, p_idx=idx: open_image_preview_dialog(parent_app, initial_index=p_idx))
+                    c_thumb.create_image(65, 42, image=photo, anchor="center")
 
-                    lbl_fname = tk.Label(left_box, text=f"{fname}\n({fmt}, {ow}×{oh})", font=("Segoe UI", 8), bg="#1e293b", fg="#94a3b8", justify="center", wraplength=130)
+                    # Bind Drag & Drop Events on Thumbnail and Drag Hint
+                    for w in (c_thumb, lbl_drag_hint, lbl_badge):
+                        w.bind("<ButtonPress-1>", lambda e, p_idx=idx: on_drag_start(e, p_idx))
+                        w.bind("<B1-Motion>", on_drag_motion)
+                        w.bind("<ButtonRelease-1>", on_drag_release)
+
+                    # Double click to view large
+                    c_thumb.bind("<Double-Button-1>", lambda e, p_idx=idx: open_image_preview_dialog(parent_app, initial_index=p_idx))
+
+                    lbl_fname = tk.Label(left_box, text=f"{fname}\n({fmt}, {ow}×{oh})", font=("Segoe UI", 8), bg="#1e293b", fg="#94a3b8", justify="center", wraplength=140)
                     lbl_fname.pack()
                 else:
                     lbl_err = tk.Label(left_box, text=f"⚠️ {fname}\n(Không đọc được ảnh)", font=("Segoe UI", 8), bg="#1e293b", fg="#ef4444")
                     lbl_err.pack(pady=4)
 
-                # Mini Up/Down buttons for this image
+                # Action Button Row 1: Direct File Change & Delete
+                action_row1 = tk.Frame(left_box, bg="#1e293b")
+                action_row1.pack(fill="x", pady=(4, 2))
+
+                btn_change = tk.Button(
+                    action_row1,
+                    text="📁 Đổi ảnh",
+                    command=lambda p_idx=idx: choose_image_for_slot(p_idx),
+                    bg="#0369a1",
+                    fg="#ffffff",
+                    activebackground="#0284c7",
+                    font=("Segoe UI", 7, "bold"),
+                    relief="flat",
+                    padx=4,
+                    pady=1,
+                    cursor="hand2"
+                )
+                btn_change.pack(side="left", fill="x", expand=True, padx=(0, 1))
+
+                btn_del = tk.Button(
+                    action_row1,
+                    text="❌ Xóa",
+                    command=lambda p_idx=idx: remove_image_at_slot(p_idx),
+                    bg="#475569",
+                    fg="#fca5a5",
+                    activebackground="#dc2626",
+                    activeforeground="#ffffff",
+                    font=("Segoe UI", 7, "bold"),
+                    relief="flat",
+                    padx=4,
+                    pady=1,
+                    cursor="hand2"
+                )
+                btn_del.pack(side="right", padx=(1, 0))
+
+                # Action Button Row 2: Up / Down Reordering
                 btn_row = tk.Frame(left_box, bg="#1e293b")
-                btn_row.pack(pady=(4, 0))
+                btn_row.pack(fill="x", pady=(0, 0))
 
                 def make_move_cmd(from_i, to_i):
                     def cmd():
                         if 0 <= to_i < len(parent_app.user_image_paths):
                             parent_app.user_image_paths[from_i], parent_app.user_image_paths[to_i] = parent_app.user_image_paths[to_i], parent_app.user_image_paths[from_i]
-                            if hasattr(parent_app, 'refresh_image_listbox'):
-                                parent_app.refresh_image_listbox()
+                            if hasattr(parent_app, 'update_image_listbox'):
+                                parent_app.update_image_listbox(selected_index=to_i)
                             refresh_list()
                     return cmd
 
                 if idx > 0:
                     btn_up = tk.Button(btn_row, text="▲ Lên", command=make_move_cmd(idx, idx - 1), bg="#334155", fg="#f8fafc", font=("Segoe UI", 7, "bold"), relief="flat", padx=4, pady=1, cursor="hand2")
-                    btn_up.pack(side="left", padx=1)
+                    btn_up.pack(side="left", fill="x", expand=True, padx=(0, 1))
                 if idx < len(images) - 1:
                     btn_dn = tk.Button(btn_row, text="▼ Xuống", command=make_move_cmd(idx, idx + 1), bg="#334155", fg="#f8fafc", font=("Segoe UI", 7, "bold"), relief="flat", padx=4, pady=1, cursor="hand2")
-                    btn_dn.pack(side="left", padx=1)
+                    btn_dn.pack(side="right", fill="x", expand=True, padx=(1, 0))
 
             else:
                 lbl_missing = tk.Label(
                     left_box,
-                    text="⚠️ CHƯA CÓ ẢNH\n(Sẽ dùng ảnh mẫu)",
-                    font=("Segoe UI", 9, "bold"),
+                    text="⚠️ CHƯA CÓ ẢNH\n(Kéo thả hoặc bấm nút bên dưới)",
+                    font=("Segoe UI", 8, "bold"),
                     bg="#0f172a",
                     fg="#f59e0b",
-                    padx=12,
-                    pady=16,
+                    padx=8,
+                    pady=12,
                     highlightthickness=1,
                     highlightbackground="#f59e0b"
                 )
-                lbl_missing.pack(pady=4)
+                lbl_missing.pack(fill="x", pady=4)
 
-            # Right Box: Question Context
+                btn_add_slot = tk.Button(
+                    left_box,
+                    text="➕ Gán ảnh cho câu này",
+                    command=lambda p_idx=idx: choose_image_for_slot(p_idx),
+                    bg="#2563eb",
+                    fg="#ffffff",
+                    activebackground="#1d4ed8",
+                    font=("Segoe UI", 8, "bold"),
+                    relief="flat",
+                    pady=3,
+                    cursor="hand2"
+                )
+                btn_add_slot.pack(fill="x", pady=(2, 0))
+
+            # Right Box: Question Context & Drop Target
             right_box = tk.Frame(card, bg="#1e293b")
             right_box.pack(side="left", fill="both", expand=True)
 
@@ -647,6 +900,11 @@ def open_exercise_pic_match_dialog(parent_app):
             txt_q.config(state="disabled")
             txt_q.pack(fill="both", expand=True)
 
+            # Bind drag & drop onto right box and text as well for seamless drop targeting
+            for w in (right_box, txt_q):
+                w.bind("<B1-Motion>", on_drag_motion)
+                w.bind("<ButtonRelease-1>", on_drag_release)
+
     # Bottom Control Bar
     bot_bar = tk.Frame(win, bg="#1e293b", padx=16, pady=10)
     bot_bar.pack(fill="x", side="bottom")
@@ -666,6 +924,15 @@ def open_exercise_pic_match_dialog(parent_app):
     )
     btn_compile.pack(side="left")
 
+    lbl_drag_instruction = tk.Label(
+        bot_bar,
+        text="💡 Mẹo: Nhấn giữ và kéo ảnh từ câu này thả vào câu khác để hoán đổi vị trí lập tức.",
+        font=("Segoe UI", 8, "italic"),
+        bg="#1e293b",
+        fg="#94a3b8"
+    )
+    lbl_drag_instruction.pack(side="left", padx=12)
+
     btn_close = tk.Button(
         bot_bar,
         text="Đóng (Esc)",
@@ -684,4 +951,5 @@ def open_exercise_pic_match_dialog(parent_app):
     win.bind("<Escape>", lambda e: win.destroy())
 
     refresh_list()
+
 
