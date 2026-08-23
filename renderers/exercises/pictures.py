@@ -157,23 +157,28 @@ class PicturesRendererMixin:
                 from renderer_utils import extract_question_prefix_and_body
                 clean_content = re.sub(r'\[PIC(?::[^\]]*)?\]', '', child.content, flags=re.IGNORECASE).strip()
                 _pref, _delim, q_num_ext, body_ext = extract_question_prefix_and_body(clean_content)
-                if q_num_ext is not None:
-                    num_part = q_num_ext
-                    body_part = body_ext.strip()
-                    if not body_part or "<blank>" in body_part.lower() or "[blank]" in body_part.lower() or "_" in body_part:
-                        prefix_w_pt = len(f"{num_part}. ") * (font_size * 0.48)
-                        char_under_w_pt = max(4.0, font_size * 0.44)
-                        num_underscores = max(10, int((img_w_pt - prefix_w_pt) / char_under_w_pt))
-                        cap_text = f"{num_part}. {'_' * num_underscores}"
-                    else:
-                        cap_text = f"{num_part}. {body_part}"
-                else:
-                    prefix_w_pt = len(f"{global_idx + 1}. ") * (font_size * 0.48)
-                    char_under_w_pt = max(4.0, font_size * 0.44)
-                    num_underscores = max(10, int((img_w_pt - prefix_w_pt) / char_under_w_pt))
-                    cap_text = f"{global_idx + 1}. {'_' * num_underscores}"
+                num_part = q_num_ext if q_num_ext is not None else str(global_idx + 1)
+                body_part = body_ext.strip() if body_ext else ""
 
-                sel.TypeText(cap_text)
+                from renderers.common.units_and_colors import parse_color_to_rgb_int
+                q_col_int = parse_color_to_rgb_int(getattr(self, "question_color", None))
+
+                prefix_w_pt = len(f"{num_part}. ") * (font_size * 0.48)
+                char_under_w_pt = max(4.0, font_size * 0.44)
+                num_underscores = max(10, int((img_w_pt - prefix_w_pt) / char_under_w_pt))
+
+                sel.Font.Name = font_name
+                sel.Font.Size = font_size
+                sel.Font.Bold = 1
+                sel.Font.Color = q_col_int if q_col_int is not None else 0
+                sel.TypeText(f"{num_part}. ")
+                sel.Font.Bold = 0
+                sel.Font.Color = 0
+
+                if not body_part or "<blank>" in body_part.lower() or "[blank]" in body_part.lower() or "_" in body_part:
+                    sel.TypeText("_" * num_underscores)
+                else:
+                    self.write_inline_spans(sel, parse_inline_spans(body_part))
 
             sel.TypeParagraph()
 

@@ -36,31 +36,41 @@ class NumberingMixin:
 
     def apply_native_numbered_list(self, word, sel, q_num: Optional[str] = None, number_format: Optional[str] = None):
         """
-        Applies native MS Word Numbered List:
+        Applies native MS Word Numbered List with guaranteed document-scoped font color & styling:
         - List number is ALWAYS BOLD by default
         - Text and numbering are separated by a SINGLE SPACE (TrailingCharacter = 1), NOT a tab!
         - LeftIndent and FirstLineIndent are flush at 0.0 cm (left page border)
+        - Uses document-scoped ListTemplate for 100% reliable font color application across Word versions.
         - Starts a new independent list instance (ContinuePreviousList=False) on first question (q_num == '1' or is_first_question_in_num_block),
           and continues sequential list incrementing (ContinuePreviousList=True) on subsequent questions.
-        - Supports custom prefix formats (e.g. 'Question %1.', 'Question %1:', 'Câu %1:', '%1.').
         """
         restart = getattr(self, "is_first_question_in_num_block", False) or (q_num == "1")
         self.is_first_question_in_num_block = False
-        try:
-            list_tpl = word.ListGalleries(2).ListTemplates(1)  # wdNumberGallery = 2 (Numbered List 1., 2., 3.)
-            lvl = list_tpl.ListLevels(1)
-            lvl.TrailingCharacter = 1  # wdTrailingSpace = 1 (SPACE separator, "Follow number with: Space")
-            lvl.Font.Bold = 1          # ALWAYS BOLD number
-            lvl.NumberPosition = 0
-            lvl.TextPosition = 0
-            lvl.NumberFormat = number_format if number_format else "%1."
-            q_color_int = parse_color_to_rgb_int(getattr(self, "question_color", None))
-            if q_color_int is not None:
-                lvl.Font.Color = q_color_int
-            else:
-                lvl.Font.Color = 0
+        target_fmt = number_format if number_format else "%1."
+        q_color_int = parse_color_to_rgb_int(getattr(self, "question_color", None))
 
-            sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=not restart)
+        try:
+            doc = sel.Document
+            # If restarting or no active doc template exists, create a new document-scoped ListTemplate
+            if restart or not hasattr(self, "_active_doc_list_template") or self._active_doc_list_template is None:
+                list_tpl = doc.ListTemplates.Add(OutlineNumbered=False)
+                lvl = list_tpl.ListLevels(1)
+                lvl.TrailingCharacter = 1  # wdTrailingSpace = 1
+                lvl.Font.Bold = 1          # ALWAYS BOLD
+                lvl.Font.Name = getattr(self, "font_name", "Times New Roman")
+                lvl.Font.Size = getattr(self, "font_size", 12.0)
+                if q_color_int is not None:
+                    lvl.Font.Color = q_color_int
+                else:
+                    lvl.Font.Color = 0
+                lvl.NumberPosition = 0
+                lvl.TextPosition = 0
+                lvl.NumberFormat = target_fmt
+                self._active_doc_list_template = list_tpl
+                sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=False)
+            else:
+                sel.Range.ListFormat.ApplyListTemplate(self._active_doc_list_template, ContinuePreviousList=True)
+
             sel.ParagraphFormat.LeftIndent = 0
             sel.ParagraphFormat.FirstLineIndent = 0
             sel.Font.Bold = 0
@@ -68,12 +78,26 @@ class NumberingMixin:
 
         except Exception:
             try:
-                sel.Range.ListFormat.ApplyNumberDefault()
+                list_tpl = word.ListGalleries(2).ListTemplates(1)
+                lvl = list_tpl.ListLevels(1)
+                lvl.TrailingCharacter = 1
+                lvl.Font.Bold = 1
+                lvl.NumberFormat = target_fmt
+                if q_color_int is not None:
+                    lvl.Font.Color = q_color_int
+                sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=not restart)
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
                 sel.Font.Bold = 0
+                sel.Font.Color = 0
             except Exception:
-                pass
+                try:
+                    sel.Range.ListFormat.ApplyNumberDefault()
+                    sel.ParagraphFormat.LeftIndent = 0
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.Font.Bold = 0
+                except Exception:
+                    pass
 
     def clean_num_placeholders(self, b: ULNBlock):
         r"""Recursively cleans #(\d+) placeholders from content, columns, spans, tables, and child blocks."""

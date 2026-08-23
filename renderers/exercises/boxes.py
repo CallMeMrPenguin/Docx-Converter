@@ -192,22 +192,7 @@ class BoxesRendererMixin:
             box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_lines - 1) * space_between_pt) + descender_clearance_pt + 4.0
 
             try:
-                shape = doc.Shapes.AddShape(
-                    5,  # msoShapeRoundedRectangle = 5
-                    0,
-                    0,
-                    box_width_pt,
-                    box_height_pt,
-                    Anchor=p_anchor
-                )
-                shape.RelativeHorizontalPosition = 0
-                shape.RelativeVerticalPosition = 2
-                shape.Left = left_offset_pt
-                shape.Top = 0
-                shape.WrapFormat.Type = 7
-                shape.WrapFormat.DistanceTop = 12.0
-                shape.WrapFormat.DistanceBottom = 12.0
-
+                shape = doc.Shapes.AddShape(5, 0, 0, box_width_pt, box_height_pt)
                 tf = shape.TextFrame
                 tf.MarginTop = 0
                 tf.MarginBottom = 0
@@ -217,7 +202,6 @@ class BoxesRendererMixin:
                     tf.WordWrap = -1 if (is_full_width or total_visual_lines > num_lines) else 0
                 except Exception:
                     pass
-
                 try:
                     tf.AutoSize = False
                 except Exception:
@@ -227,29 +211,19 @@ class BoxesRendererMixin:
                 shape.Line.Weight = 1.0
                 shape.Line.ForeColor.RGB = 0
 
-                tf.TextRange.Select()
-                box_sel = word.Selection
-                box_sel.Font.Name = font_name
-                box_sel.Font.Size = font_size
-                box_sel.Font.Bold = 1
-                box_sel.Font.Color = 0
+                tr = tf.TextRange
+                tr.Font.Name = font_name
+                tr.Font.Size = font_size
+                tr.Font.Bold = 1
+                tr.Font.Color = 0
+                tr.Text = "\n".join(lines)
 
-                box_sel.ParagraphFormat.SpaceBefore = 0
-                box_sel.ParagraphFormat.SpaceAfter = 0
-                box_sel.ParagraphFormat.LineSpacingRule = 0
-                box_sel.ParagraphFormat.Alignment = 0
-                box_sel.ParagraphFormat.TabStops.ClearAll()
-
-                for idx_line, line_str in enumerate(lines):
-                    if idx_line > 0:
-                        box_sel.ParagraphFormat.SpaceBefore = 2.0
-                    box_sel.ParagraphFormat.SpaceAfter = 0
-
-                    line_spans = parse_inline_spans(line_str, default_bold=True)
-                    self.write_inline_spans(box_sel, line_spans)
-                    box_sel.Font.Color = 0
-                    if idx_line < len(lines) - 1:
-                        box_sel.TypeParagraph()
+                for p_idx in range(1, tr.Paragraphs.Count + 1):
+                    pf = tr.Paragraphs(p_idx).Range.ParagraphFormat
+                    pf.SpaceBefore = 2.0 if p_idx > 1 else 0
+                    pf.SpaceAfter = 0
+                    pf.LineSpacingRule = 0
+                    pf.Alignment = 0
 
                 try:
                     shape.ConvertToInlineShape()
@@ -301,22 +275,7 @@ class BoxesRendererMixin:
             box_height_pt = (total_visual_lines * exact_line_h_pt) + ((num_rows - 1) * space_between_pt) + descender_clearance_pt + 4.0
 
             try:
-                shape = doc.Shapes.AddShape(
-                    5,
-                    0,
-                    0,
-                    box_width_pt,
-                    box_height_pt,
-                    Anchor=p_anchor
-                )
-                shape.RelativeHorizontalPosition = 0
-                shape.RelativeVerticalPosition = 2
-                shape.Left = left_offset_pt
-                shape.Top = 0
-                shape.WrapFormat.Type = 7
-                shape.WrapFormat.DistanceTop = 12.0
-                shape.WrapFormat.DistanceBottom = 12.0
-
+                shape = doc.Shapes.AddShape(5, 0, 0, box_width_pt, box_height_pt)
                 tf = shape.TextFrame
                 tf.MarginTop = 0
                 tf.MarginBottom = 0
@@ -335,36 +294,23 @@ class BoxesRendererMixin:
                 shape.Line.Weight = 1.0
                 shape.Line.ForeColor.RGB = 0
 
-                tf.TextRange.Select()
-                box_sel = word.Selection
-                box_sel.Font.Name = font_name
-                box_sel.Font.Size = font_size
-                box_sel.Font.Bold = 1
-                box_sel.Font.Color = 0
+                lines_text = ["\t".join(chunk) for chunk in lines_bank]
+                tr = tf.TextRange
+                tr.Font.Name = font_name
+                tr.Font.Size = font_size
+                tr.Font.Bold = 1
+                tr.Font.Color = 0
+                tr.Text = "\n".join(lines_text)
 
-                box_sel.ParagraphFormat.SpaceBefore = 0
-                box_sel.ParagraphFormat.SpaceAfter = 0
-                box_sel.ParagraphFormat.LineSpacingRule = 0
-                box_sel.ParagraphFormat.Alignment = 0
-                box_sel.ParagraphFormat.TabStops.ClearAll()
-
-                for t_pt in tab_stops_pt[1:]:
-                    box_sel.ParagraphFormat.TabStops.Add(Position=t_pt, Alignment=0)
-
-                for idx_line, chunk in enumerate(lines_bank):
-                    if idx_line > 0:
-                        box_sel.ParagraphFormat.SpaceBefore = 2.0
-                    box_sel.ParagraphFormat.SpaceAfter = 0
-
-                    for idx_w, word_txt in enumerate(chunk):
-                        w_spans = parse_inline_spans(word_txt, default_bold=True)
-                        self.write_inline_spans(box_sel, w_spans)
-                        box_sel.Font.Color = 0
-                        if idx_w < len(chunk) - 1:
-                            box_sel.TypeText("\t")
-
-                    if idx_line < len(lines_bank) - 1:
-                        box_sel.TypeParagraph()
+                for p_idx in range(1, tr.Paragraphs.Count + 1):
+                    pf = tr.Paragraphs(p_idx).Range.ParagraphFormat
+                    pf.SpaceBefore = 2.0 if p_idx > 1 else 0
+                    pf.SpaceAfter = 0
+                    pf.LineSpacingRule = 0
+                    pf.Alignment = 0
+                    pf.TabStops.ClearAll()
+                    for t_pt in tab_stops_pt[1:]:
+                        pf.TabStops.Add(Position=t_pt, Alignment=0)
 
                 try:
                     shape.ConvertToInlineShape()

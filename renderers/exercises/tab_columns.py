@@ -610,68 +610,55 @@ class TabColumnsRendererMixin:
                 sel.TypeText("\t")
 
             clean_col = col_raw.strip()
-            m_num = re.match(r'^\s*#?(\d+[\.\)])\s*(.*)$', clean_col)
-            num_prefix = m_num.group(1) if m_num else ""
-            body_content = m_num.group(2) if m_num else clean_col
+            pref_col, delim_col, q_num_col, body_content = extract_question_prefix_and_body(clean_col)
+            num_prefix = f"{pref_col or ''}{q_num_col}{delim_col or '.'}" if q_num_col is not None else ""
 
-            if has_blanks and re.search(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', body_content):
-                word_part = re.sub(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '', body_content).strip()
-
-                num_str = f"{num_prefix} " if num_prefix else ""
-                full_item_str = f"{num_str}{word_part}".strip()
-                w_pt = self.measure_text_width_pt(doc, full_item_str, font_name, font_size, is_bold=False)
-                item_w_cm = pt_to_cm(w_pt) * 1.15
-
-                start_c = col_starts_cm[c_idx]
-                next_c = col_starts_cm[c_idx + 1] if (c_idx + 1 < num_cols) else printable_width_cm
-
-                blank_start_abs = start_c + item_w_cm + 0.20
-                blank_end_abs = next_c - 0.50
-                blank_w = max(0.60, blank_end_abs - blank_start_abs)
-                num_u = max(3, int(round(blank_w / u_width_cm)))
-
-                if num_prefix:
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    q_color_int = parse_color_to_rgb_int(question_color)
-                    sel.Font.Color = q_color_int if q_color_int is not None else 0
-                    sel.TypeText(f"{num_prefix} ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                body_spans = parse_inline_spans(word_part)
-                self.write_inline_spans(sel, body_spans)
-
-                sel.Font.Bold = 0
+            if num_prefix:
+                sel.Font.Name = font_name
+                sel.Font.Size = font_size
+                sel.Font.Bold = 1
                 sel.Font.Italic = 0
                 sel.Font.Underline = 0
+                q_color_int = parse_color_to_rgb_int(question_color)
+                sel.Font.Color = q_color_int if q_color_int is not None else 0
+                sel.TypeText(f"{num_prefix} ")
+                sel.Font.Bold = 0
                 sel.Font.Color = 0
-                sel.TypeText(" ")
-                sel.TypeText("_" * num_u)
-            else:
-                if num_prefix:
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    q_color_int = parse_color_to_rgb_int(question_color)
-                    sel.Font.Color = q_color_int if q_color_int is not None else 0
-                    sel.TypeText(f"{num_prefix} ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
 
-                    body_spans = parse_inline_spans(body_content)
+            # Process inline blanks in body_content e.g. / <blank> / -> / ______ /
+            if re.search(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{2,}', body_content):
+                # If blank is embedded inside text or slashes (e.g. / <blank> /)
+                if re.search(r'(?:\/|\w|\))\s*<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{2,}', body_content) or body_content.rstrip().endswith('/'):
+                    processed_body = re.sub(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{2,}', '______', body_content)
+                    body_spans = parse_inline_spans(processed_body)
                     self.write_inline_spans(sel, body_spans)
                 else:
-                    c_spans = block.cols_spans[c_idx] if (block.cols_spans and c_idx < len(block.cols_spans)) else []
-                    if c_spans:
-                        self.write_inline_spans(sel, c_spans)
-                    else:
-                        self.write_inline_spans(sel, parse_inline_spans(col_raw))
+                    word_part = re.sub(r'[_]{2,}|<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '', body_content).strip()
+                    num_str = f"{num_prefix} " if num_prefix else ""
+                    full_item_str = f"{num_str}{word_part}".strip()
+                    w_pt = self.measure_text_width_pt(doc, full_item_str, font_name, font_size, is_bold=False)
+                    item_w_cm = pt_to_cm(w_pt) * 1.15
+
+                    start_c = col_starts_cm[c_idx]
+                    next_c = col_starts_cm[c_idx + 1] if (c_idx + 1 < num_cols) else printable_width_cm
+
+                    blank_start_abs = start_c + item_w_cm + 0.20
+                    blank_end_abs = next_c - 0.50
+                    blank_w = max(0.60, blank_end_abs - blank_start_abs)
+                    num_u = max(3, int(round(blank_w / u_width_cm)))
+
+                    body_spans = parse_inline_spans(word_part)
+                    self.write_inline_spans(sel, body_spans)
+
+                    sel.Font.Bold = 0
+                    sel.Font.Italic = 0
+                    sel.Font.Underline = 0
+                    sel.Font.Color = 0
+                    sel.TypeText(" ")
+                    sel.TypeText("_" * num_u)
+            else:
+                body_spans = parse_inline_spans(body_content)
+                self.write_inline_spans(sel, body_spans)
 
         sel.TypeParagraph()
         self.last_rendered_tag = "TAB3" if num_cols == 3 else f"TAB{num_cols}"
