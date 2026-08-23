@@ -231,8 +231,8 @@ class TabColumnsRendererMixin:
 
         opt_color_int = parse_color_to_rgb_int(opt_color)
 
-        # Standard hanging indent so options A, B, C are 100% vertically aligned
-        indent_pt = cm_to_pt(0.60)
+        # Standard hanging indent so options A, B, C are 100% vertically aligned (5mm)
+        indent_pt = cm_to_pt(0.50)
 
         # Calculate minimum vertical height needed for the question block to fit the picture
         total_items_count = len(normalized_opts) + (1 if q_display_body else 0)
