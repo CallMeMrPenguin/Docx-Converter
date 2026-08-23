@@ -24,8 +24,22 @@ class ContainersRendererMixin:
             self.current_group_opt_cols = g_cols
             self.current_group_max_item_len = g_len
 
+        old_sign_w = getattr(self, "current_group_sign_pic_w_cm", None)
+        old_sign_h = getattr(self, "current_group_sign_pic_h_cm", None)
+        old_sign_gap = getattr(self, "current_group_sign_pic_gap_cm", None)
+
+        if hasattr(self, "compute_group_sign_mcq_params"):
+            s_w, s_h, s_gap = self.compute_group_sign_mcq_params(block.children, printable_width_cm)
+            if s_w is not None:
+                self.current_group_sign_pic_w_cm = s_w
+                self.current_group_sign_pic_h_cm = s_h
+                self.current_group_sign_pic_gap_cm = s_gap
+
         try:
             if hasattr(self, "render"):
                 self.render(block.children, doc, word, is_root=False)
         finally:
             self.current_group_opt_cols, self.current_group_max_item_len = old_cols, old_len
+            self.current_group_sign_pic_w_cm = old_sign_w
+            self.current_group_sign_pic_h_cm = old_sign_h
+            self.current_group_sign_pic_gap_cm = old_sign_gap

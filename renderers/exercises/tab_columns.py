@@ -67,12 +67,97 @@ class TabColumnsRendererMixin:
         except Exception as e:
             print(f"[ULNRenderer] Warning adding placeholder shape: {e}")
 
+    def compute_group_sign_mcq_params(self, blocks: List[ULNBlock], printable_width_cm: float):
+        """
+        Pre-scans all Sign MCQ questions in a container group to calculate uniform picture dimensions
+        (width and height) across the entire exercise section.
+        - Measures option text lengths using GDI to detect any wrapped option lines.
+        - Scales all pictures uniformly in proportion to the question with the maximum number of lines (including wrapped lines).
+        - Enforces a minimum 5.0 mm gap, preferring 10.0 mm gap between text options and the picture on the right.
+        """
+        font_name = getattr(self, "font_name", "Times New Roman")
+        font_size = getattr(self, "font_size", 12.0)
+        from renderers.common.typography import get_gdi_text_measurer
+        measurer = get_gdi_text_measurer()
+
+        sign_questions = []
+        i = 0
+        while i < len(blocks):
+            b = blocks[i]
+            next_b = blocks[i + 1] if i + 1 < len(blocks) else None
+
+            is_sign_mcq = False
+            q_raw = ""
+            if next_b and next_b.tag == "OPT":
+                if b.content and re.search(r'\[PIC(?::.*?)?\]', b.content, re.IGNORECASE):
+                    is_sign_mcq = True
+                    q_raw = re.sub(r'\s*\[PIC(?::.*?)?\]\s*$', '', b.content, flags=re.IGNORECASE).strip()
+                elif b.tag.startswith("TAB") and (b.col1 or b.col2):
+                    c1 = b.col1 or ""
+                    c2 = b.col2 or ""
+                    if re.search(r'\[PIC(?::.*?)?\]', c1, re.IGNORECASE) or re.search(r'\[PIC(?::.*?)?\]', c2, re.IGNORECASE):
+                        is_sign_mcq = True
+                        q_raw = c2 if re.search(r'\[PIC(?::.*?)?\]', c1, re.IGNORECASE) else c1
+
+            if is_sign_mcq:
+                sign_questions.append((q_raw, next_b))
+                i += 2
+            else:
+                i += 1
+
+        if not sign_questions:
+            return None, None, None
+
+        est_pic_w_cm = 2.40
+        preferred_gap_cm = 1.00  # 10 mm preferred gap
+        avail_text_w_cm = max(6.0, printable_width_cm - est_pic_w_cm - preferred_gap_cm - 0.70)
+        avail_text_w_pt = cm_to_pt(avail_text_w_cm)
+
+        max_visual_lines = 3
+        for q_raw, opt_b in sign_questions:
+            pref, delim, q_num, c_body = extract_question_prefix_and_body(q_raw)
+            has_body = bool(c_body.strip())
+            q_lines = 1 if has_body else 0
+
+            raw_opt_text = opt_b.content.strip()
+            if '|' in raw_opt_text:
+                opt_items = [x.strip() for x in raw_opt_text.split('|') if x.strip()]
+            elif '\n' in raw_opt_text:
+                opt_items = [x.strip() for x in raw_opt_text.split('\n') if x.strip()]
+            else:
+                from renderer_utils import split_line_into_option_items
+                opt_items = split_line_into_option_items(raw_opt_text)
+
+            total_opt_lines = 0
+            for idx_o, item in enumerate(opt_items):
+                clean_item = self.strip_markup_for_measurement(item)
+                let_str = chr(65 + idx_o) if idx_o < 26 else str(idx_o + 1)
+                full_str = f"{let_str}. {clean_item}"
+                w_pt = measurer.measure_text_pt(full_str, font_name=font_name, font_size_pt=font_size, is_bold=False) * 1.15
+                lines_for_this_opt = max(1, int(w_pt // avail_text_w_pt) + (1 if w_pt % avail_text_w_pt > 0 else 0))
+                total_opt_lines += lines_for_this_opt
+
+            total_lines_for_q = q_lines + total_opt_lines
+            if total_lines_for_q > max_visual_lines:
+                max_visual_lines = total_lines_for_q
+
+        # Calculate uniform picture size matching the max visual lines
+        uniform_h_cm = max(2.20, min(5.50, max_visual_lines * 0.72))
+        uniform_w_cm = min(3.20, uniform_h_cm)
+
+        # Gap calculation: maintain minimum 5.0 mm, preferring 10.0 mm (1.0 cm)
+        rem_gap_space = printable_width_cm - uniform_w_cm - 8.0
+        gap_cm = max(0.50, min(1.00, rem_gap_space)) if rem_gap_space < 1.00 else 1.00
+
+        return uniform_w_cm, uniform_h_cm, gap_cm
+
     def render_side_by_side_pic_mcq(self, sel, doc, word, tab_block: ULNBlock, opt_block: ULNBlock, printable_width_cm: float):
         """
         Renders a 2-column Picture MCQ question using 100% PURE native paragraph tab stops and indents (NO TABLES).
-        - Matches picture height dynamically to the total vertical height of the options block.
-        - Option letters (A., B., C., D.) are strictly vertically aligned using consistent paragraph LeftIndent.
-        - Floating shape is locked to the specific question paragraph (LockAnchor=True) so images never jump/drift.
+        - Picture is ALWAYS positioned on the RIGHT side.
+        - Uses synchronized uniform picture dimensions (width and height) across the entire exercise section.
+        - Enforces minimum 5.0 mm, preferred 10.0 mm gap between text and picture.
+        - Option text naturally wraps if long within RightIndent.
         - Word native Numbered List is applied on question items.
         """
         font_name = getattr(self, "font_name", "Times New Roman")
@@ -88,15 +173,13 @@ class TabColumnsRendererMixin:
         pic_in_c2 = bool(re.search(r'\[PIC(?::.*?)?\]', c2_str, re.IGNORECASE))
 
         if pic_in_c1:
-            is_pic_right = False
             pic_str = c1_str
             q_raw = c2_str
         else:
-            is_pic_right = True
             pic_str = c2_str
             q_raw = c1_str
 
-        pic_info = parse_pic_tag(pic_str) or PicInfo(description="Sign / Picture", pos="center", size="medium")
+        pic_info = parse_pic_tag(pic_str) or PicInfo(description="Sign / Picture", pos="right", size="medium")
 
         # 1. Parse Options
         raw_opt_text = opt_block.content.strip()
@@ -123,198 +206,120 @@ class TabColumnsRendererMixin:
         pref, delim, q_num, c_body = extract_question_prefix_and_body(q_raw)
         q_display_body = c_body.strip() if c_body else ""
 
-        # 3. Dynamic Picture Dimensions matching options block
-        num_opts = len(normalized_opts)
-        total_lines = num_opts + (1 if q_display_body else 0)
-        pic_h_cm = max(1.8, min(4.5, total_lines * 0.72))
-        pic_w_cm = min(2.5, pic_h_cm)
+        # 3. Dynamic Picture Dimensions (from pre-computed uniform group params or local calculation)
+        grp_w = getattr(self, "current_group_sign_pic_w_cm", None)
+        grp_h = getattr(self, "current_group_sign_pic_h_cm", None)
+        grp_gap = getattr(self, "current_group_sign_pic_gap_cm", None)
+
+        if grp_w is not None and grp_h is not None:
+            pic_w_cm = grp_w
+            pic_h_cm = grp_h
+            gap_cm = grp_gap if grp_gap is not None else 1.00
+        else:
+            num_opts = len(normalized_opts)
+            total_lines = num_opts + (1 if q_display_body else 0)
+            pic_h_cm = max(2.2, min(5.0, total_lines * 0.72))
+            pic_w_cm = min(3.2, pic_h_cm)
+            gap_cm = 1.00
+
         pic_w_pt = cm_to_pt(pic_w_cm)
         pic_h_pt = cm_to_pt(pic_h_cm)
-        min_gap_pt = cm_to_pt(0.40)
-        opts_left_indent_pt = pic_w_pt + min_gap_pt
+        gap_pt = cm_to_pt(gap_cm)
+        right_margin_indent = pic_w_pt + gap_pt
+        pic_left_pt = printable_width_pt - pic_w_pt
 
         opt_color_int = parse_color_to_rgb_int(opt_color)
 
-        if is_pic_right:
-            # ── Picture on RIGHT ──────────────────────────────────────
-            pic_left_pt = printable_width_pt - pic_w_pt
-            right_margin_indent = pic_w_pt + min_gap_pt
+        # ── Render Text on LEFT with Picture on RIGHT ───────────────
+        if q_display_body:
+            # Line 1: Question sentence
+            start_q_pos = sel.Range.Start
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.RightIndent = right_margin_indent
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.ParagraphFormat.SpaceBefore = 8
+            sel.ParagraphFormat.SpaceAfter = 3
+            sel.ParagraphFormat.KeepWithNext = True
 
-            if q_display_body:
+            if q_num is not None:
+                num_fmt = self.get_effective_number_format(pref, delim)
+                self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
                 sel.ParagraphFormat.LeftIndent = 0
                 sel.ParagraphFormat.RightIndent = right_margin_indent
+
+            self.write_inline_spans(sel, parse_inline_spans(q_display_body))
+            sel.TypeParagraph()
+            end_q_pos = sel.Range.Start - 1
+            first_para_rng = doc.Range(start_q_pos, end_q_pos)
+            self._insert_sign_picture_shape(doc, first_para_rng, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
+
+            try:
+                sel.Range.ListFormat.RemoveNumbers()
+            except Exception:
+                pass
+
+            for let, body in normalized_opts:
+                sel.ParagraphFormat.LeftIndent = cm_to_pt(0.50)
+                sel.ParagraphFormat.RightIndent = right_margin_indent
                 sel.ParagraphFormat.FirstLineIndent = 0
-                sel.ParagraphFormat.SpaceBefore = 8
-                sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.SpaceBefore = 2
+                sel.ParagraphFormat.SpaceAfter = 2
                 sel.ParagraphFormat.KeepWithNext = True
 
-                if q_num is not None:
-                    num_fmt = self.get_effective_number_format(pref, delim)
-                    self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                    sel.ParagraphFormat.LeftIndent = 0
-                    sel.ParagraphFormat.RightIndent = right_margin_indent
+                sel.Font.Name = font_name
+                sel.Font.Size = font_size
+                sel.Font.Bold = 1
+                sel.Font.Italic = 0
+                sel.Font.Underline = 0
+                sel.Font.Color = opt_color_int if opt_color_int is not None else 0
+                sel.TypeText(f"{let}. ")
+                sel.Font.Bold = 0
+                sel.Font.Color = 0
 
-                self.write_inline_spans(sel, parse_inline_spans(q_display_body))
-                first_para_rng = sel.Paragraphs(1).Range
-                self._insert_sign_picture_shape(doc, first_para_rng, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
+                self.write_inline_spans(sel, parse_inline_spans(body))
                 sel.TypeParagraph()
-
-                try:
-                    sel.Range.ListFormat.RemoveNumbers()
-                except Exception:
-                    pass
-
-                for let, body in normalized_opts:
-                    sel.ParagraphFormat.LeftIndent = cm_to_pt(0.50)
-                    sel.ParagraphFormat.RightIndent = right_margin_indent
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.SpaceBefore = 2
-                    sel.ParagraphFormat.SpaceAfter = 2
-                    sel.ParagraphFormat.KeepWithNext = True
-
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
-                    sel.TypeText(f"{let}. ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    self.write_inline_spans(sel, parse_inline_spans(body))
-                    sel.TypeParagraph()
-
-            else:
-                # Options-only: Line 1 has Native Numbered List + Option A
-                for idx_opt, (let, body) in enumerate(normalized_opts):
-                    sel.ParagraphFormat.RightIndent = right_margin_indent
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.SpaceBefore = 8 if idx_opt == 0 else 2
-                    sel.ParagraphFormat.SpaceAfter = 2
-                    sel.ParagraphFormat.KeepWithNext = True
-
-                    if idx_opt == 0:
-                        sel.ParagraphFormat.LeftIndent = 0
-                        if q_num is not None:
-                            num_fmt = self.get_effective_number_format(pref, delim)
-                            self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                            sel.ParagraphFormat.LeftIndent = 0
-                            sel.ParagraphFormat.RightIndent = right_margin_indent
-                    else:
-                        try:
-                            sel.Range.ListFormat.RemoveNumbers()
-                        except Exception:
-                            pass
-                        sel.ParagraphFormat.LeftIndent = cm_to_pt(0.65)
-
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
-                    sel.TypeText(f"{let}. ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    self.write_inline_spans(sel, parse_inline_spans(body))
-
-                    if idx_opt == 0:
-                        first_para_rng = sel.Paragraphs(1).Range
-                        self._insert_sign_picture_shape(doc, first_para_rng, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
-
-                    sel.TypeParagraph()
 
         else:
-            # ── Picture on LEFT ───────────────────────────────────────
-            pic_left_pt = 0
-
-            if q_display_body:
-                sel.ParagraphFormat.LeftIndent = opts_left_indent_pt
-                sel.ParagraphFormat.RightIndent = 0
+            # Options-only: Line 1 has Native Numbered List + Option A
+            for idx_opt, (let, body) in enumerate(normalized_opts):
+                sel.ParagraphFormat.RightIndent = right_margin_indent
                 sel.ParagraphFormat.FirstLineIndent = 0
-                sel.ParagraphFormat.SpaceBefore = 8
-                sel.ParagraphFormat.SpaceAfter = 3
+                sel.ParagraphFormat.SpaceBefore = 8 if idx_opt == 0 else 2
+                sel.ParagraphFormat.SpaceAfter = 2
                 sel.ParagraphFormat.KeepWithNext = True
 
-                if q_num is not None:
-                    num_fmt = self.get_effective_number_format(pref, delim)
-                    self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                    sel.ParagraphFormat.LeftIndent = opts_left_indent_pt
-                    sel.ParagraphFormat.FirstLineIndent = 0
+                if idx_opt == 0:
+                    start_q_pos = sel.Range.Start
+                    sel.ParagraphFormat.LeftIndent = 0
+                    if q_num is not None:
+                        num_fmt = self.get_effective_number_format(pref, delim)
+                        self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
+                        sel.ParagraphFormat.LeftIndent = 0
+                        sel.ParagraphFormat.RightIndent = right_margin_indent
+                else:
+                    try:
+                        sel.Range.ListFormat.RemoveNumbers()
+                    except Exception:
+                        pass
+                    sel.ParagraphFormat.LeftIndent = cm_to_pt(0.65)
 
-                self.write_inline_spans(sel, parse_inline_spans(q_display_body))
-                first_para_rng = sel.Paragraphs(1).Range
-                self._insert_sign_picture_shape(doc, first_para_rng, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
+                sel.Font.Name = font_name
+                sel.Font.Size = font_size
+                sel.Font.Bold = 1
+                sel.Font.Italic = 0
+                sel.Font.Underline = 0
+                sel.Font.Color = opt_color_int if opt_color_int is not None else 0
+                sel.TypeText(f"{let}. ")
+                sel.Font.Bold = 0
+                sel.Font.Color = 0
+
+                self.write_inline_spans(sel, parse_inline_spans(body))
                 sel.TypeParagraph()
 
-                try:
-                    sel.Range.ListFormat.RemoveNumbers()
-                except Exception:
-                    pass
-
-                for let, body in normalized_opts:
-                    sel.ParagraphFormat.LeftIndent = opts_left_indent_pt + cm_to_pt(0.50)
-                    sel.ParagraphFormat.RightIndent = 0
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.SpaceBefore = 2
-                    sel.ParagraphFormat.SpaceAfter = 2
-                    sel.ParagraphFormat.KeepWithNext = True
-
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
-                    sel.TypeText(f"{let}. ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    self.write_inline_spans(sel, parse_inline_spans(body))
-                    sel.TypeParagraph()
-
-            else:
-                # Options-only: Line 1 has Native Numbered List + Option A
-                for idx_opt, (let, body) in enumerate(normalized_opts):
-                    sel.ParagraphFormat.RightIndent = 0
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.SpaceBefore = 8 if idx_opt == 0 else 2
-                    sel.ParagraphFormat.SpaceAfter = 2
-                    sel.ParagraphFormat.KeepWithNext = True
-
-                    if idx_opt == 0:
-                        sel.ParagraphFormat.LeftIndent = opts_left_indent_pt
-                        if q_num is not None:
-                            num_fmt = self.get_effective_number_format(pref, delim)
-                            self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                            sel.ParagraphFormat.LeftIndent = opts_left_indent_pt
-                            sel.ParagraphFormat.FirstLineIndent = 0
-                    else:
-                        try:
-                            sel.Range.ListFormat.RemoveNumbers()
-                        except Exception:
-                            pass
-                        sel.ParagraphFormat.LeftIndent = opts_left_indent_pt + cm_to_pt(0.65)
-
-                    sel.Font.Name = font_name
-                    sel.Font.Size = font_size
-                    sel.Font.Bold = 1
-                    sel.Font.Italic = 0
-                    sel.Font.Underline = 0
-                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
-                    sel.TypeText(f"{let}. ")
-                    sel.Font.Bold = 0
-                    sel.Font.Color = 0
-
-                    self.write_inline_spans(sel, parse_inline_spans(body))
-
-                    if idx_opt == 0:
-                        first_para_rng = sel.Paragraphs(1).Range
-                        self._insert_sign_picture_shape(doc, first_para_rng, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
-
-                    sel.TypeParagraph()
+                if idx_opt == 0:
+                    end_q_pos = sel.Range.Start - 1
+                    first_para_rng = doc.Range(start_q_pos, end_q_pos)
+                    self._insert_sign_picture_shape(doc, first_para_rng, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
 
         sel.ParagraphFormat.LeftIndent = 0
         sel.ParagraphFormat.RightIndent = 0

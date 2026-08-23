@@ -201,9 +201,10 @@ D. HORIZONTAL PICTURE CHOICE GRIDS:
      [/PIC_GRID]
      [/NUM]
 
-E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES:
-   - CASE 1: Sign / Picture Identification MCQs:
-     Output each question as `[P0] #N. [PIC: Description]` followed directly by its `[OPT]` choice list:
+E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES (ALL PICTURES ON THE RIGHT):
+   - MANDATE: For all sign / notice / diagram MCQ questions, pictures [PIC] MUST always be placed on the RIGHT side of the question / options.
+   - CASE 1: Sign / Picture Identification MCQs (Options-Only):
+     Output each question as `[P0] #N. [PIC: Description]` (or `[TAB2] #N. | [PIC: Description]`) followed directly by its `[OPT]` choice list:
      [P0] [ins]**V. What do these signs mean? Choose the correct answers.**
      [NUM]
      [P0] #1. [PIC: Traffic lights]
@@ -217,7 +218,7 @@ E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES:
      [/NUM]
 
    - CASE 2: Sign / Diagram with Question Sentence (e.g. "What does the sign say?"):
-     Place the question sentence and picture on row 1 using `[TAB2]`, followed by `[OPT]`:
+     Place the question sentence on the left and picture on the right using `[TAB2] #N. Question text | [PIC: Description]`, followed by `[OPT]`:
      [NUM]
      [TAB2] #11. What does the sign say? | [PIC: Speed limit 40]
      [OPT] Maximum 40 vehicles are allowed on this road. | You shouldn't exceed this maximum speed. | Minimum 40 vehicles are allowed on this road. | You shouldn't move below this speed. [/OPT]
