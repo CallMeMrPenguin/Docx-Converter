@@ -205,12 +205,21 @@ E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES:
      [OPT] Walking only. | No crossing the street. | No pedestrians. [/OPT]
      [/NUM]
 
-   - CASE 2: Sign / Notice with Question Sentence (e.g., "What does the sign say?"):
-     Place the question sentence and picture on row 1 using `[TAB2]`, and list choices below using `[OPT]`:
+   - CASE 2: Sign / Diagram on the RIGHT (Column 2) alongside Question & Options on Left:
+     Place the question sentence and picture on row 1 using `[TAB2]` (Question in Col 1 | Picture in Col 2), followed by `[OPT]`:
      [NUM]
-     [TAB2] #11. What does the sign say? | [PIC]
+     [TAB2] #11. What does the sign say? | [PIC: Speed limit 40]
      [OPT] Maximum 40 vehicles are allowed on this road. | You shouldn't exceed this maximum speed. | Minimum 40 vehicles are allowed on this road. | You shouldn't move below this speed. [/OPT]
      [/NUM]
+
+   - CASE 3: Sign / Diagram on the LEFT (Column 1) alongside Question & Options on Right:
+     Place the picture in Col 1 and the question in Col 2 using `[TAB2]` (Picture in Col 1 | Question in Col 2), followed by `[OPT]`:
+     [NUM]
+     [TAB2] [PIC: Slippery road] | #12. Look at the warning sign. What is the hazard?
+     [OPT] Slippery road ahead. | Falling rocks from the cliff. | Narrow bridge on the highway. | Construction zone. [/OPT]
+     [/NUM]
+
+   *NOTE ON COMPILATION & SIZING: The compiler automatically matches the picture height to the total height of the question + options block, computes exact typographical widths to ensure options NEVER wrap text, preserves a minimum 5mm gap between columns, and maximizes the image size.*
 
 F. STRICT RULE: WHEN TO USE [TAB2] / [TAB3] / [TAB4] VS STANDARD [P0]/[P1]:
    - DO NOT use [TAB2]/[TAB3] for regular sentences, sentence transformations, or inline fill-in-the-blanks.

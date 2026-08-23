@@ -436,14 +436,13 @@ class ULNParser:
                     blocks.append(ULNBlock(tag=tag, content=rest_content, spans=spans, pic=pic_info, is_instruction=True))
 
                 elif tag.startswith("TAB"):
-                    # Check if line starts with [PIC: ...] followed by text
-                    pic_start_match = re.match(r'^\s*(\[PIC:[^\]]+\])\s+(.*)$', rest_content, re.IGNORECASE)
-                    if pic_start_match and tag == "TAB2":
-                        parts = [pic_start_match.group(1).strip(), pic_start_match.group(2).strip()]
-                    elif ' | ' in rest_content:
+                    if ' | ' in rest_content:
                         parts = [p.strip() for p in rest_content.split(' | ') if p.strip()]
                     elif '|' in rest_content:
                         parts = [p.strip() for p in rest_content.split('|') if p.strip()]
+                    elif tag == "TAB2" and re.match(r'^\s*(\[PIC(?::[^\]]+)?\])\s+(.*)$', rest_content, re.IGNORECASE):
+                        m_pic_start = re.match(r'^\s*(\[PIC(?::[^\]]+)?\])\s+(.*)$', rest_content, re.IGNORECASE)
+                        parts = [m_pic_start.group(1).strip(), m_pic_start.group(2).strip()]
                     elif '\t' in rest_content:
                         parts = [p.strip() for p in rest_content.split('\t') if p.strip()]
                     else:

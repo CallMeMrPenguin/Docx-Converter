@@ -1,12 +1,259 @@
+import os
 import re
-from typing import List
-from uln_parser import ULNBlock, parse_inline_spans, parse_pic_tag
+from typing import List, Optional
+from uln_parser import ULNBlock, parse_inline_spans, PicInfo, parse_pic_tag
 from renderer_utils import extract_question_prefix_and_body
 from renderers.common.units_and_colors import cm_to_pt, pt_to_cm, parse_color_to_rgb_int
 
 
 class TabColumnsRendererMixin:
     """Renders multi-column paragraph tab stops: [TAB2], [TAB3], [TAB4], and [TAB]."""
+
+    def _insert_sign_picture_shape(self, doc, anchor, pic_info: PicInfo, left_pt: float, width_pt: float, height_pt: float):
+        """Helper to insert picture shape or placeholder aligned to anchor."""
+        get_next_path = getattr(self, "get_next_image_path", None)
+        target_path = get_next_path(pic_info) if get_next_path else None
+        font_name = getattr(self, "font_name", "Times New Roman")
+
+        if target_path and os.path.exists(target_path):
+            try:
+                shp = doc.Shapes.AddPicture(
+                    FileName=os.path.abspath(target_path),
+                    LinkToFile=False,
+                    SaveWithDocument=True,
+                    Anchor=anchor
+                )
+                shp.RelativeHorizontalPosition = 0
+                shp.RelativeVerticalPosition = 2
+                shp.Left = left_pt
+                shp.Top = 0
+                shp.Width = width_pt
+                shp.Height = height_pt
+                shp.WrapFormat.Type = 3  # wdWrapSquare = 3
+                return
+            except Exception as e:
+                print(f"[ULNRenderer] Warning adding sign picture: {e}")
+
+        # Fallback Placeholder Box
+        try:
+            shp = doc.Shapes.AddShape(
+                5,  # msoShapeRoundedRectangle = 5
+                left_pt,
+                0,
+                width_pt,
+                height_pt,
+                Anchor=anchor
+            )
+            shp.RelativeHorizontalPosition = 0
+            shp.RelativeVerticalPosition = 2
+            shp.Left = left_pt
+            shp.Top = 0
+            shp.Fill.ForeColor.RGB = 16316664  # Soft light grey
+            shp.Line.ForeColor.RGB = 8421504   # Medium grey border
+            shp.Line.Weight = 0.75
+            tf = shp.TextFrame
+            tf.MarginLeft = 2.0
+            tf.MarginRight = 2.0
+            tf.MarginTop = 2.0
+            tf.MarginBottom = 2.0
+            tf.TextRange.Font.Name = font_name
+            tf.TextRange.Font.Size = 9.0
+            tf.TextRange.Font.Bold = 1
+            tf.TextRange.Font.Color = 5263440  # Dark slate
+            tf.TextRange.ParagraphFormat.Alignment = 1
+            tf.TextRange.Text = f"[ 🖼️ {pic_info.description or 'SIGN IMAGE'} ]"
+        except Exception as e:
+            print(f"[ULNRenderer] Warning adding placeholder shape: {e}")
+
+    def render_side_by_side_pic_mcq(self, sel, doc, word, tab_block: ULNBlock, opt_block: ULNBlock, printable_width_cm: float):
+        """
+        Renders a 2-column Picture MCQ question where the picture is placed in Column 1 (Left)
+        or Column 2 (Right), and the Question + Options (A, B, C, D) are stacked in the opposite column.
+        - Matches picture height dynamically to the total vertical height of the options block.
+        - Calculates typographical width using GDI to guarantee options NEVER wrap text.
+        - Enforces a minimum 5.0 mm gap between columns.
+        - Maximizes the picture size up to the available remaining width.
+        """
+        font_name = getattr(self, "font_name", "Times New Roman")
+        font_size = getattr(self, "font_size", 12.0)
+        question_color = getattr(self, "question_color", None)
+        opt_color = getattr(self, "opt_color", None)
+        printable_width_pt = cm_to_pt(printable_width_cm)
+        min_gap_pt = cm_to_pt(0.50)  # 5.0 mm strictly preserved
+
+        c1_str = tab_block.col1.strip()
+        c2_str = tab_block.col2.strip()
+
+        pic_in_c1 = bool(re.search(r'\[PIC(?::.*?)?\]', c1_str, re.IGNORECASE))
+        pic_in_c2 = bool(re.search(r'\[PIC(?::.*?)?\]', c2_str, re.IGNORECASE))
+
+        if pic_in_c1:
+            is_pic_right = False
+            pic_str = c1_str
+            q_raw = c2_str
+        else:
+            is_pic_right = True
+            pic_str = c2_str
+            q_raw = c1_str
+
+        pic_info = parse_pic_tag(pic_str) or PicInfo(description="Sign / Picture", pos="center", size="medium")
+
+        # 1. Parse Options
+        raw_opt_text = opt_block.content.strip()
+        if '|' in raw_opt_text:
+            opt_items = [x.strip() for x in raw_opt_text.split('|') if x.strip()]
+        elif '\n' in raw_opt_text:
+            opt_items = [x.strip() for x in raw_opt_text.split('\n') if x.strip()]
+        else:
+            from renderer_utils import split_line_into_option_items
+            opt_items = split_line_into_option_items(raw_opt_text)
+
+        normalized_opts = []
+        for idx_opt, item in enumerate(opt_items):
+            m_let = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z][\.\)])(?:\*\*|\*|\]|\}|\{u\}|\))*)\s*(.*)$', item)
+            if m_let:
+                let_part = m_let.group(1).rstrip('.)')
+                body_part = m_let.group(2).strip()
+                normalized_opts.append((let_part, body_part))
+            else:
+                let_part = chr(65 + idx_opt) if idx_opt < 26 else str(idx_opt + 1)
+                normalized_opts.append((let_part, item))
+
+        # 2. Extract question number and body
+        pref, delim, q_num, c_body = extract_question_prefix_and_body(q_raw)
+        if q_num is not None:
+            pref_str = pref if pref else ""
+            delim_char = delim if delim else "."
+            num_prefix_str = f"{pref_str}{q_num}{delim_char} "
+            q_display_body = c_body.strip()
+        else:
+            num_prefix_str = ""
+            q_display_body = q_raw.strip()
+
+        # 3. Measure physical text width with GDI
+        opt_strings = [f"{let}. {self.strip_markup_for_measurement(body)}" for let, body in normalized_opts]
+        opt_widths = [self.measure_text_width_pt(doc, s, font_name, font_size, is_bold=False) * 1.15 for s in opt_strings]
+        max_opt_w_pt = max(opt_widths) if opt_widths else 120.0
+
+        full_q_str = f"{num_prefix_str}{self.strip_markup_for_measurement(q_display_body)}"
+        q_w_pt = self.measure_text_width_pt(doc, full_q_str, font_name, font_size, is_bold=True) * 1.15
+
+        needed_text_w_pt = max(max_opt_w_pt + cm_to_pt(0.50), q_w_pt)
+
+        # 4. Calculate dynamic picture sizing
+        max_pic_w_pt = max(cm_to_pt(2.5), printable_width_pt - needed_text_w_pt - min_gap_pt)
+        num_lines = 1 + len(normalized_opts)
+        exact_line_h_pt = font_size * 1.28
+        total_text_h_pt = (num_lines * exact_line_h_pt) + ((num_lines - 1) * 3.0)
+
+        pic_h_pt = max(cm_to_pt(2.5), total_text_h_pt)
+        pic_w_pt = min(max_pic_w_pt, max(pic_h_pt, max_pic_w_pt * 0.90))
+
+        # 5. Render Question & Options
+        opt_color_int = parse_color_to_rgb_int(opt_color)
+        q_color_int = parse_color_to_rgb_int(question_color)
+
+        if is_pic_right:
+            # Picture on RIGHT: text stays on left with RightIndent
+            sel.ParagraphFormat.LeftIndent = 0
+            sel.ParagraphFormat.RightIndent = pic_w_pt + min_gap_pt
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.ParagraphFormat.SpaceBefore = 6
+            sel.ParagraphFormat.SpaceAfter = 3
+            sel.ParagraphFormat.KeepWithNext = True
+
+            anchor_q = sel.Range.Duplicate
+
+            if num_prefix_str:
+                sel.Font.Name = font_name
+                sel.Font.Size = font_size
+                sel.Font.Bold = 1
+                sel.Font.Italic = 0
+                sel.Font.Underline = 0
+                sel.Font.Color = q_color_int if q_color_int is not None else 0
+                sel.TypeText(num_prefix_str)
+                sel.Font.Bold = 0
+                sel.Font.Color = 0
+
+            self.write_inline_spans(sel, parse_inline_spans(q_display_body))
+            sel.TypeParagraph()
+
+            for let, body in normalized_opts:
+                sel.ParagraphFormat.LeftIndent = cm_to_pt(0.50)
+                sel.ParagraphFormat.RightIndent = pic_w_pt + min_gap_pt
+                sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.SpaceBefore = 2
+                sel.ParagraphFormat.SpaceAfter = 2
+                sel.ParagraphFormat.KeepWithNext = True
+
+                sel.Font.Name = font_name
+                sel.Font.Size = font_size
+                sel.Font.Bold = 1
+                sel.Font.Italic = 0
+                sel.Font.Underline = 0
+                sel.Font.Color = opt_color_int if opt_color_int is not None else 0
+                sel.TypeText(f"{let}. ")
+                sel.Font.Bold = 0
+                sel.Font.Color = 0
+
+                self.write_inline_spans(sel, parse_inline_spans(body))
+                sel.TypeParagraph()
+
+            # Insert Picture Shape on RIGHT
+            pic_left_pt = printable_width_pt - pic_w_pt
+            self._insert_sign_picture_shape(doc, anchor_q, pic_info, pic_left_pt, pic_w_pt, pic_h_pt)
+
+        else:
+            # Picture on LEFT: text stays on right with LeftIndent
+            anchor_q = sel.Range.Duplicate
+            self._insert_sign_picture_shape(doc, anchor_q, pic_info, 0, pic_w_pt, pic_h_pt)
+
+            sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt
+            sel.ParagraphFormat.RightIndent = 0
+            sel.ParagraphFormat.FirstLineIndent = 0
+            sel.ParagraphFormat.SpaceBefore = 6
+            sel.ParagraphFormat.SpaceAfter = 3
+            sel.ParagraphFormat.KeepWithNext = True
+
+            if num_prefix_str:
+                sel.Font.Name = font_name
+                sel.Font.Size = font_size
+                sel.Font.Bold = 1
+                sel.Font.Italic = 0
+                sel.Font.Underline = 0
+                sel.Font.Color = q_color_int if q_color_int is not None else 0
+                sel.TypeText(num_prefix_str)
+                sel.Font.Bold = 0
+                sel.Font.Color = 0
+
+            self.write_inline_spans(sel, parse_inline_spans(q_display_body))
+            sel.TypeParagraph()
+
+            for let, body in normalized_opts:
+                sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt + cm_to_pt(0.50)
+                sel.ParagraphFormat.RightIndent = 0
+                sel.ParagraphFormat.FirstLineIndent = 0
+                sel.ParagraphFormat.SpaceBefore = 2
+                sel.ParagraphFormat.SpaceAfter = 2
+                sel.ParagraphFormat.KeepWithNext = True
+
+                sel.Font.Name = font_name
+                sel.Font.Size = font_size
+                sel.Font.Bold = 1
+                sel.Font.Italic = 0
+                sel.Font.Underline = 0
+                sel.Font.Color = opt_color_int if opt_color_int is not None else 0
+                sel.TypeText(f"{let}. ")
+                sel.Font.Bold = 0
+                sel.Font.Color = 0
+
+                self.write_inline_spans(sel, parse_inline_spans(body))
+                sel.TypeParagraph()
+
+        sel.ParagraphFormat.LeftIndent = 0
+        sel.ParagraphFormat.RightIndent = 0
+        sel.ParagraphFormat.FirstLineIndent = 0
+        self.last_rendered_tag = "OPT"
 
     def render_tab2_group(self, sel, doc, word, tab2_group: List[ULNBlock], printable_width_cm: float):
         """

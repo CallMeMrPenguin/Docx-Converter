@@ -874,6 +874,17 @@ class ULNWordRenderer(RendererBlocksMixin):
                         tab2_group.append(blocks[k])
                         k += 1
 
+                    # Check if single TAB2 block contains a picture and is immediately followed by an OPT block
+                    if len(tab2_group) == 1:
+                        single_tab = tab2_group[0]
+                        c1_txt = single_tab.col1 or ""
+                        c2_txt = single_tab.col2 or ""
+                        has_pic_in_tab = ("[PIC" in c1_txt.upper() or "[PIC" in c2_txt.upper() or parse_pic_tag(c1_txt) is not None or parse_pic_tag(c2_txt) is not None)
+                        if has_pic_in_tab and k < len(blocks) and blocks[k].tag == "OPT":
+                            self.render_side_by_side_pic_mcq(sel, doc, word, single_tab, blocks[k], printable_width_cm)
+                            idx_block = k + 1
+                            continue
+
                     self.render_tab2_group(sel, doc, word, tab2_group, printable_width_cm)
                     idx_block += len(tab2_group)
                     continue
