@@ -195,8 +195,18 @@ D. HORIZONTAL PICTURE CHOICE GRIDS:
      [/NUM]
 
 E. SIGN / NOTICE & DIAGRAM QUESTION EXERCISES:
-   - For exercises featuring a sign or diagram image alongside a question + 4 choices (A, B, C, D):
-   - Place the question and picture on row 1 using `[TAB2]`, and list choices below using `[OPT]`:
+   - CASE 1: Pure Sign / Picture Identification MCQs (Picture is directly the question item with no extra question sentence):
+     Output each question as `[P0] #N. [PIC]` followed directly by its `[OPT]` choice list:
+     [P0] [ins]**V. What do these signs mean? Choose the correct answers.**
+     [NUM]
+     [P0] #1. [PIC]
+     [OPT] Traffic lights ahead. | Stop at the traffic lights. | No traffic lights on this road. [/OPT]
+     [P0] #2. [PIC]
+     [OPT] Walking only. | No crossing the street. | No pedestrians. [/OPT]
+     [/NUM]
+
+   - CASE 2: Sign / Notice with Question Sentence (e.g., "What does the sign say?"):
+     Place the question sentence and picture on row 1 using `[TAB2]`, and list choices below using `[OPT]`:
      [NUM]
      [TAB2] #11. What does the sign say? | [PIC]
      [OPT] Maximum 40 vehicles are allowed on this road. | You shouldn't exceed this maximum speed. | Minimum 40 vehicles are allowed on this road. | You shouldn't move below this speed. [/OPT]

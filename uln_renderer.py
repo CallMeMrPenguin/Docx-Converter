@@ -468,43 +468,77 @@ class ULNWordRenderer(RendererBlocksMixin):
                 elif trailing_pic_match:
                     text_part = block.content[:trailing_pic_match.start()].strip()
                     pic_str = trailing_pic_match.group(1).strip()
-                    pic_info = parse_pic_tag(pic_str) or PicInfo(description="Activity Picture", pos="right", size="small")
-                    pic_w_cm = 2.0
-                    pic_h_cm = 1.4
-                    col_pic_pos_cm = printable_width_cm - pic_w_cm
-
-                    sel.ParagraphFormat.LeftIndent = 0
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.TabStops.ClearAll()
-                    sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col_pic_pos_cm), Alignment=0)
-                    sel.ParagraphFormat.SpaceBefore = 3
-                    sel.ParagraphFormat.SpaceAfter = 3
-                    sel.ParagraphFormat.KeepWithNext = False
+                    pic_info = parse_pic_tag(pic_str) or PicInfo(description="Sign / Picture", pos="center", size="small")
 
                     pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
-                    if q_num is not None and c_body.strip():
-                        num_fmt = self.get_effective_number_format(pref, delim)
-                        self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                        from uln_parser import parse_inline_spans as _pis
-                        text_spans = _pis(c_body.strip())
-                        self.write_inline_spans(sel, text_spans)
-                    else:
-                        try:
-                            sel.Range.ListFormat.RemoveNumbers()
-                        except Exception:
-                            pass
-                        from uln_parser import parse_inline_spans as _pis
-                        text_spans = _pis(text_part)
-                        self.write_inline_spans(sel, text_spans)
 
-                    sel.TypeText("\t")
-                    self.current_tab2_pic_width_cm = pic_w_cm
-                    self.current_tab2_pic_height_cm = pic_h_cm
-                    self.render_pic(sel, doc, pic_info)
-                    self.current_tab2_pic_width_cm = None
-                    self.current_tab2_pic_height_cm = None
-                    sel.TypeParagraph()
-                    sel.ParagraphFormat.TabStops.ClearAll()
+                    if q_num is not None and not c_body.strip():
+                        # Question is purely a number and picture: e.g. #1. [PIC]
+                        sel.ParagraphFormat.LeftIndent = 0
+                        sel.ParagraphFormat.FirstLineIndent = 0
+                        sel.ParagraphFormat.TabStops.ClearAll()
+                        sel.ParagraphFormat.SpaceBefore = 6 if self.last_rendered_tag == "OPT" else 3
+                        sel.ParagraphFormat.SpaceAfter = 3
+                        sel.ParagraphFormat.KeepWithNext = True
+
+                        pref_str = pref if pref else ""
+                        delim_char = delim if delim else "."
+                        num_prefix_str = f"{pref_str}{q_num}{delim_char} "
+                        sel.Font.Name = self.font_name
+                        sel.Font.Size = self.font_size
+                        sel.Font.Bold = 1
+                        sel.Font.Italic = 0
+                        sel.Font.Underline = 0
+                        q_color_int = parse_color_to_rgb_int(self.question_color)
+                        sel.Font.Color = q_color_int if q_color_int is not None else 0
+                        sel.TypeText(num_prefix_str)
+                        sel.Font.Bold = 0
+                        sel.Font.Color = 0
+
+                        pic_w_cm = 2.2
+                        pic_h_cm = 2.2
+                        self.current_tab2_pic_width_cm = pic_w_cm
+                        self.current_tab2_pic_height_cm = pic_h_cm
+                        self.render_pic(sel, doc, pic_info)
+                        self.current_tab2_pic_width_cm = None
+                        self.current_tab2_pic_height_cm = None
+                        sel.TypeParagraph()
+                    else:
+                        pic_w_cm = 2.0
+                        pic_h_cm = 1.4
+                        col_pic_pos_cm = printable_width_cm - pic_w_cm
+
+                        sel.ParagraphFormat.LeftIndent = 0
+                        sel.ParagraphFormat.FirstLineIndent = 0
+                        sel.ParagraphFormat.TabStops.ClearAll()
+                        sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col_pic_pos_cm), Alignment=0)
+                        sel.ParagraphFormat.SpaceBefore = 3
+                        sel.ParagraphFormat.SpaceAfter = 3
+                        sel.ParagraphFormat.KeepWithNext = True
+
+                        if q_num is not None and c_body.strip():
+                            num_fmt = self.get_effective_number_format(pref, delim)
+                            self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
+                            from uln_parser import parse_inline_spans as _pis
+                            text_spans = _pis(c_body.strip())
+                            self.write_inline_spans(sel, text_spans)
+                        else:
+                            try:
+                                sel.Range.ListFormat.RemoveNumbers()
+                            except Exception:
+                                pass
+                            from uln_parser import parse_inline_spans as _pis
+                            text_spans = _pis(text_part)
+                            self.write_inline_spans(sel, text_spans)
+
+                        sel.TypeText("\t")
+                        self.current_tab2_pic_width_cm = pic_w_cm
+                        self.current_tab2_pic_height_cm = pic_h_cm
+                        self.render_pic(sel, doc, pic_info)
+                        self.current_tab2_pic_width_cm = None
+                        self.current_tab2_pic_height_cm = None
+                        sel.TypeParagraph()
+                        sel.ParagraphFormat.TabStops.ClearAll()
                 elif trailing_blank_symbol_match:
                     # Option B: text before <blank> rendered inline, blank filled dynamically to right margin via Leader=4
                     text_part = trailing_blank_symbol_match.group(1)
