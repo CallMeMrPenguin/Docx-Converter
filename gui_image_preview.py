@@ -202,65 +202,192 @@ def open_image_preview_dialog(parent_app, initial_index: int = 0):
 
 def extract_pic_questions_from_uln(uln_text: str):
     """
-    Parses ULN text to extract all [PIC] occurrences in order,
-    along with their question numbers, clean question text, section instructions, and context.
+    Parses ULN text into AST blocks and extracts all [PIC] occurrences in the exact
+    identical order that ULNWordRenderer processes them for MS Word document compilation.
     """
     import re
-    lines = uln_text.splitlines()
+    from uln_parser import ULNParser, parse_pic_tag
+    from renderer_utils import extract_question_prefix_and_body
+
+    parser = ULNParser()
+    blocks = parser.parse(uln_text)
+
     pic_items = []
     current_section = ""
 
-    i = 0
-    while i < len(lines):
-        line = lines[i].strip()
-        if not line:
-            i += 1
-            continue
+    def traverse_blocks(block_list):
+        nonlocal current_section
+        i = 0
+        while i < len(block_list):
+            b = block_list[i]
+            tag = b.tag.upper()
 
-        # Detect Section Heading / Instruction
-        if re.search(r'\[ins\]|\[H[1-6]\]', line, re.IGNORECASE) or re.match(r'^\s*\[P0\]\s*(?:[IVXLCDM]+\.?|[A-Z]\.|\d+\.)\s+[A-Z]', line):
-            clean_sec = re.sub(r'\[(?:ins|INS|P0|P1|P2|H[1-6])\]', '', line).replace('*', '').strip()
-            if len(clean_sec) > 3:
-                current_section = clean_sec
+            # Track section instruction / headings
+            if b.is_instruction or (b.spans and any(s.is_instruction for s in b.spans)) or tag.startswith("H"):
+                clean_sec = re.sub(r'\[(?:ins|INS|P0|P1|P2|H[1-6])\]', '', b.content).replace('*', '').strip()
+                if clean_sec:
+                    current_section = clean_sec
+            elif tag in ["P0", "P"] and re.match(r'^\s*(?:[IVXLCDM]+\.?|[A-Z]\.|\d+\.)\s+[A-Z]', b.content):
+                clean_sec = b.content.replace('*', '').strip()
+                if len(clean_sec) > 3:
+                    current_section = clean_sec
 
-        # Check if line contains [PIC]
-        if re.search(r'\[PIC(?::.*?)?\]', line, re.IGNORECASE):
-            clean_line = re.sub(r'\[(?:P0|P1|P2|TAB\d*|NUM)\]', '', line).strip()
+            # 1. NUM Container
+            if tag == "NUM":
+                if b.children:
+                    traverse_blocks(b.children)
+                i += 1
+                continue
 
-            # Check for subsequent option lines like [OPT] or [P1] A. ... B. ...
-            opt_context = ""
-            if i + 1 < len(lines):
-                next_line = lines[i + 1].strip()
-                if re.match(r'^\s*\[(?:OPT|P1|P2)\]', next_line, re.IGNORECASE) or re.match(r'^\s*\*?\*?[A-D][\.\)]', next_line):
-                    clean_opt = re.sub(r'\[(?:OPT|P1|P2)\]', '', next_line).replace('*', '').strip()
-                    opt_context = clean_opt
+            # 2. PIC_GRID
+            if tag == "PIC_GRID":
+                for idx_child, child in enumerate(b.children):
+                    q_text = child.content.strip() if child.content else f"Grid Item #{idx_child + 1}"
+                    pic_items.append({
+                        "pic_index": len(pic_items) + 1,
+                        "section": current_section,
+                        "text": q_text,
+                        "raw_line": child.content
+                    })
+                i += 1
+                continue
 
-            if '|' in clean_line:
-                parts = [p.strip() for p in clean_line.split('|')]
-                c1, c2 = parts[0], parts[1] if len(parts) > 1 else ""
+            # 3. TAB2 group or Side-by-Side Sign MCQ
+            if tag.startswith("TAB") and tag != "TABLE":
+                num_cols = len(b.cols) if b.cols else (3 if tag == "TAB3" else (4 if tag == "TAB4" else 2))
+                if num_cols == 2:
+                    tab2_group = []
+                    k = i
+                    while k < len(block_list) and block_list[k].tag.startswith("TAB") and block_list[k].tag != "TABLE" and (not block_list[k].cols or len(block_list[k].cols) == 2):
+                        tab2_group.append(block_list[k])
+                        k += 1
 
-                if re.search(r'\[PIC(?::.*?)?\]', c1, re.IGNORECASE):
-                    q_num_match = re.search(r'#?\s*(\d+)[\.\)]', c1)
-                    q_num = f"Câu #{q_num_match.group(1)}: " if q_num_match else ""
-                    q_body = c2.replace('<blank>', '___________').replace('[blank]', '___________').replace('#', '').strip()
-                    display_text = f"{q_num}{q_body}" if q_body else c1
+                    # Check if single TAB2 block + OPT is a Side-by-Side Sign MCQ
+                    if len(tab2_group) == 1:
+                        single_tab = tab2_group[0]
+                        c1_txt = single_tab.col1 or ""
+                        c2_txt = single_tab.col2 or ""
+                        has_pic = ("[PIC" in c1_txt.upper() or "[PIC" in c2_txt.upper() or parse_pic_tag(c1_txt) is not None or parse_pic_tag(c2_txt) is not None)
+                        if has_pic and k < len(block_list) and block_list[k].tag == "OPT":
+                            opt_block = block_list[k]
+                            pref, delim, q_num, c_body = extract_question_prefix_and_body(c1_txt)
+                            num_str = f"Câu #{q_num}: " if q_num is not None else ""
+                            q_text = f"{num_str}{c_body.replace('[PIC]', '').replace('#', '').strip()}" if c_body else c1_txt.replace('[PIC]', '').replace('#', '').strip()
+                            opt_text = " | ".join(opt_block.cols) if opt_block.cols else opt_block.content
+                            opt_clean = opt_text.replace('*', '').strip()
+                            display_text = f"{q_text}\n   -> {opt_clean}" if opt_clean else q_text
+                            pic_items.append({
+                                "pic_index": len(pic_items) + 1,
+                                "section": current_section,
+                                "text": display_text,
+                                "raw_line": f"{single_tab.col1} | {single_tab.col2}"
+                            })
+                            i = k + 1
+                            continue
+
+                    # Process each block in tab2_group
+                    for blk in tab2_group:
+                        c1_txt = blk.col1 or ""
+                        c2_txt = blk.col2 or ""
+                        has_pic_c1 = ("[PIC" in c1_txt.upper() or parse_pic_tag(c1_txt) is not None)
+                        has_pic_c2 = ("[PIC" in c2_txt.upper() or parse_pic_tag(c2_txt) is not None)
+
+                        if has_pic_c1 or has_pic_c2:
+                            if has_pic_c1:
+                                pref, delim, q_num, c1_body = extract_question_prefix_and_body(c1_txt)
+                                num_str = f"Câu #{q_num}: " if q_num is not None else ""
+                                c2_clean = c2_txt.replace('<blank>', '___________').replace('[blank]', '___________').replace('#', '').strip()
+                                display_text = f"{num_str}{c2_clean}" if c2_clean else c1_txt
+                            else:
+                                pref, delim, q_num, c1_body = extract_question_prefix_and_body(c1_txt)
+                                num_str = f"Câu #{q_num}: " if q_num is not None else ""
+                                display_text = f"{num_str}{c1_body.strip()}" if c1_body.strip() else c1_txt
+
+                            pic_items.append({
+                                "pic_index": len(pic_items) + 1,
+                                "section": current_section,
+                                "text": display_text,
+                                "raw_line": f"{c1_txt} | {c2_txt}"
+                            })
+
+                    i = k
+                    continue
                 else:
-                    display_text = c1.replace('#', '').strip()
-            else:
-                display_text = clean_line.replace('<blank>', '___________').replace('[blank]', '___________').replace('#', '').strip()
+                    # TAB3, TAB4
+                    for c in (b.cols or []):
+                        if "[PIC" in c.upper() or parse_pic_tag(c) is not None:
+                            pic_items.append({
+                                "pic_index": len(pic_items) + 1,
+                                "section": current_section,
+                                "text": c.replace('#', '').strip(),
+                                "raw_line": c
+                            })
+                    i += 1
+                    continue
 
-            if opt_context:
-                display_text += f"\n   -> {opt_context}"
+            # 4. Standalone PIC block
+            if tag == "PIC":
+                pic_items.append({
+                    "pic_index": len(pic_items) + 1,
+                    "section": current_section,
+                    "text": b.content.strip() if b.content else "Standalone Picture",
+                    "raw_line": b.content
+                })
+                i += 1
+                continue
 
-            pic_items.append({
-                "pic_index": len(pic_items) + 1,
-                "section": current_section,
-                "text": display_text,
-                "raw_line": line
-            })
+            # 5. P0, P1, P2 blocks
+            if tag in ["P0", "P1", "P2", "P"]:
+                trailing_pic_match = re.search(r'\s*(\[PIC(?::[^\]]+)?\])\s*$', b.content, re.IGNORECASE)
+                if trailing_pic_match:
+                    text_part = b.content[:trailing_pic_match.start()].strip()
+                    if i + 1 < len(block_list) and block_list[i + 1].tag == "OPT":
+                        opt_blk = block_list[i + 1]
+                        opt_text = " | ".join(opt_blk.cols) if opt_blk.cols else opt_blk.content
+                        display_text = f"{text_part}\n   -> {opt_text.strip()}"
+                        pic_items.append({
+                            "pic_index": len(pic_items) + 1,
+                            "section": current_section,
+                            "text": display_text,
+                            "raw_line": b.content
+                        })
+                        i += 2
+                        continue
+                    else:
+                        pic_items.append({
+                            "pic_index": len(pic_items) + 1,
+                            "section": current_section,
+                            "text": text_part if text_part else b.content,
+                            "raw_line": b.content
+                        })
+                        i += 1
+                        continue
 
-        i += 1
+                if b.spans:
+                    for s in b.spans:
+                        if s.text.startswith("[PIC:") or s.text.strip().upper() == "[PIC]":
+                            pic_items.append({
+                                "pic_index": len(pic_items) + 1,
+                                "section": current_section,
+                                "text": b.content.replace('#', '').strip(),
+                                "raw_line": b.content
+                            })
 
+            # 6. TABLE
+            if tag == "TABLE" and b.table_data:
+                for row in b.table_data.rows:
+                    for cell in row.cells:
+                        if "[PIC" in cell.content.upper() or parse_pic_tag(cell.content) is not None:
+                            pic_items.append({
+                                "pic_index": len(pic_items) + 1,
+                                "section": current_section,
+                                "text": cell.content.replace('#', '').strip(),
+                                "raw_line": cell.content
+                            })
+
+            i += 1
+
+    traverse_blocks(blocks)
     return pic_items
 
 

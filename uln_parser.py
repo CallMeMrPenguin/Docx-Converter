@@ -318,7 +318,7 @@ class ULNParser:
                     num_lines.append(line)
                 continue
 
-            # Handle multi-line [OPT] ... [/OPT]
+            # Handle multi-line or single-line [OPT] ... [/OPT]
             if trimmed.upper() == "[OPT]" or trimmed.upper().startswith("[OPT] ") or trimmed.upper().startswith("[OPT:"):
                 if trimmed.upper() == "[OPT]":
                     in_opt = True
@@ -326,15 +326,15 @@ class ULNParser:
                     continue
                 else:
                     rest = trimmed[5:].lstrip(": ").strip()
-                    if rest.upper().endswith("[/OPT]"):
-                        opt_content = rest[:-6].strip()
+                    if "[/OPT]" in rest.upper():
+                        opt_content = re.sub(r'\[\/OPT\]', '', rest, flags=re.IGNORECASE).strip()
                         blocks.append(ULNBlock(tag="OPT", content=opt_content, spans=parse_inline_spans(opt_content)))
                         continue
                     else:
-                        in_opt = True
-                        opt_lines = [rest]
+                        # Self-contained single-line [OPT] (e.g. [OPT] A. ... | B. ...)
+                        blocks.append(ULNBlock(tag="OPT", content=rest, spans=parse_inline_spans(rest)))
                         continue
-            
+
             if in_opt:
                 if trimmed.upper() == "[/OPT]":
                     in_opt = False
