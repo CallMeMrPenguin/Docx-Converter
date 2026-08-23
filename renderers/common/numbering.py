@@ -36,56 +36,42 @@ class NumberingMixin:
 
     def apply_native_numbered_list(self, word, sel, q_num: Optional[str] = None, number_format: Optional[str] = None):
         """
-        Applies native MS Word Auto-Numbering (ListTemplate):
-        - True Word Auto-Numbering field (<w:numPr>)
+        Formats question number directly with bold font, custom color, and trailing space:
         - Numbers are ALWAYS BOLD and styled with self.question_color
-        - Separated by a single space (wdTrailingSpace = 1), flush at left margin (0.0 cm)
-        - Starts new list on exercise restart and continues sequentially across questions.
+        - Separated by a single space, flush at left margin (0.0 cm)
+        - Sequential tracking ensures continuous 1, 2, 3, 4, 5 without drops or mid-exercise resets
         """
-        restart = getattr(self, "is_first_question_in_num_block", False) or (q_num == "1") or not hasattr(self, "_exercise_list_template") or (self._exercise_list_template is None)
-        self.is_first_question_in_num_block = False
+        try:
+            sel.Range.ListFormat.RemoveNumbers()
+        except Exception:
+            pass
+
+        # Determine effective number
+        if q_num is not None and str(q_num).strip().isdigit():
+            num_val = int(str(q_num).strip())
+            self.current_exercise_q_num = num_val + 1
+        else:
+            num_val = getattr(self, "current_exercise_q_num", 1)
+            self.current_exercise_q_num = num_val + 1
+
         target_fmt = number_format if number_format else "%1."
+        num_str = target_fmt.replace("%1", str(num_val)) if "%1" in target_fmt else f"{num_val}."
+        if not num_str.endswith(" "):
+            num_str += " "
+
         q_color_int = parse_color_to_rgb_int(getattr(self, "question_color", None))
 
-        try:
-            doc = sel.Document
-            if restart or (getattr(self, "_exercise_list_template_fmt", None) != target_fmt):
-                list_tpl = doc.ListTemplates.Add(OutlineNumbered=False)
-                lvl = list_tpl.ListLevels(1)
-                lvl.TrailingCharacter = 1  # wdTrailingSpace = 1 (single space, no tab)
-                lvl.Font.Bold = 1          # Bold number
-                lvl.Font.Name = getattr(self, "font_name", "Times New Roman")
-                lvl.Font.Size = getattr(self, "font_size", 12.0)
-                lvl.Font.Color = q_color_int if q_color_int is not None else 0
-                lvl.NumberFormat = target_fmt
-                lvl.NumberPosition = 0
-                lvl.TextPosition = 0
-                self._exercise_list_template = list_tpl
-                self._exercise_list_template_fmt = target_fmt
-                sel.Range.ListFormat.ApplyListTemplate(list_tpl, ContinuePreviousList=False)
-            else:
-                sel.Range.ListFormat.ApplyListTemplate(self._exercise_list_template, ContinuePreviousList=True)
-
-            sel.ParagraphFormat.LeftIndent = 0
-            sel.ParagraphFormat.FirstLineIndent = 0
-            sel.Font.Bold = 0
-            sel.Font.Color = 0  # Black body text
-
-        except Exception as e:
-            target_fmt = number_format if number_format else "%1."
-            num_val = q_num if (q_num and str(q_num).isdigit()) else "1"
-            num_str = target_fmt.replace("%1", str(num_val)) if "%1" in target_fmt else f"{num_val}."
-            if not num_str.endswith(" "):
-                num_str += " "
-            sel.ParagraphFormat.LeftIndent = 0
-            sel.ParagraphFormat.FirstLineIndent = 0
-            sel.Font.Name = getattr(self, "font_name", "Times New Roman")
-            sel.Font.Size = getattr(self, "font_size", 12.0)
-            sel.Font.Bold = 1
-            sel.Font.Color = q_color_int if q_color_int is not None else 0
-            sel.TypeText(num_str)
-            sel.Font.Bold = 0
-            sel.Font.Color = 0
+        sel.ParagraphFormat.LeftIndent = 0
+        sel.ParagraphFormat.FirstLineIndent = 0
+        sel.Font.Name = getattr(self, "font_name", "Times New Roman")
+        sel.Font.Size = getattr(self, "font_size", 12.0)
+        sel.Font.Bold = 1
+        sel.Font.Italic = 0
+        sel.Font.Underline = 0
+        sel.Font.Color = q_color_int if q_color_int is not None else 0
+        sel.TypeText(num_str)
+        sel.Font.Bold = 0
+        sel.Font.Color = 0  # Black body text
 
     def clean_num_placeholders(self, b: ULNBlock):
         r"""Recursively cleans #(\d+) placeholders from content, columns, spans, tables, and child blocks."""
