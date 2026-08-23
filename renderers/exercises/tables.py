@@ -72,16 +72,21 @@ class TableRendererMixin:
                 is_opt_line = bool(re.match(r'^\s*\*?\*?[A-Da-d][\.\)]', txt_line)) or (idx_r >= 1 and len(text_rows) >= 3)
                 left_ind_cm = 0.5 if is_opt_line else 0.0
 
-                q_match = re.match(r'^\s*(?:#?(\d+)[\.\)]|Question\s+#?(\d+)[\.\)]?|Câu\s+#?(\d+)[\.\)]?)\s*(.*)$', txt_line, re.IGNORECASE) if idx_r == 0 else None
+                from renderer_utils import extract_question_prefix_and_body
+                pref_c, delim_c, q_num_c, clean_txt = extract_question_prefix_and_body(txt_line) if idx_r == 0 else (None, None, None, txt_line)
 
-                if q_match and q_match.group(4).strip():
+                if q_num_c is not None and clean_txt.strip():
                     try:
-                        sel.Range.ListFormat.ApplyNumberDefault()
+                        num_fmt = self.get_effective_number_format(pref_c, delim_c) if hasattr(self, "get_effective_number_format") else "%1."
+                        if hasattr(self, "apply_native_numbered_list"):
+                            self.apply_native_numbered_list(doc.Application, sel, q_num=q_num_c, number_format=num_fmt)
+                        else:
+                            sel.Range.ListFormat.ApplyNumberDefault()
                         sel.ParagraphFormat.LeftIndent = 0
                         sel.ParagraphFormat.FirstLineIndent = 0
                     except Exception:
                         pass
-                    txt_line = q_match.group(4).strip()
+                    txt_line = clean_txt.strip()
                 else:
                     try:
                         sel.Range.ListFormat.RemoveNumbers()

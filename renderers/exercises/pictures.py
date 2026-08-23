@@ -154,11 +154,12 @@ class PicturesRendererMixin:
                 col_w_pt = cm_to_pt(slot_w_cm)
                 img_w_pt = min(col_w_pt - 10.0, cm_to_pt(3.6))
 
+                from renderer_utils import extract_question_prefix_and_body
                 clean_content = re.sub(r'\[PIC(?::[^\]]*)?\]', '', child.content, flags=re.IGNORECASE).strip()
-                m_num = re.match(r'^(?:#?(\d+)[\.\)]\s*)?(.*)$', clean_content)
-                if m_num:
-                    num_part = m_num.group(1) or str(global_idx + 1)
-                    body_part = m_num.group(2).strip()
+                _pref, _delim, q_num_ext, body_ext = extract_question_prefix_and_body(clean_content)
+                if q_num_ext is not None:
+                    num_part = q_num_ext
+                    body_part = body_ext.strip()
                     if not body_part or "<blank>" in body_part.lower() or "[blank]" in body_part.lower() or "_" in body_part:
                         prefix_w_pt = len(f"{num_part}. ") * (font_size * 0.48)
                         char_under_w_pt = max(4.0, font_size * 0.44)

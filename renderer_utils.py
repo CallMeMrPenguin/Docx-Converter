@@ -119,67 +119,111 @@ def parse_color_to_rgb_int(color_str: str) -> Optional[int]:
 
 def extract_question_prefix_and_body(text: str) -> Tuple[Optional[str], Optional[str], Optional[str], str]:
     """
-    Extracts (full_prefix, delim_char, q_num, body_text) when formatted with '#' placeholder, standard numbers, or parentheses:
-    - #1. -> ('', '.', '1', 'Mike...') -> Word list: '1.'
-    - 1. -> ('', '.', '1', 'Mike...') -> Word list: '1.'
-    - (1) -> ('(', ')', '1', 'Mike...') -> Word list: '(1)'
-    - (#1) -> ('(', ')', '1', 'Mike...') -> Word list: '(1)'
-    - (1.) -> ('(', '.)', '1', 'Mike...') -> Word list: '(1.)'
-    - Question #1. -> ('Question ', '.', '1', 'What...') -> Word list: 'Question 1.'
-    - Question (1): -> ('Question (', '):', '1', 'What...') -> Word list: 'Question (1):'
-    - Câu #1: -> ('Câu ', ':', '1', '...') -> Word list: 'Câu 1:'
-    - Câu (1): -> ('Câu (', '):', '1', '...') -> Word list: 'Câu (1):'
-    - Task #1. -> ('Task ', '.', '1', '...') -> Word list: 'Task 1.'
+    Universally extracts (full_prefix, delim_char, q_num, body_text) from any question text.
+    Handles:
+    - Leading markdown/ULN/HTML tags: [ins], [b], [i], [u], [hl], [ans], [q], [opt], [box], <b>, <strong>, <em>, **, *, _, etc.
+    - Explicit '#' with optional space: #1., # 1., #1:, #1), #1/, #1-, #1 [PIC], (#1), [#1], (#1.), (#1:)
+    - Word prefixes: Question #1., Câu #1:, Task #1., Activity #1., Ex #1., Exercise #1., Bài #1:, etc.
+    - Standard numbering: 1., 1), 1:, 1/, 1 -, (1), [1]
+    - Clean body extraction with balanced formatting tags.
     Returns (full_prefix, delim_char, q_num, body_text) if matched, else (None, None, None, original_text).
     """
-    if not text:
+    if not text or not text.strip():
         return None, None, None, text
 
-    # Case 1: Number wrapped in parentheses e.g. '(1)', '(#1)', '(1.)', '(#1.)', 'Question (1):', 'Câu (#1):'
-    pattern_paren = r'^\s*(?:\*\*)?((?:Question|Câu|Task|Activity|Ex|Exercise)\s+)?\(\s*#?(\d+)([\.\:\-])?\s*\)([\.\:\-])?\s*(?:\*\*)?\s*(.*)$'
-    m_paren = re.match(pattern_paren, text, re.IGNORECASE)
-    if m_paren:
-        prefix_word = m_paren.group(1).strip() if m_paren.group(1) else ''
-        q_num = m_paren.group(2)
-        inner_delim = m_paren.group(3) if m_paren.group(3) else ''
-        outer_delim = m_paren.group(4) if m_paren.group(4) else ''
-        body = m_paren.group(5).strip()
-        body = re.sub(r'^(?:\*\*|[:\.\-\)])\s*', '', body).strip()
+    s = text.strip()
 
+    pattern = re.compile(
+        r'^\s*'
+        r'((?:\[(?:ins|b|i|u|hl|ans|q|opt|box|p0|p1|p2|gap)\]|<(?:b|i|u|strong|em|span)[^>]*>|\*\*|\*|_|\{u\})*)'
+        r'((?:Question|Câu|Task|Activity|Ex|Exercise|Part|Section|Item|Sentence|Dialogue|Problem|Bài)\s+)?'
+        r'(?:(\(|\[)\s*)?'
+        r'#?\s*(\d+)'
+        r'([\.\:\)\/\-]|(?:\.\)|\:\)|\.\/|\:\-))?'
+        r'(?:\s*(\)|\]))?'
+        r'([\.\:\)\/\-])?'
+        r'((?:\[\/(?:ins|b|i|u|hl|ans|q|opt|box|p0|p1|p2|gap)\]|<\/(?:b|i|u|strong|em|span)>|\*\*|\*|_|\{\/u\})*)'
+        r'[\s\:\.\-]*'
+        r'(.*)$',
+        re.IGNORECASE | re.DOTALL
+    )
+
+    m = pattern.match(s)
+    if not m:
+        return None, None, None, text
+
+    lead_tags = m.group(1) or ''
+    prefix_word = m.group(2).strip() if m.group(2) else ''
+    open_paren = m.group(3) or ''
+    q_num = m.group(4)
+    inner_delim = m.group(5) or ''
+    close_paren = m.group(6) or ''
+    outer_delim = m.group(7) or ''
+    trail_tags = m.group(8) or ''
+    raw_body = m.group(9).strip()
+
+    # Safety check: If no explicit '#' was in the original text prefix, ensure it has either
+    # a prefix word (Question, Câu, etc.), or parentheses ((1)), or a standard delimiter (., :, ), /, -)
+    has_hash = ('#' in text[:m.start(9) if raw_body else len(text)])
+    has_prefix_word = bool(prefix_word)
+    has_paren = bool(open_paren and close_paren)
+    has_delim = bool(inner_delim or outer_delim)
+
+    if not (has_hash or has_prefix_word or has_paren or has_delim):
+        return None, None, None, text
+
+    # Balance/clean body text with formatting tags
+    body = raw_body
+    if body:
+        # Check if trailing markdown tags exist in body that match lead_tags
+        if '**' in lead_tags and re.search(r'\*\*(?:\[\/(?:ins|b|i|u|hl)\])*$', body) and not re.match(r'^(?:\[(?:ins|b|i|u|hl)\])*\*\*', body):
+            m_lead = re.match(r'^(?:\[(?:ins|b|i|u|hl)\])+', body, re.IGNORECASE)
+            if m_lead:
+                body = body[:m_lead.end()] + '**' + body[m_lead.end():]
+            else:
+                body = '**' + body
+
+        if '*' in lead_tags and not ('**' in lead_tags) and re.search(r'\*(?:\[\/(?:ins|b|i|u|hl)\])*$', body) and not re.match(r'^(?:\[(?:ins|b|i|u|hl)\])*\*', body):
+            m_lead = re.match(r'^(?:\[(?:ins|b|i|u|hl)\])+', body, re.IGNORECASE)
+            if m_lead:
+                body = body[:m_lead.end()] + '*' + body[m_lead.end():]
+            else:
+                body = '*' + body
+
+        for tag in ['ins', 'b', 'i', 'u', 'hl']:
+            open_t = f'[{tag}]'
+            close_t = f'[/{tag}]'
+            if open_t in lead_tags.lower() and close_t in body.lower() and not body.lower().startswith(open_t):
+                body = open_t + body
+
+        # Clean orphan leading punctuation
+        body = re.sub(r'^(?:[:\.\-\)])\s*', '', body).strip()
+
+    if open_paren == '(' and close_paren == ')':
         full_prefix = f'{prefix_word} (' if prefix_word else '('
-        delim_char = f'{inner_delim}){outer_delim}' if outer_delim else f'{inner_delim})'
+        delim_char = f'{inner_delim}){outer_delim}' if outer_delim else (f'{inner_delim})' if inner_delim else ')')
         return full_prefix, delim_char, q_num, body
-
-    # Case 2: Explicit '#' placeholder (e.g. #1., Question #1:, Câu #1.)
-    if '#' in text:
-        pattern = r'^\s*(?:\*\*)?([A-Za-zÀ-ỹ\s]+?)?#(\d+)([\.\)\:\-]|\s*:\s*|\s*\.\s*)?\s*(?:\*\*)?[:\.\)]?\s*(.*)$'
-        m = re.match(pattern, text, re.IGNORECASE)
-        if m:
-            prefix_word = m.group(1).strip() if m.group(1) else ""
-            q_num = m.group(2)
-            delimiter = m.group(3).strip() if m.group(3) else "."
-            body = m.group(4).strip()
-            body = re.sub(r'^(?:\*\*|[:\.\-\)])\s*', '', body).strip()
-
-            full_prefix = f"{prefix_word} " if prefix_word else ""
-            delim_char = ":" if ":" in delimiter else ("." if "." in delimiter else (delimiter if delimiter else "."))
-            return full_prefix, delim_char, q_num, body
-
-    # Case 3: Standard question number prefix with delimiter (e.g. '1.', '2)', 'Question 1:', 'Câu 1:')
-    pattern2 = r'^\s*(?:\*\*)?((?:Question|Câu|Task|Activity|Ex|Exercise)\s+)?(\d+)([\.\)\:\-])\s*(?:\*\*)?[:\.\)]?\s*(.*)$'
-    m2 = re.match(pattern2, text, re.IGNORECASE)
-    if m2:
-        prefix_word = m2.group(1).strip() if m2.group(1) else ""
-        q_num = m2.group(2)
-        delimiter = m2.group(3).strip() if m2.group(3) else "."
-        body = m2.group(4).strip()
-        body = re.sub(r'^(?:\*\*|[:\.\-\)])\s*', '', body).strip()
-
-        full_prefix = f"{prefix_word} " if prefix_word else ""
-        delim_char = ":" if ":" in delimiter else ("." if "." in delimiter else (delimiter if delimiter else "."))
+    elif open_paren == '[' and close_paren == ']':
+        full_prefix = f'{prefix_word} [' if prefix_word else '['
+        delim_char = f'{inner_delim}]{outer_delim}' if outer_delim else (f'{inner_delim}]' if inner_delim else ']')
         return full_prefix, delim_char, q_num, body
+    else:
+        raw_delim = outer_delim or inner_delim
+        if ':' in raw_delim:
+            delim_char = ':'
+        elif '.' in raw_delim:
+            delim_char = '.'
+        elif ')' in raw_delim:
+            delim_char = ')'
+        elif '/' in raw_delim:
+            delim_char = '/'
+        elif '-' in raw_delim:
+            delim_char = '-'
+        else:
+            delim_char = '.'
 
-    return None, None, None, text
+        full_prefix = f'{prefix_word} ' if prefix_word else ''
+        return full_prefix, delim_char, q_num, body
 
 def split_line_into_option_items(line_text: str) -> List[str]:
     """

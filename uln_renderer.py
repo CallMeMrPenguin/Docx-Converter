@@ -471,10 +471,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                     pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
 
                     if has_next_opt:
-                        if not c_body.strip():
-                            tab_fake = ULNBlock(tag="TAB2", col1=pic_str, col2=text_part)
-                        else:
-                            tab_fake = ULNBlock(tag="TAB2", col1=text_part, col2=pic_str)
+                        tab_fake = ULNBlock(tag="TAB2", col1=text_part, col2=pic_str)
                         self.render_side_by_side_pic_mcq(sel, doc, word, tab_fake, blocks[idx_block + 1], printable_width_cm)
                         idx_block += 2
                         continue
@@ -761,11 +758,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                     pic_str = trailing_pic_match.group(1).strip()
 
                     if has_next_opt:
-                        pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
-                        if not c_body.strip():
-                            tab_fake = ULNBlock(tag="TAB2", col1=pic_str, col2=text_part)
-                        else:
-                            tab_fake = ULNBlock(tag="TAB2", col1=text_part, col2=pic_str)
+                        tab_fake = ULNBlock(tag="TAB2", col1=text_part, col2=pic_str)
                         self.render_side_by_side_pic_mcq(sel, doc, word, tab_fake, blocks[idx_block + 1], printable_width_cm)
                         idx_block += 2
                         continue
