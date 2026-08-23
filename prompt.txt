@@ -116,14 +116,17 @@ All headings automatically have `KeepWithNext = True` in MS Word so they never g
     [/TABLE]
 
 - [BOX] ... [/BOX] : Framing container for Grammar Formulas, Rule Callouts, Notes, or FRAMED Word Banks.
-  - Use [BOX] ONLY when the original source image explicitly shows a visible border / box around the content!
+  - STRICT PROHIBITION FOR READING PASSAGES: NEVER use [BOX] for reading passages, short/long reading texts, stories, articles, or comprehension passages, even if the source document displays them with a frame or box around them! All reading passages MUST be tagged as [QUOTE] ... [/QUOTE].
+  - Use [BOX] ONLY for Grammar Formulas, Rule Callouts, Notes, or Framed Word Banks.
   - For Grammar Formulas & Rules: Put the full formula / rule sentence directly inside without pipes. It will be rendered as a centered, continuous single-line (or multi-line) rounded framed box.
     - Example: `[BOX] Từ phủ định / Cụm từ phủ định + Trợ động từ / To be / Modal Verb + S + V (nguyên thể) [/BOX]`
     - Example: `[BOX] S + have/has + V3/ed + ... [/BOX]`
   - For Framed Word Banks: Separate vocabulary items using pipes `|`. The compiler will auto-calculate columns into a balanced framed word bank.
     - Example: `[BOX] photosynthesis | chlorophyll | sunlight [/BOX]`
 
-- [QUOTE] ... [/QUOTE] : Indented, JUSTIFIED text block for reading passages, stories, or dialogs (first line indent: 0.75 cm, justified, no empty line gaps between paragraphs).
+- [QUOTE] ... [/QUOTE] : Indented, JUSTIFIED text block for ALL reading passages, short/long comprehension texts, stories, articles, or dialogues.
+  - MANDATORY RULE FOR ALL READING PASSAGES: Any reading passage, article, story, comprehension text, or long/short passage MUST ALWAYS be wrapped in `[QUOTE] ... [/QUOTE]`. NEVER put reading passages inside a `[BOX]`, even if the original source document puts a border/box around it.
+  - Formatting in Word: First line indent: 0.75 cm, Justified text alignment, no empty line gaps between paragraphs.
 
 - [PIC_GRID] ... [/PIC_GRID] : 4-column picture grid container (4 pictures per row).
   - Inside `[PIC_GRID]`, separate items using pipes `|`.
@@ -333,6 +336,25 @@ I. PICTURE VOCABULARY & WORD COMPLETION GRIDS (2-COLUMN PICTURE EXERCISES):
      [TR] ______ | ______
      [TR] ______ | ______
      [/TABLE]
+
+J. READING PASSAGES, STORIES & COMPREHENSION TEXTS (STRICT QUOTE MANDATE):
+   - ABSOLUTE PROHIBITION ON BOXING READING TEXTS: Any reading text, short passage, long article, email, blog post, story, or reading comprehension passage MUST NEVER be placed into a [BOX], regardless of whether the provided source image or document encloses it in a box or border!
+   - MANDATORY TAG: ALL reading passages MUST be classified and wrapped using `[QUOTE] ... [/QUOTE]`.
+   - Paragraphs within a reading passage should be written as natural paragraphs inside `[QUOTE] ... [/QUOTE]`.
+   - Example:
+     [P0] [ins]**VIII. Read the passage and choose the best answer.**
+     [QUOTE]
+     Hobbies play an important role in our lives. They help us relax after long hours of stressful work and study. Among various hobbies, reading books is considered one of the most beneficial activities.
+
+     When you read a book, you not only expand your knowledge about different cultures and historical events, but also improve your vocabulary and concentration. Moreover, reading helps develop critical thinking and problem-solving skills.
+     [/QUOTE]
+
+     [NUM]
+     [P0] #1. What is the main benefit of having a hobby according to the text?
+     [OPT] It helps people relax. | It makes people rich. | It wastes time. | It is difficult. [/OPT]
+     [P0] #2. How does reading books help readers?
+     [OPT] By expanding knowledge. | By making people sleepy. | By reducing memory. | By creating stress. [/OPT]
+     [/NUM]
 
 ---
 
