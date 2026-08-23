@@ -128,7 +128,7 @@ class ULNWordRenderer(RendererBlocksMixin):
             raise KeyboardInterrupt("Tác vụ tạo DOCX đã bị người dùng hủy bằng phím ESC.")
 
     def configure_document(self, doc):
-        """Applies page setup margins and optional page numbering."""
+        """Applies page setup margins."""
         self.check_cancellation()
         ps = doc.PageSetup
         ps.PageWidth = cm_to_pt(21.0)
@@ -138,7 +138,13 @@ class ULNWordRenderer(RendererBlocksMixin):
         ps.LeftMargin = cm_to_pt(self.margin_left)
         ps.RightMargin = cm_to_pt(self.margin_right)
 
-        if self.enable_page_numbers:
+    def apply_page_numbers(self, doc):
+        """Applies footer page numbering AFTER all content has finished rendering to avoid rendering lag."""
+        if not self.enable_page_numbers:
+            return
+
+        try:
+            self.check_cancellation()
             for section in doc.Sections:
                 footer = section.Footers(1)  # wdHeaderFooterPrimary = 1
                 footer.Range.Font.Name = self.font_name
@@ -160,6 +166,13 @@ class ULNWordRenderer(RendererBlocksMixin):
                     footer.Range.ParagraphFormat.Alignment = 1
                 except Exception:
                     pass
+
+            try:
+                doc.Fields.Update()
+            except Exception:
+                pass
+        except Exception as e:
+            print(f"[ULNRenderer] Warning applying page numbers: {e}")
 
     def write_inline_spans(self, sel, spans: List[InlineSpan], default_bold: bool = False, default_italic: bool = False, default_uppercase: bool = False, custom_font_size: Optional[float] = None, force_color: Optional[int] = None):
         """Writes formatted text runs strictly according to span AST properties with cached COM attributes for 10x speed."""
@@ -268,9 +281,10 @@ class ULNWordRenderer(RendererBlocksMixin):
                     break
         return False
 
-    def render(self, blocks: List[ULNBlock], doc, word):
+    def render(self, blocks: List[ULNBlock], doc, word, is_root: bool = True):
         """Renders parsed ULNBlocks into the active document purely driven by structural AST tags."""
-        self.configure_document(doc)
+        if is_root:
+            self.configure_document(doc)
         sel = word.Selection
 
         printable_width_cm = 21.0 - self.margin_left - self.margin_right
@@ -899,3 +913,6 @@ class ULNWordRenderer(RendererBlocksMixin):
 
             self.last_rendered_tag = tag
             idx_block += 1
+
+        if is_root:
+            self.apply_page_numbers(doc)

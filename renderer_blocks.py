@@ -209,7 +209,7 @@ class RendererBlocksMixin:
             self.current_group_max_item_len = g_len
 
         try:
-            self.render(block.children, doc, word)
+            self.render(block.children, doc, word, is_root=False)
         finally:
             self.current_group_opt_cols, self.current_group_max_item_len = old_cols, old_len
 
