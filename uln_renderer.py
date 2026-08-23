@@ -468,9 +468,18 @@ class ULNWordRenderer(RendererBlocksMixin):
                 elif trailing_pic_match:
                     text_part = block.content[:trailing_pic_match.start()].strip()
                     pic_str = trailing_pic_match.group(1).strip()
-                    pic_info = parse_pic_tag(pic_str) or PicInfo(description="Sign / Picture", pos="center", size="small")
-
                     pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
+
+                    if has_next_opt:
+                        if not c_body.strip():
+                            tab_fake = ULNBlock(tag="TAB2", col1=pic_str, col2=text_part)
+                        else:
+                            tab_fake = ULNBlock(tag="TAB2", col1=text_part, col2=pic_str)
+                        self.render_side_by_side_pic_mcq(sel, doc, word, tab_fake, blocks[idx_block + 1], printable_width_cm)
+                        idx_block += 2
+                        continue
+
+                    pic_info = parse_pic_tag(pic_str) or PicInfo(description="Sign / Picture", pos="center", size="small")
 
                     if q_num is not None and not c_body.strip():
                         # Question is purely a number and picture: e.g. #1. [PIC]
@@ -755,6 +764,17 @@ class ULNWordRenderer(RendererBlocksMixin):
                 elif trailing_pic_match:
                     text_part = content_to_render[:trailing_pic_match.start()].strip()
                     pic_str = trailing_pic_match.group(1).strip()
+
+                    if has_next_opt:
+                        pref, delim, q_num, c_body = extract_question_prefix_and_body(text_part)
+                        if not c_body.strip():
+                            tab_fake = ULNBlock(tag="TAB2", col1=pic_str, col2=text_part)
+                        else:
+                            tab_fake = ULNBlock(tag="TAB2", col1=text_part, col2=pic_str)
+                        self.render_side_by_side_pic_mcq(sel, doc, word, tab_fake, blocks[idx_block + 1], printable_width_cm)
+                        idx_block += 2
+                        continue
+
                     pic_info = parse_pic_tag(pic_str) or PicInfo(description="Activity Picture", pos="right", size="small")
                     pic_w_cm = 2.0
                     pic_h_cm = 1.4

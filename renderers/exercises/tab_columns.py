@@ -208,47 +208,87 @@ class TabColumnsRendererMixin:
             anchor_q = sel.Range.Duplicate
             self._insert_sign_picture_shape(doc, anchor_q, pic_info, 0, pic_w_pt, pic_h_pt)
 
-            sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt
-            sel.ParagraphFormat.RightIndent = 0
-            sel.ParagraphFormat.FirstLineIndent = 0
-            sel.ParagraphFormat.SpaceBefore = 6
-            sel.ParagraphFormat.SpaceAfter = 3
-            sel.ParagraphFormat.KeepWithNext = True
-
-            if num_prefix_str:
-                sel.Font.Name = font_name
-                sel.Font.Size = font_size
-                sel.Font.Bold = 1
-                sel.Font.Italic = 0
-                sel.Font.Underline = 0
-                sel.Font.Color = q_color_int if q_color_int is not None else 0
-                sel.TypeText(num_prefix_str)
-                sel.Font.Bold = 0
-                sel.Font.Color = 0
-
-            self.write_inline_spans(sel, parse_inline_spans(q_display_body))
-            sel.TypeParagraph()
-
-            for let, body in normalized_opts:
-                sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt + cm_to_pt(0.50)
+            if q_display_body:
+                sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt
                 sel.ParagraphFormat.RightIndent = 0
                 sel.ParagraphFormat.FirstLineIndent = 0
-                sel.ParagraphFormat.SpaceBefore = 2
-                sel.ParagraphFormat.SpaceAfter = 2
+                sel.ParagraphFormat.SpaceBefore = 6
+                sel.ParagraphFormat.SpaceAfter = 3
                 sel.ParagraphFormat.KeepWithNext = True
 
-                sel.Font.Name = font_name
-                sel.Font.Size = font_size
-                sel.Font.Bold = 1
-                sel.Font.Italic = 0
-                sel.Font.Underline = 0
-                sel.Font.Color = opt_color_int if opt_color_int is not None else 0
-                sel.TypeText(f"{let}. ")
-                sel.Font.Bold = 0
-                sel.Font.Color = 0
+                if num_prefix_str:
+                    sel.Font.Name = font_name
+                    sel.Font.Size = font_size
+                    sel.Font.Bold = 1
+                    sel.Font.Italic = 0
+                    sel.Font.Underline = 0
+                    sel.Font.Color = q_color_int if q_color_int is not None else 0
+                    sel.TypeText(num_prefix_str)
+                    sel.Font.Bold = 0
+                    sel.Font.Color = 0
 
-                self.write_inline_spans(sel, parse_inline_spans(body))
+                self.write_inline_spans(sel, parse_inline_spans(q_display_body))
                 sel.TypeParagraph()
+
+                for let, body in normalized_opts:
+                    sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt + cm_to_pt(0.50)
+                    sel.ParagraphFormat.RightIndent = 0
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.SpaceBefore = 2
+                    sel.ParagraphFormat.SpaceAfter = 2
+                    sel.ParagraphFormat.KeepWithNext = True
+
+                    sel.Font.Name = font_name
+                    sel.Font.Size = font_size
+                    sel.Font.Bold = 1
+                    sel.Font.Italic = 0
+                    sel.Font.Underline = 0
+                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
+                    sel.TypeText(f"{let}. ")
+                    sel.Font.Bold = 0
+                    sel.Font.Color = 0
+
+                    self.write_inline_spans(sel, parse_inline_spans(body))
+                    sel.TypeParagraph()
+            else:
+                # No question body text: merge question number with option A on line 1
+                num_indent_pt = self.measure_text_width_pt(doc, num_prefix_str, font_name, font_size, is_bold=True) if num_prefix_str else 0.0
+
+                for idx_opt, (let, body) in enumerate(normalized_opts):
+                    if idx_opt == 0:
+                        sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt
+                    else:
+                        sel.ParagraphFormat.LeftIndent = pic_w_pt + min_gap_pt + num_indent_pt
+
+                    sel.ParagraphFormat.RightIndent = 0
+                    sel.ParagraphFormat.FirstLineIndent = 0
+                    sel.ParagraphFormat.SpaceBefore = 6 if idx_opt == 0 else 2
+                    sel.ParagraphFormat.SpaceAfter = 2
+                    sel.ParagraphFormat.KeepWithNext = True
+
+                    if idx_opt == 0 and num_prefix_str:
+                        sel.Font.Name = font_name
+                        sel.Font.Size = font_size
+                        sel.Font.Bold = 1
+                        sel.Font.Italic = 0
+                        sel.Font.Underline = 0
+                        sel.Font.Color = q_color_int if q_color_int is not None else 0
+                        sel.TypeText(num_prefix_str)
+                        sel.Font.Bold = 0
+                        sel.Font.Color = 0
+
+                    sel.Font.Name = font_name
+                    sel.Font.Size = font_size
+                    sel.Font.Bold = 1
+                    sel.Font.Italic = 0
+                    sel.Font.Underline = 0
+                    sel.Font.Color = opt_color_int if opt_color_int is not None else 0
+                    sel.TypeText(f"{let}. ")
+                    sel.Font.Bold = 0
+                    sel.Font.Color = 0
+
+                    self.write_inline_spans(sel, parse_inline_spans(body))
+                    sel.TypeParagraph()
 
         sel.ParagraphFormat.LeftIndent = 0
         sel.ParagraphFormat.RightIndent = 0
