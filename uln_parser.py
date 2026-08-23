@@ -266,11 +266,18 @@ class ULNParser:
                             row_content = tline_trim[4:].strip()
                         elif tline_trim.upper().startswith("[TR]"):
                             row_content = tline_trim[4:].strip()
+                        elif tline_trim.upper().startswith("[TD]"):
+                            row_content = tline_trim[4:].strip()
+
+                        # Strip trailing row closing tags if present
+                        row_content = re.sub(r'\[\/(?:TH|TR|TD)\]\s*$', '', row_content, flags=re.IGNORECASE).strip()
 
                         cell_texts = row_content.split('|')
                         cells: List[ULNTableCell] = []
                         for ctxt in cell_texts:
                             c_clean = ctxt.strip()
+                            c_clean = re.sub(r'^\s*\[(?:TH|TR|TD)\]\s*', '', c_clean, flags=re.IGNORECASE)
+                            c_clean = re.sub(r'\s*\[\/(?:TH|TR|TD)\]\s*$', '', c_clean, flags=re.IGNORECASE).strip()
                             c_spans = parse_inline_spans(c_clean, default_bold=is_hdr)
                             cells.append(ULNTableCell(content=c_clean, is_header=is_hdr, spans=c_spans))
 

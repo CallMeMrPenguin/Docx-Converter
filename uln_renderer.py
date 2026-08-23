@@ -278,6 +278,7 @@ class ULNWordRenderer(RendererBlocksMixin):
         idx_block = 0
         while idx_block < len(blocks):
             self.check_cancellation()
+            sel = word.Selection
             block = blocks[idx_block]
             tag = block.tag
 
@@ -808,294 +809,26 @@ class ULNWordRenderer(RendererBlocksMixin):
                             self.write_inline_spans(sel, c_spans)
                             sel.TypeParagraph()
 
-            elif tag.startswith("TAB"):
+            elif tag == "TABLE":
+                if block.table_data:
+                    self.render_table(sel, doc, block.table_data, printable_width_cm, idx_block=idx_block, blocks=blocks)
+
+            elif tag.startswith("TAB") and tag != "TABLE":
                 num_cols = len(block.cols) if block.cols else (3 if tag == "TAB3" else (4 if tag == "TAB4" else 2))
                 if num_cols >= 3:
                     self.current_block_tag = tag
                     self.render_tab_multi(sel, doc, block, idx_block, blocks, printable_width_cm)
                 else:
                     self.current_block_tag = "TAB2"
-                    group_start = idx_block
-                    while group_start > 0 and blocks[group_start - 1].tag.startswith("TAB") and (not blocks[group_start - 1].cols or len(blocks[group_start - 1].cols) == 2):
-                        group_start -= 1
-
-                    # Collect the full group from start to end
                     tab2_group = []
-                    lookahead = group_start
-                    while lookahead < len(blocks) and blocks[lookahead].tag.startswith("TAB") and (not blocks[lookahead].cols or len(blocks[lookahead].cols) == 2):
-                        tab2_group.append(blocks[lookahead])
-                        lookahead += 1
+                    k = idx_block
+                    while k < len(blocks) and blocks[k].tag.startswith("TAB") and blocks[k].tag != "TABLE" and (not blocks[k].cols or len(blocks[k].cols) == 2):
+                        tab2_group.append(blocks[k])
+                        k += 1
 
-                    max_c1_len = max(len(b.col1) for b in tab2_group) if tab2_group else 10
-                    max_c2_len = max(len(b.col2) for b in tab2_group) if tab2_group else 10
-
-                    group_first_c1 = tab2_group[0].col1 if tab2_group else block.col1
-                    base_indent_cm = 0.5 if "P1" in group_first_c1 else (1.0 if "P2" in group_first_c1 else 0.0)
-
-                    # Check if Column 2 is an answer blank (e.g. ______ or <blank> or [BLANK])
-                    col2_is_blank = bool(re.match(r'^\s*(?:Answer:\s*)?(?:_{2,}|<blank>|\[BLANK\])\s*$', block.col2, re.IGNORECASE))
-
-                    if col2_is_blank:
-                        # Blank Column Layout: Fixed right-aligned blank (2.8 cm), only Column 1 wraps if needed
-                        blank_w_cm = 2.8
-                        col2_tab_pos_cm = printable_width_cm - blank_w_cm
-                    else:
-                        # Standard 2-Column Matching Layout:
-                        # Measure exact physical width of longest Column 1 line using Windows GDI with Word typographical scaling (1.15x)
-                        c1_clean_texts = []
-                        for b in tab2_group:
-                            raw_t = re.sub(r'^\s*\[(?:P0|P1|P2|INS)\]\s*', '', b.col1, flags=re.IGNORECASE).replace('#', '').strip()
-                            clean_t = self.strip_markup_for_measurement(raw_t)
-                            c1_clean_texts.append(clean_t)
-
-                        max_c1_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in c1_clean_texts) if c1_clean_texts else 100.0
-                        c1_word_w_cm = pt_to_cm(max_c1_w_pt) * 1.15
-
-                        # Measure Column 2 text width to ensure both columns fit cleanly on the page
-                        c2_clean_texts = []
-                        for b in tab2_group:
-                            clean_c2 = self.strip_markup_for_measurement(b.col2.strip())
-                            c2_clean_texts.append(clean_c2)
-                        max_c2_w_pt = max(self.measure_text_width_pt(doc, t, self.font_name, self.font_size, is_bold=False) for t in c2_clean_texts) if c2_clean_texts else 50.0
-                        c2_word_w_cm = pt_to_cm(max_c2_w_pt) * 1.15
-
-                        # Check if columns contain inline picture tags
-                        c1_has_pic = any("[PIC" in b.col1.upper() or parse_pic_tag(b.col1) is not None for b in tab2_group)
-                        c2_has_pic = any("[PIC" in b.col2.upper() or parse_pic_tag(b.col2) is not None for b in tab2_group)
-
-                        min_gap_cm = 0.50  # MINIMUM DISTANCE BETWEEN 2 COLUMNS: STRICTLY >= 5.0 MM (0.50 cm)
-                        spacing_around_img_cm = 0.20
-
-                        if c1_has_pic and c2_has_pic:
-                            # DYNAMICALLY DETERMINE OPTIMAL UNIFORM IMAGE SIZE ACROSS ALL PICTURES
-                            # Available horizontal width for the 2 images:
-                            avail_w_for_imgs = printable_width_cm - base_indent_cm - c1_word_w_cm - c2_word_w_cm - (2 * spacing_around_img_cm) - min_gap_cm
-                            opt_pic_w_cm = min(4.5, max(3.5, avail_w_for_imgs / 2.0))
-                            opt_pic_h_cm = opt_pic_w_cm * 0.72
-                            self.current_tab2_pic_width_cm = opt_pic_w_cm
-                            self.current_tab2_pic_height_cm = opt_pic_h_cm
-
-                            # Total physical column widths:
-                            c1_total_w_cm = c1_word_w_cm + opt_pic_w_cm + spacing_around_img_cm
-                            c2_total_w_cm = c2_word_w_cm + opt_pic_w_cm + spacing_around_img_cm
-
-                            tab_min_cm = base_indent_cm + c1_total_w_cm + min_gap_cm
-                            tab_max_cm = printable_width_cm - c2_total_w_cm - 0.10
-
-                            if tab_max_cm >= tab_min_cm:
-                                col2_tab_pos_cm = tab_max_cm
-                            else:
-                                col2_tab_pos_cm = max(base_indent_cm + 4.0, tab_min_cm)
-
-                        elif c1_has_pic or c2_has_pic:
-                            # Check if this is a Sentence Fill-in activity with cue pictures on the right
-                            is_cue_pic_activity = (c2_has_pic and not c1_has_pic and (c1_word_w_cm >= 6.5 or any("<blank>" in b.col1.lower() or "_" in b.col1 for b in tab2_group)))
-
-                            if is_cue_pic_activity:
-                                # Compact cue picture thumbnail for sentence activities
-                                opt_pic_w_cm = 2.0
-                                opt_pic_h_cm = 1.4
-                                self.current_tab2_pic_width_cm = opt_pic_w_cm
-                                self.current_tab2_pic_height_cm = opt_pic_h_cm
-                                col2_tab_pos_cm = printable_width_cm - opt_pic_w_cm - 0.20
-                            else:
-                                # Standard picture matching layout (picture is the main exercise content)
-                                avail_w_for_img = printable_width_cm - base_indent_cm - c1_word_w_cm - c2_word_w_cm - spacing_around_img_cm - min_gap_cm
-                                opt_pic_w_cm = min(5.0, max(3.2, avail_w_for_img))
-                                opt_pic_h_cm = opt_pic_w_cm * 0.72
-                                self.current_tab2_pic_width_cm = opt_pic_w_cm
-                                self.current_tab2_pic_height_cm = opt_pic_h_cm
-
-                                c1_total_w_cm = c1_word_w_cm + (opt_pic_w_cm + spacing_around_img_cm if c1_has_pic else 0.0)
-                                c2_total_w_cm = c2_word_w_cm + (opt_pic_w_cm + spacing_around_img_cm if c2_has_pic else 0.0)
-
-                                tab_min_cm = base_indent_cm + c1_total_w_cm + min_gap_cm
-                                tab_max_cm = printable_width_cm - c2_total_w_cm - 0.10
-
-                                if tab_max_cm >= tab_min_cm:
-                                    col2_tab_pos_cm = tab_max_cm
-                                else:
-                                    col2_tab_pos_cm = max(base_indent_cm + 4.0, tab_min_cm)
-
-                        else:
-                            # Standard text matching layout
-                            self.current_tab2_pic_width_cm = None
-                            self.current_tab2_pic_height_cm = None
-
-                            tab_max_cm = printable_width_cm - c2_word_w_cm - 0.10
-                            tab_min_cm = base_indent_cm + c1_word_w_cm + min_gap_cm
-
-                            if tab_max_cm >= tab_min_cm:
-                                col2_tab_pos_cm = tab_max_cm
-                            else:
-                                col2_tab_pos_cm = max(base_indent_cm + 4.0, printable_width_cm - max(3.5, c2_word_w_cm) - 0.10)
-
-                    col1_needed_cm = col2_tab_pos_cm - base_indent_cm
-
-                    space_before_tab2 = 14 if (self.last_rendered_tag == "BOX") else 3
-                    sel.ParagraphFormat.SpaceBefore = space_before_tab2
-                    sel.ParagraphFormat.SpaceAfter = 3
-                    sel.ParagraphFormat.KeepWithNext = False
-                    sel.ParagraphFormat.PageBreakBefore = False
-
-                    # Detect header row in TAB2 (e.g. A | B)
-                    is_header_row = (block == tab2_group[0] and len(block.col1.strip()) <= 10 and len(block.col2.strip()) <= 10 and not re.search(r'\d', block.col1))
-
-                    if is_header_row:
-                        col1_center_cm = base_indent_cm + (col1_needed_cm / 2.0)
-                        col2_center_cm = col2_tab_pos_cm + ((printable_width_cm - col2_tab_pos_cm) / 2.0)
-
-                        sel.ParagraphFormat.LeftIndent = 0
-                        sel.ParagraphFormat.FirstLineIndent = 0
-                        sel.ParagraphFormat.TabStops.ClearAll()
-                        sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col1_center_cm), Alignment=1)  # wdAlignTabCenter = 1
-                        sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_center_cm), Alignment=1)  # wdAlignTabCenter = 1
-
-                        sel.TypeText("\t")
-                        self.write_inline_spans(sel, block.col1_spans, default_bold=True)
-                        sel.TypeText("\t")
-                        self.write_inline_spans(sel, block.col2_spans, default_bold=True)
-                        sel.TypeParagraph()
-
-                    elif col2_is_blank:
-                        # Safe blank width: strictly bounded within printable width with 0.4cm buffer to guarantee 0 line wraps
-                        avail_w_cm = max(1.5, printable_width_cm - col2_tab_pos_cm - 0.4)
-                        blank_w_cm = min(3.5, avail_w_cm)
-                        char_under_w_cm = max(0.18, (self.font_size * 0.44) / 28.3465)
-                        num_underscores = max(6, int(blank_w_cm / char_under_w_cm))
-
-                        # Configure paragraph & tab stop before writing text
-                        sel.ParagraphFormat.LeftIndent = cm_to_pt(base_indent_cm)
-                        sel.ParagraphFormat.FirstLineIndent = 0
-                        sel.ParagraphFormat.TabStops.ClearAll()
-                        sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
-                        sel.ParagraphFormat.KeepWithNext = False
-                        sel.ParagraphFormat.PageBreakBefore = False
-
-                        pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
-                        if q_num is not None and c1_body.strip():
-                            num_fmt = self.get_effective_number_format(pref, delim)
-                            self.apply_native_numbered_list(word, sel, q_num=q_num, number_format=num_fmt)
-                            from uln_parser import parse_inline_spans
-                            c1_spans = parse_inline_spans(c1_body.strip())
-                            self.write_inline_spans(sel, c1_spans)
-                        else:
-                            try:
-                                sel.Range.ListFormat.RemoveNumbers()
-                            except Exception:
-                                pass
-                            self.write_inline_spans(sel, block.col1_spans)
-
-                        sel.Font.Color = 0
-                        sel.Font.Bold = 0
-                        sel.Font.Underline = 0
-                        sel.TypeText(f"\t{'_' * num_underscores}")
-                        sel.TypeParagraph()
-
-                    else:
-                        col2_trim = block.col2.strip()
-                        m_opt = re.match(r'^\s*(?:(?:\*\*|\*|\[|\(?)*([a-zA-Z])[\.\)](?:\*\*|\*|\]|\}|\{u\}|\))*)\s+(.*)$', col2_trim)
-
-                        try:
-                            sel.Range.ListFormat.RemoveNumbers()
-                        except Exception:
-                            pass
-
-                        # Single tab stop: col1 text → \t → col2 content (option letter + body inline)
-                        sel.ParagraphFormat.LeftIndent = cm_to_pt(col2_tab_pos_cm)
-                        sel.ParagraphFormat.FirstLineIndent = cm_to_pt(-col1_needed_cm)
-                        sel.ParagraphFormat.TabStops.ClearAll()
-                        sel.ParagraphFormat.TabStops.Add(Position=cm_to_pt(col2_tab_pos_cm), Alignment=0)
-                        sel.ParagraphFormat.KeepWithNext = False
-                        sel.ParagraphFormat.PageBreakBefore = False
-
-                        pref, delim, q_num, c1_body = extract_question_prefix_and_body(block.col1)
-                        if q_num is not None:
-                            # Write formatted question number directly (bold number + dot) to ensure exact positioning
-                            pref_str = pref if pref else ""
-                            delim_char = delim if delim else "."
-                            num_prefix_str = f"{pref_str}{q_num}{delim_char} "
-                            sel.Font.Name = self.font_name
-                            sel.Font.Size = self.font_size
-                            sel.Font.Bold = 1
-                            sel.Font.Italic = 0
-                            sel.Font.Underline = 0
-                            q_color_int = parse_color_to_rgb_int(self.question_color)
-                            if q_color_int is not None:
-                                sel.Font.Color = q_color_int
-                            else:
-                                sel.Font.Color = 0
-                            sel.TypeText(num_prefix_str)
-                            sel.Font.Bold = 0
-                            sel.Font.Color = 0
-
-                            from uln_parser import parse_inline_spans
-                            c1_spans = parse_inline_spans(c1_body.strip())
-                            self.write_inline_spans(sel, c1_spans)
-                        else:
-                            self.write_inline_spans(sel, block.col1_spans)
-
-                        sel.TypeText("\t")
-
-                        pref2, delim2, q_num2, c2_body = extract_question_prefix_and_body(block.col2)
-                        if q_num2 is not None:
-                            pref_str2 = pref2 if pref2 else ""
-                            delim_char2 = delim2 if delim2 else "."
-                            num_prefix_str2 = f"{pref_str2}{q_num2}{delim_char2} "
-                            sel.Font.Name = self.font_name
-                            sel.Font.Size = self.font_size
-                            sel.Font.Bold = 1
-                            sel.Font.Italic = 0
-                            sel.Font.Underline = 0
-                            q_color_int = parse_color_to_rgb_int(self.question_color)
-                            if q_color_int is not None:
-                                sel.Font.Color = q_color_int
-                            else:
-                                sel.Font.Color = 0
-                            sel.TypeText(num_prefix_str2)
-                            sel.Font.Bold = 0
-                            sel.Font.Color = 0
-
-                            from uln_parser import parse_inline_spans as _pis
-                            c2_spans = _pis(c2_body.strip())
-                            self.write_inline_spans(sel, c2_spans)
-                        elif m_opt and not block.pic:
-                            opt_let = f"{m_opt.group(1).upper()}."
-                            opt_body = m_opt.group(2).strip()
-
-                            sel.Font.Name = self.font_name
-                            sel.Font.Size = self.font_size
-                            sel.Font.Bold = 1
-                            sel.Font.Italic = 0
-                            sel.Font.Underline = 0
-                            opt_color_int = parse_color_to_rgb_int(self.opt_color)
-                            if opt_color_int is not None:
-                                sel.Font.Color = opt_color_int
-                            else:
-                                sel.Font.Color = 0
-                            sel.TypeText(f"{opt_let} ")
-                            sel.Font.Bold = 0
-                            sel.Font.Color = 0
-
-                            from uln_parser import parse_inline_spans as _pis
-                            self.write_inline_spans(sel, _pis(opt_body))
-                        else:
-                            self.write_inline_spans(sel, block.col2_spans)
-
-                        sel.TypeParagraph()
-
-
-                    sel.ParagraphFormat.LeftIndent = 0
-                    sel.ParagraphFormat.FirstLineIndent = 0
-                    sel.ParagraphFormat.TabStops.ClearAll()
-
-                    if idx_block + 1 >= len(blocks) or blocks[idx_block + 1].tag != "TAB2":
-                        self.current_tab2_pic_width_cm = None
-                        self.current_tab2_pic_height_cm = None
-
-            elif tag == "TABLE":
-                if block.table_data:
-                    self.render_table(sel, doc, block.table_data, printable_width_cm, idx_block=idx_block, blocks=blocks)
+                    self.render_tab2_group(sel, doc, word, tab2_group, printable_width_cm)
+                    idx_block += len(tab2_group)
+                    continue
 
             elif tag == "PIC_GRID":
                 self.render_pic_grid(sel, doc, block.children, printable_width_cm)
@@ -1159,12 +892,10 @@ class ULNWordRenderer(RendererBlocksMixin):
                     sel.TypeParagraph()
 
             try:
+                sel = word.Selection
                 word.ActiveWindow.ScrollIntoView(sel.Range, True)
             except Exception:
-                try:
-                    sel.ScrollIntoView()
-                except Exception:
-                    pass
+                pass
 
             self.last_rendered_tag = tag
             idx_block += 1
