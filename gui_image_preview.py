@@ -520,6 +520,148 @@ def open_exercise_pic_match_dialog(parent_app):
         "drag_start_y": 0,
     }
 
+    def update_status_bar(custom_msg=None, custom_fg=None):
+        """Updates status header without rebuilding any card widgets."""
+        num_pics = len(card_registry)
+        num_imgs = len(parent_app.user_image_paths)
+        if custom_msg:
+            lbl_status.config(text=custom_msg, fg=custom_fg or "#38bdf8")
+        elif num_pics == 0:
+            lbl_status.config(text=f"ℹ️ Bài tập hiện tại không có thẻ [PIC] nào. (Queue có {num_imgs} ảnh)", fg="#94a3b8")
+        elif num_imgs == num_pics:
+            lbl_status.config(text=f"✅ Hoàn hảo! Khớp đủ {num_pics} / {num_pics} ảnh theo thứ tự câu hỏi. (Kéo thả ảnh giữa các câu để đổi vị trí)", fg="#4ade80")
+        elif num_imgs < num_pics:
+            lbl_status.config(text=f"⚠️ Có {num_pics} thẻ [PIC] nhưng Queue mới chỉ có {num_imgs} ảnh (thiếu {num_pics - num_imgs} ảnh).", fg="#fbbf24")
+        else:
+            lbl_status.config(text=f"ℹ️ Có {num_pics} thẻ [PIC] trong bài, Queue có {num_imgs} ảnh ({num_imgs - num_pics} ảnh sau sẽ không dùng).", fg="#38bdf8")
+
+    def update_card_slot_ui(idx):
+        """
+        Updates ONLY the image/button area of a specific card index in-place.
+        Does NOT destroy the whole list, does NOT re-parse ULN. Zero lag & zero flicker.
+        """
+        if idx < 0 or idx >= len(card_registry):
+            return
+        c_info = card_registry[idx]
+        slot_container = c_info.get("slot_container")
+        if not slot_container or not slot_container.winfo_exists():
+            return
+
+        for child in slot_container.winfo_children():
+            child.destroy()
+
+        images = parent_app.user_image_paths
+        has_img = idx < len(images) and bool(images[idx])
+
+        if has_img:
+            img_path = images[idx]
+            fname = os.path.basename(img_path)
+
+            thumb_res = load_and_scale_image(img_path, max_w=130, max_h=85)
+            if thumb_res:
+                photo, ow, oh, fmt, sz = thumb_res
+                photo_cache.append(photo)
+                c_thumb = tk.Canvas(slot_container, width=130, height=85, bg="#0f172a", highlightthickness=1, highlightbackground="#475569", cursor="fleur")
+                c_thumb.pack(pady=4)
+                c_thumb.create_image(65, 42, image=photo, anchor="center")
+
+                # Bind Drag Events
+                c_thumb.bind("<ButtonPress-1>", lambda e, p_idx=idx: on_drag_start(e, p_idx))
+                c_thumb.bind("<B1-Motion>", on_drag_motion)
+                c_thumb.bind("<ButtonRelease-1>", on_drag_release)
+                c_thumb.bind("<Double-Button-1>", lambda e, p_idx=idx: open_image_preview_dialog(parent_app, initial_index=p_idx))
+
+                lbl_fname = tk.Label(slot_container, text=f"{fname}\n({fmt}, {ow}×{oh})", font=("Segoe UI", 8), bg="#1e293b", fg="#94a3b8", justify="center", wraplength=140)
+                lbl_fname.pack()
+            else:
+                lbl_err = tk.Label(slot_container, text=f"⚠️ {fname}\n(Không đọc được ảnh)", font=("Segoe UI", 8), bg="#1e293b", fg="#ef4444")
+                lbl_err.pack(pady=4)
+
+            # Action Buttons Row 1: Direct File Change & Delete
+            action_row1 = tk.Frame(slot_container, bg="#1e293b")
+            action_row1.pack(fill="x", pady=(4, 2))
+
+            btn_change = tk.Button(
+                action_row1,
+                text="📁 Đổi ảnh",
+                command=lambda p_idx=idx: choose_image_for_slot(p_idx),
+                bg="#0369a1",
+                fg="#ffffff",
+                activebackground="#0284c7",
+                font=("Segoe UI", 7, "bold"),
+                relief="flat",
+                padx=4,
+                pady=1,
+                cursor="hand2"
+            )
+            btn_change.pack(side="left", fill="x", expand=True, padx=(0, 1))
+
+            btn_del = tk.Button(
+                action_row1,
+                text="❌ Xóa",
+                command=lambda p_idx=idx: remove_image_at_slot(p_idx),
+                bg="#475569",
+                fg="#fca5a5",
+                activebackground="#dc2626",
+                activeforeground="#ffffff",
+                font=("Segoe UI", 7, "bold"),
+                relief="flat",
+                padx=4,
+                pady=1,
+                cursor="hand2"
+            )
+            btn_del.pack(side="right", padx=(1, 0))
+
+            # Action Buttons Row 2: Up / Down Reordering
+            btn_row = tk.Frame(slot_container, bg="#1e293b")
+            btn_row.pack(fill="x", pady=(0, 0))
+
+            if idx > 0:
+                btn_up = tk.Button(btn_row, text="▲ Lên", command=lambda: move_slots_in_place(idx, idx - 1), bg="#334155", fg="#f8fafc", font=("Segoe UI", 7, "bold"), relief="flat", padx=4, pady=1, cursor="hand2")
+                btn_up.pack(side="left", fill="x", expand=True, padx=(0, 1))
+            if idx < len(images) - 1:
+                btn_dn = tk.Button(btn_row, text="▼ Xuống", command=lambda: move_slots_in_place(idx, idx + 1), bg="#334155", fg="#f8fafc", font=("Segoe UI", 7, "bold"), relief="flat", padx=4, pady=1, cursor="hand2")
+                btn_dn.pack(side="right", fill="x", expand=True, padx=(1, 0))
+
+        else:
+            lbl_missing = tk.Label(
+                slot_container,
+                text="⚠️ CHƯA CÓ ẢNH\n(Kéo thả hoặc bấm nút bên dưới)",
+                font=("Segoe UI", 8, "bold"),
+                bg="#0f172a",
+                fg="#f59e0b",
+                padx=8,
+                pady=12,
+                highlightthickness=1,
+                highlightbackground="#f59e0b"
+            )
+            lbl_missing.pack(fill="x", pady=4)
+
+            btn_add_slot = tk.Button(
+                slot_container,
+                text="➕ Gán ảnh cho câu này",
+                command=lambda p_idx=idx: choose_image_for_slot(p_idx),
+                bg="#2563eb",
+                fg="#ffffff",
+                activebackground="#1d4ed8",
+                font=("Segoe UI", 8, "bold"),
+                relief="flat",
+                pady=3,
+                cursor="hand2"
+            )
+            btn_add_slot.pack(fill="x", pady=(2, 0))
+
+    def move_slots_in_place(from_i, to_i):
+        """Swaps two slots in-place with instant 0ms response without refreshing whole dialog."""
+        num_imgs = len(parent_app.user_image_paths)
+        if 0 <= from_i < num_imgs and 0 <= to_i < num_imgs:
+            parent_app.user_image_paths[from_i], parent_app.user_image_paths[to_i] = parent_app.user_image_paths[to_i], parent_app.user_image_paths[from_i]
+            if hasattr(parent_app, 'update_image_listbox'):
+                parent_app.update_image_listbox(selected_index=to_i)
+            update_card_slot_ui(from_i)
+            update_card_slot_ui(to_i)
+            update_status_bar(f"🔄 Đã chuyển ảnh sang Câu #{to_i + 1}", "#38bdf8")
+
     def on_drag_start(event, from_idx):
         if from_idx >= len(parent_app.user_image_paths):
             return
@@ -528,7 +670,6 @@ def open_exercise_pic_match_dialog(parent_app):
         drag_data["target_idx"] = from_idx
         drag_data["drag_start_y"] = event.y_root
 
-        # Create floating semi-transparent drag preview window (Ghost)
         try:
             if drag_data["ghost_win"] and drag_data["ghost_win"].winfo_exists():
                 drag_data["ghost_win"].destroy()
@@ -573,7 +714,7 @@ def open_exercise_pic_match_dialog(parent_app):
         if drag_data["ghost_win"] and drag_data["ghost_win"].winfo_exists():
             drag_data["ghost_win"].geometry(f"+{event.x_root + 15}+{event.y_root + 15}")
 
-        # Auto-scroll canvas when dragging near top or bottom edges
+        # Auto-scroll canvas when dragging near edges
         win_y = canvas.winfo_rooty()
         win_h = canvas.winfo_height()
         if event.y_root < win_y + 40:
@@ -581,7 +722,6 @@ def open_exercise_pic_match_dialog(parent_app):
         elif event.y_root > win_y + win_h - 40:
             canvas.yview_scroll(1, "units")
 
-        # Detect which question card the cursor is hovering over
         hovered_idx = None
         for c_info in card_registry:
             c_widget = c_info["widget"]
@@ -598,7 +738,6 @@ def open_exercise_pic_match_dialog(parent_app):
 
         drag_data["target_idx"] = hovered_idx
 
-        # Highlight target card with luminous border
         for c_info in card_registry:
             c_widget = c_info["widget"]
             try:
@@ -621,7 +760,6 @@ def open_exercise_pic_match_dialog(parent_app):
         src_idx = drag_data["source_idx"]
         tgt_idx = drag_data["target_idx"]
 
-        # Reset card highlights
         for c_info in card_registry:
             try:
                 c_info["widget"].configure(highlightbackground="#334155", highlightthickness=1)
@@ -629,13 +767,11 @@ def open_exercise_pic_match_dialog(parent_app):
                 pass
 
         if src_idx is not None and tgt_idx is not None and src_idx != tgt_idx:
-            # Perform Image Swap / Move between src_idx and tgt_idx
             num_imgs = len(parent_app.user_image_paths)
             if 0 <= src_idx < num_imgs:
                 if 0 <= tgt_idx < num_imgs:
                     parent_app.user_image_paths[src_idx], parent_app.user_image_paths[tgt_idx] = parent_app.user_image_paths[tgt_idx], parent_app.user_image_paths[src_idx]
                 else:
-                    # Target is unassigned card beyond user_image_paths length
                     val = parent_app.user_image_paths[src_idx]
                     parent_app.user_image_paths.pop(src_idx)
                     while len(parent_app.user_image_paths) < tgt_idx:
@@ -645,11 +781,14 @@ def open_exercise_pic_match_dialog(parent_app):
 
                 if hasattr(parent_app, 'update_image_listbox'):
                     parent_app.update_image_listbox(selected_index=min(tgt_idx, len(parent_app.user_image_paths) - 1))
-                refresh_list()
-                lbl_status.config(text=f"🔄 Đã chuyển ảnh từ vị trí #{src_idx + 1} sang Câu #{tgt_idx + 1} thành công!", fg="#38bdf8")
+
+                # Update ONLY affected card slots in-place
+                update_card_slot_ui(src_idx)
+                update_card_slot_ui(tgt_idx)
+                update_status_bar(f"🔄 Đã chuyển ảnh từ vị trí #{src_idx + 1} sang Câu #{tgt_idx + 1} thành công!", "#38bdf8")
 
     def choose_image_for_slot(slot_idx):
-        """Allows direct image selection from file picker specifically for this question slot."""
+        """Allows direct image selection from file picker specifically for this question slot in-place."""
         filetypes = [
             ("All Supported Images", "*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tiff;*.webp;*.svg;*.wmf;*.emf"),
             ("PNG Images", "*.png"),
@@ -673,20 +812,25 @@ def open_exercise_pic_match_dialog(parent_app):
 
             if hasattr(parent_app, 'update_image_listbox'):
                 parent_app.update_image_listbox(selected_index=min(slot_idx, len(parent_app.user_image_paths) - 1))
-            refresh_list()
-            lbl_status.config(text=f"✅ Đã gán ảnh mới cho Câu #{slot_idx + 1}: {os.path.basename(chosen)}", fg="#4ade80")
+
+            update_card_slot_ui(slot_idx)
+            update_status_bar(f"✅ Đã gán ảnh mới cho Câu #{slot_idx + 1}: {os.path.basename(chosen)}", "#4ade80")
 
     def remove_image_at_slot(slot_idx):
-        """Removes image assigned to this question slot."""
+        """Removes image assigned to this question slot in-place."""
         if 0 <= slot_idx < len(parent_app.user_image_paths):
             f_name = os.path.basename(parent_app.user_image_paths[slot_idx])
             parent_app.user_image_paths.pop(slot_idx)
             if hasattr(parent_app, 'update_image_listbox'):
                 parent_app.update_image_listbox(selected_index=min(slot_idx, len(parent_app.user_image_paths) - 1) if parent_app.user_image_paths else None)
-            refresh_list()
-            lbl_status.config(text=f"🗑️ Đã xóa ảnh '{f_name}' khỏi Câu #{slot_idx + 1}", fg="#f43f5e")
+
+            # Update shifted slots from slot_idx to end
+            for s in range(slot_idx, len(card_registry)):
+                update_card_slot_ui(s)
+            update_status_bar(f"🗑️ Đã xóa ảnh '{f_name}' khỏi Câu #{slot_idx + 1}", "#f43f5e")
 
     def refresh_list():
+        """Builds the full card list once upon dialog opening or manual refresh button."""
         photo_cache.clear()
         card_registry.clear()
         for widget in scrollable_frame.winfo_children():
@@ -694,19 +838,8 @@ def open_exercise_pic_match_dialog(parent_app):
 
         current_uln = parent_app.text_editor.get("1.0", tk.END).strip()
         items = extract_pic_questions_from_uln(current_uln)
-        images = parent_app.user_image_paths
         num_pics = len(items)
-        num_imgs = len(images)
-
-        # Update status header
-        if num_pics == 0:
-            lbl_status.config(text=f"ℹ️ Bài tập hiện tại không có thẻ [PIC] nào. (Queue có {num_imgs} ảnh)", fg="#94a3b8")
-        elif num_imgs == num_pics:
-            lbl_status.config(text=f"✅ Hoàn hảo! Khớp đủ {num_pics} / {num_pics} ảnh theo thứ tự câu hỏi. (Kéo thả ảnh giữa các câu để đổi vị trí)", fg="#4ade80")
-        elif num_imgs < num_pics:
-            lbl_status.config(text=f"⚠️ Có {num_pics} thẻ [PIC] nhưng Queue mới chỉ có {num_imgs} ảnh (thiếu {num_pics - num_imgs} ảnh).", fg="#fbbf24")
-        else:
-            lbl_status.config(text=f"ℹ️ Có {num_pics} thẻ [PIC] trong bài, Queue có {num_imgs} ảnh ({num_imgs - num_pics} ảnh sau sẽ không dùng).", fg="#38bdf8")
+        update_status_bar()
 
         if num_pics == 0:
             empty_lbl = tk.Label(
@@ -724,14 +857,11 @@ def open_exercise_pic_match_dialog(parent_app):
             card = tk.Frame(scrollable_frame, bg="#1e293b", highlightthickness=1, highlightbackground="#334155", padx=10, pady=8)
             card.pack(fill="x", pady=5, padx=4)
 
-            # Register card for drag & drop target detection
-            card_registry.append({"widget": card, "idx": idx})
-
-            # Left Box: Image & Drag Controls
+            # Left Box: Fixed Header + Dynamic Slot Container
             left_box = tk.Frame(card, bg="#1e293b", width=230)
             left_box.pack(side="left", fill="y", padx=(0, 12))
 
-            # Badge & Drag Handle Bar
+            # Header Badge & Drag Handle
             badge_bar = tk.Frame(left_box, bg="#1e293b")
             badge_bar.pack(fill="x", anchor="w")
 
@@ -756,117 +886,24 @@ def open_exercise_pic_match_dialog(parent_app):
             )
             lbl_drag_hint.pack(side="right", padx=(4, 0))
 
-            has_img = idx < len(images)
-            if has_img:
-                img_path = images[idx]
-                fname = os.path.basename(img_path)
+            lbl_drag_hint.bind("<ButtonPress-1>", lambda e, p_idx=idx: on_drag_start(e, p_idx))
+            lbl_drag_hint.bind("<B1-Motion>", on_drag_motion)
+            lbl_drag_hint.bind("<ButtonRelease-1>", on_drag_release)
 
-                # Thumbnail Canvas with Drag & Drop Event Bindings
-                thumb_res = load_and_scale_image(img_path, max_w=130, max_h=85)
-                if thumb_res:
-                    photo, ow, oh, fmt, sz = thumb_res
-                    photo_cache.append(photo)
-                    c_thumb = tk.Canvas(left_box, width=130, height=85, bg="#0f172a", highlightthickness=1, highlightbackground="#475569", cursor="fleur")
-                    c_thumb.pack(pady=4)
-                    c_thumb.create_image(65, 42, image=photo, anchor="center")
+            lbl_badge.bind("<ButtonPress-1>", lambda e, p_idx=idx: on_drag_start(e, p_idx))
+            lbl_badge.bind("<B1-Motion>", on_drag_motion)
+            lbl_badge.bind("<ButtonRelease-1>", on_drag_release)
 
-                    # Bind Drag & Drop Events on Thumbnail and Drag Hint
-                    for w in (c_thumb, lbl_drag_hint, lbl_badge):
-                        w.bind("<ButtonPress-1>", lambda e, p_idx=idx: on_drag_start(e, p_idx))
-                        w.bind("<B1-Motion>", on_drag_motion)
-                        w.bind("<ButtonRelease-1>", on_drag_release)
+            # Dynamic Slot Container (updated in-place on changes)
+            slot_container = tk.Frame(left_box, bg="#1e293b")
+            slot_container.pack(fill="both", expand=True)
 
-                    # Double click to view large
-                    c_thumb.bind("<Double-Button-1>", lambda e, p_idx=idx: open_image_preview_dialog(parent_app, initial_index=p_idx))
-
-                    lbl_fname = tk.Label(left_box, text=f"{fname}\n({fmt}, {ow}×{oh})", font=("Segoe UI", 8), bg="#1e293b", fg="#94a3b8", justify="center", wraplength=140)
-                    lbl_fname.pack()
-                else:
-                    lbl_err = tk.Label(left_box, text=f"⚠️ {fname}\n(Không đọc được ảnh)", font=("Segoe UI", 8), bg="#1e293b", fg="#ef4444")
-                    lbl_err.pack(pady=4)
-
-                # Action Button Row 1: Direct File Change & Delete
-                action_row1 = tk.Frame(left_box, bg="#1e293b")
-                action_row1.pack(fill="x", pady=(4, 2))
-
-                btn_change = tk.Button(
-                    action_row1,
-                    text="📁 Đổi ảnh",
-                    command=lambda p_idx=idx: choose_image_for_slot(p_idx),
-                    bg="#0369a1",
-                    fg="#ffffff",
-                    activebackground="#0284c7",
-                    font=("Segoe UI", 7, "bold"),
-                    relief="flat",
-                    padx=4,
-                    pady=1,
-                    cursor="hand2"
-                )
-                btn_change.pack(side="left", fill="x", expand=True, padx=(0, 1))
-
-                btn_del = tk.Button(
-                    action_row1,
-                    text="❌ Xóa",
-                    command=lambda p_idx=idx: remove_image_at_slot(p_idx),
-                    bg="#475569",
-                    fg="#fca5a5",
-                    activebackground="#dc2626",
-                    activeforeground="#ffffff",
-                    font=("Segoe UI", 7, "bold"),
-                    relief="flat",
-                    padx=4,
-                    pady=1,
-                    cursor="hand2"
-                )
-                btn_del.pack(side="right", padx=(1, 0))
-
-                # Action Button Row 2: Up / Down Reordering
-                btn_row = tk.Frame(left_box, bg="#1e293b")
-                btn_row.pack(fill="x", pady=(0, 0))
-
-                def make_move_cmd(from_i, to_i):
-                    def cmd():
-                        if 0 <= to_i < len(parent_app.user_image_paths):
-                            parent_app.user_image_paths[from_i], parent_app.user_image_paths[to_i] = parent_app.user_image_paths[to_i], parent_app.user_image_paths[from_i]
-                            if hasattr(parent_app, 'update_image_listbox'):
-                                parent_app.update_image_listbox(selected_index=to_i)
-                            refresh_list()
-                    return cmd
-
-                if idx > 0:
-                    btn_up = tk.Button(btn_row, text="▲ Lên", command=make_move_cmd(idx, idx - 1), bg="#334155", fg="#f8fafc", font=("Segoe UI", 7, "bold"), relief="flat", padx=4, pady=1, cursor="hand2")
-                    btn_up.pack(side="left", fill="x", expand=True, padx=(0, 1))
-                if idx < len(images) - 1:
-                    btn_dn = tk.Button(btn_row, text="▼ Xuống", command=make_move_cmd(idx, idx + 1), bg="#334155", fg="#f8fafc", font=("Segoe UI", 7, "bold"), relief="flat", padx=4, pady=1, cursor="hand2")
-                    btn_dn.pack(side="right", fill="x", expand=True, padx=(1, 0))
-
-            else:
-                lbl_missing = tk.Label(
-                    left_box,
-                    text="⚠️ CHƯA CÓ ẢNH\n(Kéo thả hoặc bấm nút bên dưới)",
-                    font=("Segoe UI", 8, "bold"),
-                    bg="#0f172a",
-                    fg="#f59e0b",
-                    padx=8,
-                    pady=12,
-                    highlightthickness=1,
-                    highlightbackground="#f59e0b"
-                )
-                lbl_missing.pack(fill="x", pady=4)
-
-                btn_add_slot = tk.Button(
-                    left_box,
-                    text="➕ Gán ảnh cho câu này",
-                    command=lambda p_idx=idx: choose_image_for_slot(p_idx),
-                    bg="#2563eb",
-                    fg="#ffffff",
-                    activebackground="#1d4ed8",
-                    font=("Segoe UI", 8, "bold"),
-                    relief="flat",
-                    pady=3,
-                    cursor="hand2"
-                )
-                btn_add_slot.pack(fill="x", pady=(2, 0))
+            # Register card info for in-place updates and drag detection
+            card_registry.append({
+                "widget": card,
+                "idx": idx,
+                "slot_container": slot_container
+            })
 
             # Right Box: Question Context & Drop Target
             right_box = tk.Frame(card, bg="#1e293b")
@@ -900,10 +937,12 @@ def open_exercise_pic_match_dialog(parent_app):
             txt_q.config(state="disabled")
             txt_q.pack(fill="both", expand=True)
 
-            # Bind drag & drop onto right box and text as well for seamless drop targeting
             for w in (right_box, txt_q):
                 w.bind("<B1-Motion>", on_drag_motion)
                 w.bind("<ButtonRelease-1>", on_drag_release)
+
+            # Render slot content in-place
+            update_card_slot_ui(idx)
 
     # Bottom Control Bar
     bot_bar = tk.Frame(win, bg="#1e293b", padx=16, pady=10)
@@ -951,5 +990,6 @@ def open_exercise_pic_match_dialog(parent_app):
     win.bind("<Escape>", lambda e: win.destroy())
 
     refresh_list()
+
 
 
