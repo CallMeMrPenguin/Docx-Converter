@@ -3,6 +3,7 @@ import sys
 import re
 import threading
 import subprocess
+from typing import Optional, List, Dict
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from datetime import datetime
@@ -19,6 +20,7 @@ from gui_prompt_editor import (
 )
 from gui_update_modal import show_update_modal_dialog
 from gui_docx_picker import open_docx_picker_dialog
+from gui_image_preview import load_and_scale_image, open_image_preview_dialog
 from renderer_utils import natural_sort_key
 
 class ULNFormatterApp:
@@ -191,25 +193,78 @@ class ULNFormatterApp:
         bg_check = tk.Checkbutton(sidebar, text="⚡ Background Mode (0 Mouse Freeze)", variable=self.bg_mode_var, bg="#1e293b", fg="#38bdf8", selectcolor="#0f172a", activebackground="#1e293b", activeforeground="#38bdf8")
         bg_check.pack(anchor="w", pady=(0, 6))
 
-        # Image Queue (Order for [PIC] tags)
+        # Image Queue (Order for [PIC] tags) with Live Preview
         self.user_image_paths = []
-        img_frame = ttk.LabelFrame(sidebar, text=" 🖼️ Image Queue ([PIC] Order) ", padding=6)
-        img_frame.pack(fill="x", pady=(2, 6))
+        self._current_preview_photo = None
+        img_frame = ttk.LabelFrame(sidebar, text=" 🖼️ Image Queue ([PIC] Thứ tự ảnh) ", padding=6)
+        img_frame.pack(fill="x", pady=(2, 4))
 
-        self.img_listbox = tk.Listbox(img_frame, height=3, bg="#090d16", fg="#e2e8f0", font=("Segoe UI", 9), selectbackground="#3b82f6")
-        self.img_listbox.pack(fill="x", pady=(0, 4))
+        # Listbox with Scrollbar
+        list_container = tk.Frame(img_frame, bg="#090d16")
+        list_container.pack(fill="x", pady=(0, 4))
 
+        self.img_listbox = tk.Listbox(
+            list_container,
+            height=4,
+            bg="#090d16",
+            fg="#e2e8f0",
+            font=("Segoe UI", 9),
+            selectbackground="#2563eb",
+            selectforeground="#ffffff",
+            activestyle="none",
+            highlightthickness=0,
+            relief="flat"
+        )
+        self.img_listbox.pack(side="left", fill="both", expand=True)
+
+        list_scroll = ttk.Scrollbar(list_container, orient="vertical", command=self.img_listbox.yview)
+        list_scroll.pack(side="right", fill="y")
+        self.img_listbox.config(yscrollcommand=list_scroll.set)
+
+        self.img_listbox.bind("<<ListboxSelect>>", self.on_image_selected)
+        self.img_listbox.bind("<Double-Button-1>", lambda e: self.preview_selected_image())
+        self.img_listbox.bind("<KeyRelease-Up>", self.on_image_selected)
+        self.img_listbox.bind("<KeyRelease-Down>", self.on_image_selected)
+
+        # Button Bar Row 1: Add, Sort, Clear
         img_btn_bar = tk.Frame(img_frame, bg="#1e293b")
-        img_btn_bar.pack(fill="x")
+        img_btn_bar.pack(fill="x", pady=(0, 2))
 
-        btn_add_img = tk.Button(img_btn_bar, text="➕ Add...", command=self.add_images, bg="#3b82f6", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", pady=2)
+        btn_add_img = tk.Button(img_btn_bar, text="➕ Thêm...", command=self.add_images, bg="#2563eb", fg="#ffffff", activebackground="#1d4ed8", font=("Segoe UI", 8, "bold"), relief="flat", pady=2, cursor="hand2")
         btn_add_img.pack(side="left", fill="x", expand=True, padx=(0, 2))
 
-        btn_sort_img = tk.Button(img_btn_bar, text="🔤 A-Z", command=self.sort_images, bg="#0284c7", fg="#ffffff", font=("Segoe UI", 8, "bold"), relief="flat", pady=2)
+        btn_sort_img = tk.Button(img_btn_bar, text="🔤 A-Z", command=self.sort_images, bg="#0284c7", fg="#ffffff", activebackground="#0369a1", font=("Segoe UI", 8, "bold"), relief="flat", pady=2, cursor="hand2")
         btn_sort_img.pack(side="left", padx=2)
 
-        btn_clear_img = tk.Button(img_btn_bar, text="🗑️ Clear", command=self.clear_images, bg="#64748b", fg="#ffffff", font=("Segoe UI", 8), relief="flat", pady=2)
+        btn_clear_img = tk.Button(img_btn_bar, text="🗑️ Xóa hết", command=self.clear_images, bg="#475569", fg="#ffffff", activebackground="#64748b", font=("Segoe UI", 8), relief="flat", pady=2, cursor="hand2")
         btn_clear_img.pack(side="right", padx=(2, 0))
+
+        # Button Bar Row 2: Up, Down, Remove, Full Preview
+        img_btn_bar2 = tk.Frame(img_frame, bg="#1e293b")
+        img_btn_bar2.pack(fill="x", pady=(2, 4))
+
+        btn_up_img = tk.Button(img_btn_bar2, text="▲ Lên", command=self.move_image_up, bg="#334155", fg="#f8fafc", activebackground="#475569", font=("Segoe UI", 8), relief="flat", pady=1, cursor="hand2")
+        btn_up_img.pack(side="left", fill="x", expand=True, padx=(0, 2))
+
+        btn_down_img = tk.Button(img_btn_bar2, text="▼ Xuống", command=self.move_image_down, bg="#334155", fg="#f8fafc", activebackground="#475569", font=("Segoe UI", 8), relief="flat", pady=1, cursor="hand2")
+        btn_down_img.pack(side="left", fill="x", expand=True, padx=2)
+
+        btn_del_img = tk.Button(img_btn_bar2, text="❌ Xóa", command=self.remove_selected_image, bg="#334155", fg="#f43f5e", activebackground="#475569", font=("Segoe UI", 8), relief="flat", pady=1, cursor="hand2")
+        btn_del_img.pack(side="left", fill="x", expand=True, padx=2)
+
+        btn_view_img = tk.Button(img_btn_bar2, text="🔍 Xem Lớn", command=self.preview_selected_image, bg="#0d9488", fg="#ffffff", activebackground="#0f766e", font=("Segoe UI", 8, "bold"), relief="flat", pady=1, cursor="hand2")
+        btn_view_img.pack(side="right", fill="x", expand=True, padx=(2, 0))
+
+        # Live Image Thumbnail Preview Box
+        self.preview_card = tk.Frame(img_frame, bg="#090d16", highlightthickness=1, highlightbackground="#334155", pady=4, padx=4)
+        self.preview_card.pack(fill="x", pady=(2, 0))
+
+        self.preview_canvas = tk.Canvas(self.preview_card, height=110, bg="#090d16", highlightthickness=0, cursor="hand2")
+        self.preview_canvas.pack(fill="x")
+        self.preview_canvas.bind("<Button-1>", lambda e: self.preview_selected_image())
+
+        self.preview_info_lbl = tk.Label(self.preview_card, text="Chưa chọn ảnh nào", font=("Segoe UI", 8), bg="#090d16", fg="#94a3b8")
+        self.preview_info_lbl.pack(fill="x", pady=(2, 0))
 
         # Right Text Area (Editor)
         editor_frame = ttk.LabelFrame(main_container, text=" Raw ULN Text Input (Paste or Edit) ", padding=10)
@@ -757,21 +812,94 @@ class ULNFormatterApp:
                     self.user_image_paths.append(abs_f)
             # Automatically sort all image paths naturally by filename (e.g. 1, 2, 3... 10)
             self.user_image_paths.sort(key=lambda p: natural_sort_key(os.path.basename(p)))
-            self.update_image_listbox()
+            self.update_image_listbox(selected_index=0)
 
     def sort_images(self):
         """Manually sorts the image queue naturally by filename."""
         self.user_image_paths.sort(key=lambda p: natural_sort_key(os.path.basename(p)))
-        self.update_image_listbox()
+        self.update_image_listbox(selected_index=0)
 
     def clear_images(self):
         self.user_image_paths.clear()
         self.update_image_listbox()
 
-    def update_image_listbox(self):
+    def on_image_selected(self, event=None):
+        """Updates live thumbnail preview and metadata when user clicks or navigates listbox."""
+        sel = self.img_listbox.curselection()
+        if not sel or not self.user_image_paths:
+            self.preview_canvas.delete("all")
+            self.preview_info_lbl.config(text="Chưa chọn ảnh nào")
+            self._current_preview_photo = None
+            return
+
+        idx = sel[0]
+        if idx < 0 or idx >= len(self.user_image_paths):
+            return
+
+        img_path = self.user_image_paths[idx]
+        fname = os.path.basename(img_path)
+
+        self.preview_canvas.update_idletasks()
+        cw = max(120, self.preview_canvas.winfo_width() - 8)
+        ch = max(80, self.preview_canvas.winfo_height() - 8)
+
+        res = load_and_scale_image(img_path, max_w=cw, max_h=ch)
+        self.preview_canvas.delete("all")
+        if res:
+            photo, orig_w, orig_h, fmt, size_str = res
+            self._current_preview_photo = photo
+            self.preview_canvas.create_image(self.preview_canvas.winfo_width() // 2, self.preview_canvas.winfo_height() // 2, anchor="center", image=photo)
+            self.preview_info_lbl.config(text=f"[PIC #{idx + 1}] {fname}\n{orig_w}×{orig_h} px | {size_str} ({fmt})")
+        else:
+            self._current_preview_photo = None
+            self.preview_canvas.create_text(self.preview_canvas.winfo_width() // 2, self.preview_canvas.winfo_height() // 2, text=f"⚠️ {fname}", fill="#f43f5e", font=("Segoe UI", 8))
+            self.preview_info_lbl.config(text=f"[PIC #{idx + 1}] Không thể mở ảnh")
+
+    def preview_selected_image(self):
+        """Opens full-size interactive preview modal."""
+        sel = self.img_listbox.curselection()
+        idx = sel[0] if sel else 0
+        open_image_preview_dialog(self, initial_index=idx)
+
+    def move_image_up(self):
+        sel = self.img_listbox.curselection()
+        if not sel or sel[0] <= 0:
+            return
+        idx = sel[0]
+        self.user_image_paths[idx - 1], self.user_image_paths[idx] = self.user_image_paths[idx], self.user_image_paths[idx - 1]
+        self.update_image_listbox(selected_index=idx - 1)
+
+    def move_image_down(self):
+        sel = self.img_listbox.curselection()
+        if not sel or sel[0] >= len(self.user_image_paths) - 1:
+            return
+        idx = sel[0]
+        self.user_image_paths[idx + 1], self.user_image_paths[idx] = self.user_image_paths[idx], self.user_image_paths[idx + 1]
+        self.update_image_listbox(selected_index=idx + 1)
+
+    def remove_selected_image(self):
+        sel = self.img_listbox.curselection()
+        if not sel:
+            return
+        idx = sel[0]
+        self.user_image_paths.pop(idx)
+        new_idx = min(idx, len(self.user_image_paths) - 1) if self.user_image_paths else None
+        self.update_image_listbox(selected_index=new_idx)
+
+    def update_image_listbox(self, selected_index: Optional[int] = None):
         self.img_listbox.delete(0, tk.END)
         for idx, p in enumerate(self.user_image_paths, 1):
             self.img_listbox.insert(tk.END, f"{idx}. {os.path.basename(p)}")
+
+        if self.user_image_paths:
+            if selected_index is not None and 0 <= selected_index < len(self.user_image_paths):
+                self.img_listbox.selection_set(selected_index)
+                self.img_listbox.see(selected_index)
+            elif not self.img_listbox.curselection():
+                self.img_listbox.selection_set(0)
+            self.on_image_selected()
+        else:
+            self.on_image_selected()
 
     def load_sample(self):
         # Look in bundle dir first (PyInstaller), then current dir

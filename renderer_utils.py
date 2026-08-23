@@ -49,8 +49,6 @@ def ensure_word_compatible_image(image_path: str) -> Optional[str]:
 
     register_image_plugins()
     try:
-        from PIL import Image
-
         stat = os.stat(image_path)
         cache_key = hashlib.md5(f"{os.path.abspath(image_path)}_{stat.st_mtime}_{stat.st_size}".encode('utf-8')).hexdigest()
         temp_dir = os.path.join(tempfile.gettempdir(), "docx_converter_img_cache")
@@ -60,6 +58,20 @@ def ensure_word_compatible_image(image_path: str) -> Optional[str]:
         if os.path.exists(cached_png) and os.path.getsize(cached_png) > 0:
             return cached_png
 
+        # SVG conversion via PyMuPDF (fitz) or svglib/cairosvg
+        if ext == '.svg':
+            try:
+                import fitz
+                doc = fitz.open(image_path)
+                if len(doc) > 0:
+                    pix = doc[0].get_pixmap(dpi=300)
+                    pix.save(cached_png)
+                    doc.close()
+                    return cached_png
+            except Exception as e_svg:
+                print(f"[ULNRenderer] Warning converting SVG {image_path} via fitz: {e_svg}")
+
+        from PIL import Image
         with Image.open(image_path) as img:
             if img.mode in ('RGBA', 'LA') or (img.mode == 'P' and 'transparency' in img.info):
                 conv_img = img.convert('RGBA')
