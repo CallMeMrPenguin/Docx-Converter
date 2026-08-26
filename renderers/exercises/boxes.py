@@ -35,7 +35,7 @@ class BoxesRendererMixin:
         font_size = getattr(self, "font_size", 12.0)
 
         clean_words = [self.strip_markup_for_measurement(w) for w in words]
-        item_widths_pt = [self.measure_text_width_pt(doc, cw, font_name, font_size, is_bold=True) * 1.08 for cw in clean_words]
+        item_widths_pt = [self.measure_text_width_pt(doc, cw, font_name, font_size, is_bold=True) * 1.11 for cw in clean_words]
         max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
 
         pad_horiz_pt = cm_to_pt(0.20)      # 2.0 mm padding
@@ -175,7 +175,7 @@ class BoxesRendererMixin:
                 return
 
             clean_lines = [self.strip_markup_for_measurement(l) for l in lines]
-            line_widths_pt = [self.measure_text_width_pt(doc, cl, font_name, font_size, is_bold=True) * 1.08 for cl in clean_lines]
+            line_widths_pt = [self.measure_text_width_pt(doc, cl, font_name, font_size, is_bold=True) * 1.11 for cl in clean_lines]
             max_line_w_pt = max(line_widths_pt) if line_widths_pt else 50.0
 
             pad_left_pt = cm_to_pt(0.20)     # Exactly 2.0 mm left margin
