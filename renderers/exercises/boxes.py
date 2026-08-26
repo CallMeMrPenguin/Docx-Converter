@@ -197,6 +197,10 @@ class BoxesRendererMixin:
                 tf.MarginLeft = pad_left_pt
                 tf.MarginRight = pad_right_pt
                 try:
+                    tf.VerticalAnchor = 3  # msoAnchorMiddle (Vertical Center)
+                except Exception:
+                    pass
+                try:
                     tf.WordWrap = -1
                 except Exception:
                     pass
@@ -221,7 +225,7 @@ class BoxesRendererMixin:
                     pf.SpaceBefore = 0
                     pf.SpaceAfter = 0
                     pf.LineSpacingRule = 0
-                    pf.Alignment = 0
+                    pf.Alignment = 1  # Center aligned
 
                 try:
                     actual_lines = tr.ComputeStatistics(1)
@@ -261,6 +265,10 @@ class BoxesRendererMixin:
                 tf.MarginLeft = pad_horiz_pt
                 tf.MarginRight = pad_horiz_pt
                 try:
+                    tf.VerticalAnchor = 3  # msoAnchorMiddle (Vertical Center)
+                except Exception:
+                    pass
+                try:
                     tf.WordWrap = -1 if cols == 1 else 0
                 except Exception:
                     pass
@@ -286,7 +294,7 @@ class BoxesRendererMixin:
                     pf.SpaceBefore = 0
                     pf.SpaceAfter = 0
                     pf.LineSpacingRule = 0
-                    pf.Alignment = 0
+                    pf.Alignment = 1 if cols == 1 else 0
                     pf.TabStops.ClearAll()
                     for t_pt in tab_stops_pt[1:]:
                         pf.TabStops.Add(Position=t_pt, Alignment=0)
