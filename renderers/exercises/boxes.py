@@ -35,7 +35,7 @@ class BoxesRendererMixin:
         font_size = getattr(self, "font_size", 12.0)
 
         clean_words = [self.strip_markup_for_measurement(w) for w in words]
-        item_widths_pt = [self.measure_text_width_pt(doc, cw, font_name, font_size, is_bold=True) * 1.11 for cw in clean_words]
+        item_widths_pt = [self.measure_text_width_pt(doc, cw, font_name, font_size, is_bold=True) * 1.09 for cw in clean_words]
         max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
 
         pad_horiz_pt = cm_to_pt(0.20)      # 2.0 mm padding
@@ -220,12 +220,13 @@ class BoxesRendererMixin:
                 tr.Font.Color = 0
                 tr.Text = "\n".join(self.clean_box_item(l) for l in lines)
 
+                is_single_line = (num_lines == 1)
                 for p_idx in range(1, tr.Paragraphs.Count + 1):
                     pf = tr.Paragraphs(p_idx).Range.ParagraphFormat
                     pf.SpaceBefore = 0
                     pf.SpaceAfter = 0
                     pf.LineSpacingRule = 0
-                    pf.Alignment = 1  # Center aligned
+                    pf.Alignment = 1 if is_single_line else 0
 
                 try:
                     actual_lines = tr.ComputeStatistics(1)
@@ -289,12 +290,13 @@ class BoxesRendererMixin:
                 tr.Font.Color = 0
                 tr.Text = "\n".join(lines_text)
 
+                is_single_item = (cols == 1 and num_rows == 1)
                 for p_idx in range(1, tr.Paragraphs.Count + 1):
                     pf = tr.Paragraphs(p_idx).Range.ParagraphFormat
                     pf.SpaceBefore = 0
                     pf.SpaceAfter = 0
                     pf.LineSpacingRule = 0
-                    pf.Alignment = 1 if cols == 1 else 0
+                    pf.Alignment = 1 if is_single_item else 0
                     pf.TabStops.ClearAll()
                     for t_pt in tab_stops_pt[1:]:
                         pf.TabStops.Add(Position=t_pt, Alignment=0)
