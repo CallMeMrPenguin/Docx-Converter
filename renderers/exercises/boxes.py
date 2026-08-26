@@ -39,16 +39,16 @@ class BoxesRendererMixin:
         max_item_w_pt = max(item_widths_pt) if item_widths_pt else 45.0
 
         pad_horiz_pt = cm_to_pt(0.20)      # 2.0 mm padding
-        extra_buffer_pt = cm_to_pt(0.25)   # 2.5 mm corner buffer
-        gap_pt = cm_to_pt(0.65)            # 6.5 mm inter-column gap
+        extra_buffer_pt = cm_to_pt(0.20)   # 2.0 mm corner buffer
+        gap_pt = cm_to_pt(0.50)            # 5.0 mm inter-column gap
 
         avg_len = sum(len(cw) for cw in clean_words) / len(clean_words) if clean_words else 0
 
         # If items are long sentences / dialogue options (A. ... | B. ...), use 1 column with clean tight width
         is_sentence_options = any(re.match(r'^[A-Z]\.\s+', cw) for cw in clean_words) or (max_item_w_pt >= (printable_width_pt * 0.55)) or (avg_len >= 38)
         if is_sentence_options:
-            needed_w = max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt + cm_to_pt(0.35)
-            box_w = min(printable_width_pt, max(printable_width_pt * 0.40, needed_w))
+            needed_w = max_item_w_pt + (2 * pad_horiz_pt) + extra_buffer_pt
+            box_w = min(printable_width_pt, needed_w)
             return 1, [[w] for w in words], box_w, [0.0]
 
         items_with_w = list(zip(words, item_widths_pt))
@@ -178,13 +178,13 @@ class BoxesRendererMixin:
             line_widths_pt = [self.measure_text_width_pt(doc, cl, font_name, font_size, is_bold=True) for cl in clean_lines]
             max_line_w_pt = max(line_widths_pt) if line_widths_pt else 50.0
 
-            pad_left_pt = cm_to_pt(0.20)   # Exactly 2.0 mm left margin
-            pad_right_pt = cm_to_pt(0.20)  # Exactly 2.0 mm right margin
-            extra_buffer_pt = cm_to_pt(0.25) # 2.5 mm corner clearance buffer
+            pad_left_pt = cm_to_pt(0.20)     # Exactly 2.0 mm left margin
+            pad_right_pt = cm_to_pt(0.20)    # Exactly 2.0 mm right margin
+            extra_buffer_pt = cm_to_pt(0.20) # 2.0 mm corner clearance buffer
             total_pad_pt = pad_left_pt + pad_right_pt + extra_buffer_pt
 
-            needed_w = max_line_w_pt + total_pad_pt + cm_to_pt(0.35)
-            box_width_pt = min(printable_width_pt, max(printable_width_pt * 0.50, needed_w))
+            needed_w = max_line_w_pt + total_pad_pt
+            box_width_pt = min(printable_width_pt, needed_w)
 
             num_lines = len(lines)
             box_height_pt = (num_lines * (font_size * 1.25)) + (font_size * 0.40) + 2.0
