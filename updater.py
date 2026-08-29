@@ -1,6 +1,6 @@
 """
 Auto and Manual Update Module for ULN / JSON to DOCX Converter.
-Integrates with GitHub Releases (CallMeMrPenguin/Docx-Converter).
+Integrates with GitHub Releases, Tags, and Raw Repository (CallMeMrPenguin/Docx-Converter).
 """
 
 import os
@@ -12,7 +12,7 @@ import urllib.error
 import subprocess
 import tempfile
 import webbrowser
-from typing import Dict, Any, Optional, Tuple, Callable
+from typing import Dict, Any, Optional, Tuple, Callable, List
 
 DEFAULT_REPO = "CallMeMrPenguin/Docx-Converter"
 FALLBACK_VERSION = "1.0.0"
@@ -77,6 +77,8 @@ def get_github_token() -> Optional[str]:
 
 def parse_version(v_str: str) -> Tuple[int, ...]:
     """Parses a version string like 'v1.2.3' or '1.2' into a tuple of ints."""
+    if not v_str:
+        return (0, 0, 0)
     clean = v_str.strip().lstrip("vV")
     parts = []
     for chunk in clean.split("."):
@@ -95,8 +97,8 @@ def is_newer_version(latest_ver: str, current_ver: str) -> bool:
 
 def check_for_updates(repo: str = DEFAULT_REPO) -> Dict[str, Any]:
     """
-    Checks GitHub Releases for updates.
-    Returns a dict with update details.
+    Checks GitHub Releases, Tags, and raw VERSION file for updates.
+    Returns a dict with comprehensive update details.
     """
     current_ver = get_current_version()
     result: Dict[str, Any] = {
@@ -113,9 +115,6 @@ def check_for_updates(repo: str = DEFAULT_REPO) -> Dict[str, Any]:
     }
 
     token = get_github_token()
-
-    # 1. Try GitHub API for Latest Release
-    api_url = f"https://api.github.com/repos/{repo}/releases/latest"
     headers = {
         "User-Agent": "Docx-Converter-Updater/1.0",
         "Accept": "application/vnd.github.v3+json"
@@ -123,58 +122,111 @@ def check_for_updates(repo: str = DEFAULT_REPO) -> Dict[str, Any]:
     if token:
         headers["Authorization"] = f"Bearer {token}"
 
-    req = urllib.request.Request(api_url, headers=headers)
+    raw_main_ver: Optional[str] = None
+    releases_data: List[Dict[str, Any]] = []
+    tags_data: List[str] = []
+    errors: List[str] = []
+
+    # 1. Fetch raw VERSION from main branch (bypasses GitHub API rate limits)
     try:
-        with urllib.request.urlopen(req, timeout=6) as response:
-            if response.status == 200:
-                data = json.loads(response.read().decode("utf-8"))
-                tag_name = data.get("tag_name", "").strip()
-                latest_ver = tag_name.lstrip("vV") if tag_name else current_ver
-                
-                result["latest_version"] = latest_ver
-                result["release_title"] = data.get("name", f"Release {tag_name}")
-                result["release_notes"] = data.get("body", "").strip() or "Không có mô tả chi tiết."
-                result["release_url"] = data.get("html_url", result["release_url"])
-                result["success"] = True
-
-                # Look for downloadable .exe asset
-                for asset in data.get("assets", []):
-                    name = asset.get("name", "")
-                    if name.lower().endswith(".exe"):
-                        # If token present, use asset url with octet-stream for private repos, else browser download url
-                        result["download_url"] = asset.get("url") if token else asset.get("browser_download_url")
-                        result["asset_name"] = name
-                        break
-
-                if is_newer_version(latest_ver, current_ver):
-                    result["has_update"] = True
-                return result
-    except urllib.error.HTTPError as he:
-        pass
+        raw_url = f"https://raw.githubusercontent.com/{repo}/main/VERSION"
+        raw_req = urllib.request.Request(raw_url, headers={"User-Agent": "Docx-Converter-Updater/1.0"})
+        with urllib.request.urlopen(raw_req, timeout=5) as resp:
+            if resp.status == 200:
+                val = resp.read().decode("utf-8").strip()
+                if val:
+                    raw_main_ver = val
     except Exception as e:
-        result["error"] = str(e)
+        errors.append(f"Raw VERSION: {e}")
 
-    # 2. Fallback: Check raw VERSION file from main branch
-    raw_url = f"https://raw.githubusercontent.com/{repo}/main/VERSION"
+    # 2. Fetch GitHub Releases list (finds all releases, including latest and assets)
     try:
-        raw_headers = {"User-Agent": "Docx-Converter-Updater/1.0"}
-        if token:
-            raw_headers["Authorization"] = f"Bearer {token}"
-        raw_req = urllib.request.Request(raw_url, headers=raw_headers)
-        with urllib.request.urlopen(raw_req, timeout=5) as response:
-            if response.status == 200:
-                raw_ver = response.read().decode("utf-8").strip()
-                if raw_ver:
-                    result["latest_version"] = raw_ver
-                    result["release_title"] = f"Phiên bản {raw_ver}"
-                    result["release_notes"] = f"Bản cập nhật mới nhất {raw_ver} đã có sẵn trên GitHub."
-                    result["success"] = True
-                    if is_newer_version(raw_ver, current_ver):
-                        result["has_update"] = True
-                    return result
+        api_url = f"https://api.github.com/repos/{repo}/releases"
+        req = urllib.request.Request(api_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            if resp.status == 200:
+                releases_data = json.loads(resp.read().decode("utf-8"))
     except Exception as e:
-        if not result["error"]:
-            result["error"] = str(e)
+        errors.append(f"Releases API: {e}")
+
+    # 3. Fetch GitHub Tags list (in case tags exist without explicit releases)
+    try:
+        tags_url = f"https://api.github.com/repos/{repo}/tags"
+        req = urllib.request.Request(tags_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            if resp.status == 200:
+                tags_json = json.loads(resp.read().decode("utf-8"))
+                tags_data = [t.get("name", "").strip().lstrip("vV") for t in tags_json if t.get("name")]
+    except Exception as e:
+        errors.append(f"Tags API: {e}")
+
+    # Find highest version among releases
+    best_release: Optional[Dict[str, Any]] = None
+    highest_rel_ver: Optional[str] = None
+    for rel in releases_data:
+        tag = rel.get("tag_name", "").strip().lstrip("vV")
+        if not tag:
+            continue
+        if highest_rel_ver is None or is_newer_version(tag, highest_rel_ver):
+            highest_rel_ver = tag
+            best_release = rel
+
+    # Find highest version among tags
+    highest_tag_ver: Optional[str] = None
+    for t_ver in tags_data:
+        if highest_tag_ver is None or is_newer_version(t_ver, highest_tag_ver):
+            highest_tag_ver = t_ver
+
+    # Determine absolute highest candidate version
+    candidates: List[str] = []
+    if raw_main_ver:
+        candidates.append(raw_main_ver)
+    if highest_rel_ver:
+        candidates.append(highest_rel_ver)
+    if highest_tag_ver:
+        candidates.append(highest_tag_ver)
+
+    if not candidates:
+        if errors:
+            result["error"] = " | ".join(errors)
+        return result
+
+    best_ver = max(candidates, key=parse_version)
+    result["latest_version"] = best_ver
+    result["success"] = True
+
+    # If the best version matches or is covered by a release with an executable asset
+    matched_release = None
+    for rel in releases_data:
+        tag = rel.get("tag_name", "").strip().lstrip("vV")
+        if tag == best_ver:
+            matched_release = rel
+            break
+
+    # If exact release not found for best_ver, fallback to the latest release available
+    target_rel = matched_release or best_release
+
+    if target_rel:
+        tag_name = target_rel.get("tag_name", f"v{best_ver}")
+        result["release_title"] = target_rel.get("name", f"Release {tag_name}")
+        result["release_notes"] = target_rel.get("body", "").strip() or "Bản cập nhật mới trên GitHub."
+        result["release_url"] = target_rel.get("html_url", result["release_url"])
+
+        # Look for downloadable .exe asset
+        for asset in target_rel.get("assets", []):
+            name = asset.get("name", "")
+            if name.lower().endswith(".exe"):
+                # Use public browser_download_url by default for direct reliable downloads
+                result["download_url"] = asset.get("browser_download_url") or asset.get("url")
+                result["asset_name"] = name
+                break
+    else:
+        result["release_title"] = f"Phiên bản v{best_ver}"
+        result["release_notes"] = f"Đã có phiên bản mới v{best_ver} trên GitHub.\n\nBản cập nhật mã nguồn mới nhất đã sẵn sàng."
+        result["release_url"] = f"https://github.com/{repo}/releases"
+
+    if is_newer_version(best_ver, current_ver):
+        result["has_update"] = True
 
     return result
 
@@ -204,10 +256,12 @@ def download_and_install_update(
     token = get_github_token()
     headers = {
         "User-Agent": "Docx-Converter-Updater/1.0",
-        "Accept": "application/octet-stream"
+        "Accept": "*/*"
     }
-    if token:
+    # Only attach Authorization if hitting api.github.com, not public github.com release assets
+    if token and "api.github.com" in download_url:
         headers["Authorization"] = f"Bearer {token}"
+        headers["Accept"] = "application/octet-stream"
 
     try:
         # Download new executable with progress reporting
