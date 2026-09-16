@@ -532,9 +532,9 @@ class ULNParser:
                         merged_blocks.append(nxt)
                         i += 2
                         continue
-                    elif nxt.tag in ["P0", "P1"]:
-                        # Check if next block starts with dialogue/speaker pattern e.g. A:, Speaker A:, Q:
-                        if re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', nxt.content, re.IGNORECASE):
+                    elif nxt.tag == "P0":
+                        # Check if next block is strictly a dialogue speaker pattern e.g. Speaker A:, Speaker 1: (with a colon)
+                        if re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+[A-Za-z0-9]+|[A-Z][a-zA-Z0-9]*)\s*:(?:\*\*|\*|\])?)\s*', nxt.content, re.IGNORECASE):
                             nxt.tag = "P0"
                             nxt.content = f"{curr.content.strip()} {nxt.content}"
                             nxt.spans = parse_inline_spans(nxt.content)

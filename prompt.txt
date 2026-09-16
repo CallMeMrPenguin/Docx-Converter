@@ -285,6 +285,22 @@ G. DIALOGUE & CONVERSATION EXERCISES:
      [P0] Tom: (3) <blank>
      [P0] Doctor: You need to avoid highly fatty and greasy foods.
 
+   - CASE 3: SENTENCE / PARAGRAPH REARRANGEMENT & ORDERING QUESTIONS:
+     When a question asks to arrange sentences (a., b., c., d., e.) into a coherent paragraph or dialogue:
+     - Place the question heading / number on line 1 using `[P0]` (e.g. `[P0] Question #21:`).
+     - Place each sentence to be rearranged on its own line below `[P0]` using `[P1]` (e.g. `[P1] a. ...`, `[P1] b. ...`, `[P1] c. ...`).
+     - Place multiple-choice rearrangement options in `[OPT] ... [/OPT]` directly below the `[P1]` lines.
+     - Example:
+       [NUM]
+       [P0] Question #21:
+       [P1] a. In addition, cycling helps students improve their physical fitness and stay active throughout the school day.
+       [P1] b. Riding a bicycle to school is becoming a popular choice for many teenagers today.
+       [P1] c. To conclude, using bicycles is an excellent way for teenagers to protect the environment while staying healthy.
+       [P1] d. First of all, it is an eco-friendly mode of transport because it does not release harmful exhaust fumes into the air.
+       [P1] e. However, students should always wear helmets and follow road safety rules to ensure their personal safety.
+       [OPT] b - d - a - e - c | d - a - b - e - c | b - a - d - c - e | d - b - a - e - c [/OPT]
+       [/NUM]
+
 H. EXERCISES WITH HANDWRITING ANSWER LINES BELOW QUESTIONS:
    - When an exercise in the original textbook leaves a blank space or empty line under each question for students to write answers (e.g. "Underline and write S, V, O, Adv", Sentence Rewriting, or Open-ended Q&A):
    - ALWAYS output `[P1] <blank>` below each question line!

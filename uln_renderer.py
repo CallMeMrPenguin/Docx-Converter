@@ -441,13 +441,13 @@ class ULNWordRenderer(RendererBlocksMixin):
                 # Check if this P0 is followed by an OPT block, Dialogue continuation, BOX, or Sentence Rewrite blank line
                 has_next_opt = self.is_in_multiple_choice_question(blocks, idx_block)
                 has_next_box = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag == "BOX")
-                has_next_dlg = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P0"] and bool(re.search(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', blocks[idx_block + 1].content, re.IGNORECASE)))
+                has_next_dlg = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P0"] and bool(re.search(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+[A-Za-z0-9]+|[A-Za-z0-9_]+)\s*:(?:\*\*|\*|\])?)\s*', blocks[idx_block + 1].content, re.IGNORECASE)))
                 has_next_rewrite_blank = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P2"] and (
                     bool(re.search(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]|_{3,}|(?:→|->)', blocks[idx_block + 1].content))
                 ))
                 pref_chk, delim_chk, q_num_chk, body_chk = extract_question_prefix_and_body(block.content)
                 is_numbered_q = (q_num_chk is not None)
-                is_dialogue_line = bool(re.search(r'(?:^|#\d+[\.\)]\s*)(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', block.content, re.IGNORECASE))
+                is_dialogue_line = bool(re.search(r'(?:^|#\d+[\.\)]\s*)(?:(?:\*\*|\*|\[)?(?:Speaker\s+[A-Za-z0-9]+|[A-Za-z0-9_]+)\s*:(?:\*\*|\*|\])?)\s*', block.content, re.IGNORECASE))
 
                 if getattr(self, "is_inside_num_container", False) and tag != "PIC_GRID":
                     sel.ParagraphFormat.SpaceBefore = 0
@@ -737,7 +737,7 @@ class ULNWordRenderer(RendererBlocksMixin):
 
             elif tag in ["P1", "P2"]:
                 pref, delim, q_num, content_to_render = extract_question_prefix_and_body(block.content)
-                is_dlg_speaker = bool(re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', content_to_render, re.IGNORECASE))
+                is_dlg_speaker = bool(re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+[A-Za-z0-9]+|[A-Za-z0-9_]+)\s*:(?:\*\*|\*|\])?)\s*', content_to_render, re.IGNORECASE))
 
                 if q_num is not None:
                     left_indent_cm = 0.0
@@ -753,7 +753,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                     except Exception:
                         pass
 
-                has_next_dlg = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P0"] and bool(re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+)?[A-Za-z0-9]+\s*[:\.\-](?:\*\*|\*|\])?)\s*', blocks[idx_block + 1].content, re.IGNORECASE)))
+                has_next_dlg = (idx_block + 1 < len(blocks) and blocks[idx_block + 1].tag in ["P1", "P0"] and bool(re.match(r'^\s*(?:(?:\*\*|\*|\[)?(?:Speaker\s+[A-Za-z0-9]+|[A-Za-z0-9_]+)\s*:(?:\*\*|\*|\])?)\s*', blocks[idx_block + 1].content, re.IGNORECASE)))
                 has_next_opt = self.is_in_multiple_choice_question(blocks, idx_block)
 
                 if getattr(self, "is_inside_num_container", False) and tag != "PIC_GRID":
