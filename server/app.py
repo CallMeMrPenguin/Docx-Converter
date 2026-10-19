@@ -19,7 +19,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Query, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -341,12 +341,19 @@ async def upload_images(files: List[UploadFile] = File(...)):
 @app.get("/api/files")
 def list_managed_files(folder: Optional[str] = None, category: Optional[str] = "all"):
     """Lists DOCX and ULN/TXT files with metadata in the target folder."""
-    target_dir = folder
     output_dir = os.path.join(project_root, "output")
     os.makedirs(output_dir, exist_ok=True)
 
-    if not target_dir or not os.path.exists(target_dir):
+    target_dir = sanitize_filepath(folder) if folder else output_dir
+    if not target_dir:
         target_dir = output_dir
+
+    # If user provided a path to a specific file, browse its parent directory
+    if os.path.isfile(target_dir):
+        target_dir = os.path.dirname(target_dir)
+
+    if not os.path.exists(target_dir):
+        raise HTTPException(status_code=404, detail=f"Thư mục không tồn tại: {target_dir}")
 
     files_list = []
     try:
@@ -454,21 +461,54 @@ def delete_file(req: DeleteFileRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/files/open-folder")
-def open_folder_in_explorer(req: OpenFolderRequest):
-    """Opens target folder in Windows Explorer."""
-    target_path = sanitize_filepath(req.filepath) if req.filepath else None
-    target_folder = sanitize_filepath(req.folder) if req.folder else None
-    path = target_folder or (os.path.dirname(target_path) if target_path else os.path.join(project_root, "output"))
+@app.api_route("/api/files/open-folder", methods=["GET", "POST", "OPTIONS"])
+@app.api_route("/api/files/open-folder/", methods=["GET", "POST", "OPTIONS"])
+async def open_folder_in_explorer(
+    request: Request,
+    folder: Optional[str] = Query(None),
+    filepath: Optional[str] = Query(None)
+):
+    """Opens target folder or selects target file in Windows Explorer."""
+    if request.method == "OPTIONS":
+        return {"status": "ok"}
+
+    target_folder = folder
+    target_filepath = filepath
+
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                target_folder = body.get("folder", target_folder)
+                target_filepath = body.get("filepath", target_filepath)
+        except Exception:
+            pass
+
+    clean_file = sanitize_filepath(target_filepath) if target_filepath else ""
+    clean_folder = sanitize_filepath(target_folder) if target_folder else ""
+
+    output_dir = os.path.join(project_root, "output")
+    os.makedirs(output_dir, exist_ok=True)
+
+    path = clean_file or clean_folder or output_dir
     if not os.path.exists(path):
-        path = os.path.join(project_root, "output")
+        parent = os.path.dirname(path)
+        if parent and os.path.exists(parent):
+            path = parent
+        else:
+            path = output_dir
+
     try:
+        abs_path = os.path.abspath(path)
         if os.name == "nt":
-            if target_path and os.path.exists(target_path):
-                os.system(f'explorer /select,"{os.path.abspath(target_path)}"')
+            import subprocess
+            if os.path.isfile(abs_path):
+                subprocess.Popen(f'explorer /select,"{abs_path}"', shell=True)
             else:
-                os.startfile(path)
-        return {"success": True}
+                subprocess.Popen(f'explorer "{abs_path}"', shell=True)
+        else:
+            webbrowser.open(f"file://{abs_path}")
+        return {"success": True, "opened": abs_path}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -485,18 +525,50 @@ def list_docx_files(folder: Optional[str] = None, only_uln: bool = True):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@app.post("/api/embed-uln")
-def embed_uln_to_docx(req: EmbedRequest):
+@app.api_route("/api/embed-uln", methods=["GET", "POST", "OPTIONS"])
+@app.api_route("/api/embed-uln/", methods=["GET", "POST", "OPTIONS"])
+async def embed_uln_to_docx(
+    request: Request,
+    filepath: Optional[str] = Query(None),
+    uln_text: Optional[str] = Query(None)
+):
     """Embeds raw ULN source into an existing DOCX file."""
-    filepath = sanitize_filepath(req.filepath)
-    if not os.path.exists(filepath):
-        raise HTTPException(status_code=404, detail=f"Không tìm thấy file DOCX: {filepath}")
-    if not filepath.lower().endswith(".docx"):
+    if request.method == "OPTIONS":
+        return {"status": "ok"}
+
+    target_filepath = filepath
+    target_uln = uln_text
+
+    if request.method == "POST":
+        try:
+            body = await request.json()
+            if isinstance(body, dict):
+                target_filepath = body.get("filepath", target_filepath)
+                target_uln = body.get("uln_text", target_uln)
+        except Exception:
+            pass
+
+    if not target_filepath:
+        if request.method == "GET":
+            return {
+                "status": "ready",
+                "info": "Gửi yêu cầu POST với JSON {'filepath': '...', 'uln_text': '...'} để nhúng mã ULN vào file Word."
+            }
+        raise HTTPException(status_code=400, detail="Vui lòng cung cấp đường dẫn tệp DOCX (filepath).")
+
+    clean_path = sanitize_filepath(target_filepath)
+    if not os.path.exists(clean_path):
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy file DOCX: {clean_path}")
+    if not clean_path.lower().endswith(".docx"):
         raise HTTPException(status_code=400, detail="Tệp được chọn không phải là tệp định dạng .docx.")
-    success = embed_raw_uln_docx(filepath, req.uln_text)
+
+    if target_uln is None:
+        target_uln = ""
+
+    success = embed_raw_uln_docx(clean_path, target_uln)
     if not success:
         raise HTTPException(status_code=500, detail="Nhúng mã ULN thất bại. Vui lòng đảm bảo file không bị khóa hoặc đang mở ở tiến trình khác.")
-    return {"success": True, "filepath": filepath}
+    return {"success": True, "filepath": clean_path}
 
 
 @app.post("/api/open-docx")

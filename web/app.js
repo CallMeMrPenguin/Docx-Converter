@@ -879,8 +879,8 @@ document.addEventListener('DOMContentLoaded', () => {
     setTimeout(() => el.embedDocxPathInput.focus(), 100);
   });
 
-  el.btnConfirmEmbedRaw.addEventListener('click', async () => {
-    let rawPath = el.embedDocxPathInput.value.trim();
+  async function handleConfirmEmbedRaw() {
+    let rawPath = (el.embedDocxPathInput.value || '').trim();
     if (!rawPath) {
       showToast('Vui lòng nhập đường dẫn file DOCX!', 'warning');
       return;
@@ -905,11 +905,19 @@ document.addEventListener('DOMContentLoaded', () => {
           onClick: () => openCompiledDocx(data.filepath),
         });
       } else {
-        const err = await res.json();
-        showToast(`Nhúng thất bại: ${err.detail}`, 'error');
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        showToast(`Nhúng thất bại: ${err.detail || res.statusText}`, 'error');
       }
     } catch (err) {
       showToast(`Lỗi: ${err.message}`, 'error');
+    }
+  }
+
+  el.btnConfirmEmbedRaw.addEventListener('click', handleConfirmEmbedRaw);
+  el.embedDocxPathInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleConfirmEmbedRaw();
     }
   });
 
@@ -1047,15 +1055,29 @@ document.addEventListener('DOMContentLoaded', () => {
       loadFileManagement();
     } else {
       el.customFolderWrap.removeAttribute('hidden');
+      if (state.fmFolder && state.fmFolder !== state.outputFolder && state.fmFolder !== state.documentsFolder) {
+        el.fmCustomFolderPath.value = state.fmFolder;
+      }
       el.fmCustomFolderPath.focus();
     }
   });
 
-  el.btnApplyCustomFolder.addEventListener('click', () => {
-    const custom = el.fmCustomFolderPath.value.trim();
-    if (custom) {
-      state.fmFolder = custom;
-      loadFileManagement();
+  function applyCustomFolder() {
+    let custom = (el.fmCustomFolderPath.value || '').trim();
+    custom = custom.replace(/^["']|["']$/g, '').trim();
+    if (!custom) {
+      showToast('Vui lòng nhập đường dẫn thư mục!', 'warning');
+      return;
+    }
+    state.fmFolder = custom;
+    loadFileManagement();
+  }
+
+  el.btnApplyCustomFolder.addEventListener('click', applyCustomFolder);
+  el.fmCustomFolderPath.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      applyCustomFolder();
     }
   });
 
@@ -1071,12 +1093,19 @@ document.addEventListener('DOMContentLoaded', () => {
   el.btnFmRefresh.addEventListener('click', loadFileManagement);
 
   el.btnFmOpenFolder.addEventListener('click', async () => {
+    const targetFolder = state.fmFolder || state.outputFolder || '';
     try {
-      await fetch('/api/files/open-folder', {
+      const res = await fetch('/api/files/open-folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: state.fmFolder }),
+        body: JSON.stringify({ folder: targetFolder }),
       });
+      if (res.ok) {
+        showToast('Đang mở thư mục trong Windows Explorer...', 'success');
+      } else {
+        const err = await res.json().catch(() => ({ detail: res.statusText }));
+        showToast('Không thể mở thư mục: ' + (err.detail || res.statusText), 'error');
+      }
     } catch (err) {
       showToast('Không thể mở thư mục: ' + err.message, 'error');
     }
@@ -1087,18 +1116,26 @@ document.addEventListener('DOMContentLoaded', () => {
     resetFmPreview();
 
     try {
-      const url = `/api/files?folder=${encodeURIComponent(state.fmFolder || '')}&category=${encodeURIComponent(state.fmCategory)}`;
+      const folderParam = state.fmFolder || '';
+      const url = `/api/files?folder=${encodeURIComponent(folderParam)}&category=${encodeURIComponent(state.fmCategory)}`;
       const res = await fetch(url);
-      if (!res.ok) throw new Error('Không thể đọc danh sách tệp');
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ detail: 'Không thể đọc thư mục' }));
+        throw new Error(err.detail || 'Không thể đọc danh sách tệp');
+      }
 
       const data = await res.json();
       state.fmFiles = data.files || [];
       state.fmFolder = data.folder || state.fmFolder;
+      if (el.fmCustomFolderPath && state.fmFolder) {
+        el.fmCustomFolderPath.value = state.fmFolder;
+      }
       el.fmFileCountPill.textContent = `${state.fmFiles.length} tệp`;
 
       renderFileManagerTable();
     } catch (err) {
       el.fmTableBody.innerHTML = `<tr><td colspan="6" class="text-center" style="color:#ef4444">${err.message}</td></tr>`;
+      showToast(err.message, 'error');
     }
   }
 

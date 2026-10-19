@@ -320,9 +320,36 @@ def has_embedded_uln(docx_path: str) -> bool:
 
 
 def embed_raw_uln_docx(docx_path: str, raw_uln_text: str) -> bool:
-    """Natively embeds raw ULN into a DOCX file using Word COM CustomXMLParts (safe collection cleanup)."""
+    """
+    Natively embeds raw ULN into a DOCX file using both ZIP package injection
+    and Word COM CustomXMLParts for maximum compatibility and resilience.
+    """
     if not os.path.exists(docx_path):
         return False
+
+    abs_path = os.path.abspath(docx_path)
+    zip_success = False
+
+    # 1. Pure Python zipfile injection (fast, safe, 100% reliable without needing MS Word)
+    temp_zip = abs_path + ".tmp.zip"
+    try:
+        with zipfile.ZipFile(abs_path, 'r') as zin:
+            with zipfile.ZipFile(temp_zip, 'w', compression=zipfile.ZIP_DEFLATED) as zout:
+                for item in zin.infolist():
+                    if item.filename not in ['customXml/uln_raw_source.txt', 'uln_raw_source.txt']:
+                        zout.writestr(item, zin.read(item.filename))
+                zout.writestr('customXml/uln_raw_source.txt', raw_uln_text.encode('utf-8'))
+        os.replace(temp_zip, abs_path)
+        zip_success = True
+    except Exception as ze:
+        print(f"[ULNCompiler] Zipfile embedding note: {ze}")
+        if os.path.exists(temp_zip):
+            try:
+                os.remove(temp_zip)
+            except Exception:
+                pass
+
+    # 2. Also sync with Word COM CustomXMLParts if Word COM is available
     word = None
     doc = None
     try:
@@ -332,7 +359,7 @@ def embed_raw_uln_docx(docx_path: str, raw_uln_text: str) -> bool:
             word.DisplayAlerts = 0
         except Exception:
             pass
-        doc = word.Documents.Open(os.path.abspath(docx_path))
+        doc = word.Documents.Open(abs_path)
 
         # Safe deletion: collect parts first to avoid modifying collection during forward iteration
         parts_to_delete = []
@@ -355,8 +382,8 @@ def embed_raw_uln_docx(docx_path: str, raw_uln_text: str) -> bool:
         doc.Save()
         return True
     except Exception as e:
-        print(f"[ULNCompiler] Error embedding raw ULN via COM: {e}")
-        return False
+        print(f"[ULNCompiler] Word COM note: {e}")
+        return zip_success
     finally:
         if doc:
             try:
@@ -368,6 +395,10 @@ def embed_raw_uln_docx(docx_path: str, raw_uln_text: str) -> bool:
                 word.Quit()
             except Exception:
                 pass
+        try:
+            pythoncom.CoUninitialize()
+        except Exception:
+            pass
         try:
             pythoncom.CoUninitialize()
         except Exception:
