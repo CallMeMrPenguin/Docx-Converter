@@ -20,7 +20,8 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // ── Heartbeat & Auto-Shutdown on Tab Close ─────────────────────
-  // Send heartbeat every 3 seconds to keep local server alive
+  // Send initial heartbeat immediately on load, then every 3 seconds
+  fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
   setInterval(() => {
     fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
   }, 3000);
@@ -69,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // Toolbar & Editor
     btnSaveUlnDirect: document.getElementById('btnSaveUlnDirect'),
     btnEmbedRaw: document.getElementById('btnEmbedRaw'),
+    btnOpenOutputFolder: document.getElementById('btnOpenOutputFolder'),
     btnImportTxt: document.getElementById('btnImportTxt'),
     btnLoadSample: document.getElementById('btnLoadSample'),
     btnClearText: document.getElementById('btnClearText'),
@@ -921,6 +923,25 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
+  if (el.btnOpenOutputFolder) {
+    el.btnOpenOutputFolder.addEventListener('click', async () => {
+      try {
+        const res = await fetch('/api/files/open-folder', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ folder: state.outputFolder || '' }),
+        });
+        if (res.ok) {
+          showToast('Đã mở thư mục output trong Windows Explorer', 'success');
+        } else {
+          showToast('Không thể mở thư mục output', 'error');
+        }
+      } catch (err) {
+        showToast('Không thể kết nối máy chủ: ' + err.message, 'error');
+      }
+    });
+  }
+
   // ── Compilation Orchestration ──────────────────────────────────
   el.btnCompile.addEventListener('click', startCompilation);
   el.btnCancelCompile.addEventListener('click', cancelCompilation);
@@ -1093,12 +1114,24 @@ document.addEventListener('DOMContentLoaded', () => {
   el.btnFmRefresh.addEventListener('click', loadFileManagement);
 
   el.btnFmOpenFolder.addEventListener('click', async () => {
-    const targetFolder = state.fmFolder || state.outputFolder || '';
+    let targetFolder = state.fmFolder;
+    if (el.fmFolderSelect && el.fmFolderSelect.value === 'custom' && el.fmCustomFolderPath && el.fmCustomFolderPath.value.trim()) {
+      targetFolder = el.fmCustomFolderPath.value.trim().replace(/^["']|["']$/g, '').trim();
+    }
+    if (!targetFolder) {
+      targetFolder = state.outputFolder || '';
+    }
+
+    const payload = { folder: targetFolder };
+    if (state.fmSelectedFile && state.fmSelectedFile.path) {
+      payload.filepath = state.fmSelectedFile.path;
+    }
+
     try {
       const res = await fetch('/api/files/open-folder', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ folder: targetFolder }),
+        body: JSON.stringify(payload),
       });
       if (res.ok) {
         showToast('Đang mở thư mục trong Windows Explorer...', 'success');
@@ -1107,7 +1140,7 @@ document.addEventListener('DOMContentLoaded', () => {
         showToast('Không thể mở thư mục: ' + (err.detail || res.statusText), 'error');
       }
     } catch (err) {
-      showToast('Không thể mở thư mục: ' + err.message, 'error');
+      showToast('Không thể kết nối máy chủ: ' + err.message, 'error');
     }
   });
 

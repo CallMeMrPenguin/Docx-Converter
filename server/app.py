@@ -145,7 +145,7 @@ def shutdown_server():
     shutdown_cancel_event.clear()
 
     def _delayed_exit():
-        time.sleep(3.5)
+        time.sleep(15.0)
         if not shutdown_cancel_event.is_set():
             print("\n[Server] Tab trình duyệt đã đóng. Máy chủ đã dừng.")
             os._exit(0)
@@ -502,10 +502,18 @@ async def open_folder_in_explorer(
         abs_path = os.path.abspath(path)
         if os.name == "nt":
             import subprocess
-            if os.path.isfile(abs_path):
-                subprocess.Popen(f'explorer /select,"{abs_path}"', shell=True)
+            if clean_file and os.path.isfile(clean_file):
+                try:
+                    subprocess.Popen(['explorer.exe', f'/select,{os.path.abspath(clean_file)}'])
+                except Exception:
+                    target_dir = abs_path if os.path.isdir(abs_path) else os.path.dirname(abs_path)
+                    os.startfile(target_dir)
             else:
-                subprocess.Popen(f'explorer "{abs_path}"', shell=True)
+                target_dir = abs_path if os.path.isdir(abs_path) else os.path.dirname(abs_path)
+                try:
+                    os.startfile(target_dir)
+                except Exception:
+                    subprocess.Popen(['explorer.exe', target_dir])
         else:
             webbrowser.open(f"file://{abs_path}")
         return {"success": True, "opened": abs_path}
