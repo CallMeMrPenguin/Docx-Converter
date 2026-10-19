@@ -15,7 +15,20 @@ class GdiTextMeasurer:
         self._dpi_x = 96
         self._font_cache = {}
         self._text_cache = {}
+        self._max_cache_size = 10000
         self._init_gdi()
+
+    def __del__(self):
+        try:
+            if self._gdi32 and self._font_cache:
+                for hfont in self._font_cache.values():
+                    self._gdi32.DeleteObject(hfont)
+                self._font_cache.clear()
+            if self._user32 and self._hdc:
+                self._user32.ReleaseDC(0, self._hdc)
+                self._hdc = None
+        except Exception:
+            pass
 
     def _init_gdi(self):
         try:
@@ -36,6 +49,12 @@ class GdiTextMeasurer:
         cache_key = (text, font_name, font_size_pt, is_bold, is_italic)
         if cache_key in self._text_cache:
             return self._text_cache[cache_key]
+
+        if len(self._text_cache) >= self._max_cache_size:
+            # Drop the oldest 2000 entries to prevent memory leak
+            keys = list(self._text_cache.keys())[:2000]
+            for k in keys:
+                self._text_cache.pop(k, None)
 
         if self._gdi32 and self._hdc:
             try:
@@ -102,7 +121,7 @@ class TypographyMixin:
         # 1. Replace <blank> / [BLANK] with 11 underscores matching write_inline_spans
         t = re.sub(r'<(?:blank|BLANK)>|\[(?:blank|BLANK)\]', '___________', text)
         # 2. Extract inner text from [text]{tag}
-        t = re.sub(r'\[(.*?)\]\{(?:u|b|i|[a-zA-Z0-9#:,]+)\}', r'\1', text)
+        t = re.sub(r'\[(.*?)\]\{(?:u|b|i|[a-zA-Z0-9#:,]+)\}', r'\1', t)
         # 3. Strip [ins], [/ins] and [PIC: ...]
         t = re.sub(r'\[\/?(?:ins|INS)\]', '', t)
         t = re.sub(r'\[PIC(?::.*?)?\]', '', t, flags=re.IGNORECASE)

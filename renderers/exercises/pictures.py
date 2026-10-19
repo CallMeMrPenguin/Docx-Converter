@@ -1,7 +1,7 @@
 import os
 import re
 from typing import List
-from uln_parser import ULNBlock, PicInfo, parse_pic_tag
+from uln_parser import ULNBlock, PicInfo, parse_pic_tag, parse_inline_spans
 from renderers.common.units_and_colors import cm_to_pt
 
 
@@ -16,12 +16,7 @@ class PicturesRendererMixin:
         if target_path and os.path.exists(target_path):
             try:
                 shape = sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
-                # Enforce UNIFORM identical width and height across all pictures in the exercise
-                try:
-                    shape.LockAspectRatio = 0
-                except Exception:
-                    pass
-
+                
                 is_in_table = False
                 try:
                     is_in_table = bool(sel.Information(12))  # wdWithInTable = 12
@@ -29,20 +24,32 @@ class PicturesRendererMixin:
                     pass
 
                 if getattr(self, 'current_tab2_pic_width_cm', None):
-                    w_cm = self.current_tab2_pic_width_cm
-                    h_cm = getattr(self, 'current_tab2_pic_height_cm', w_cm * 0.72)
-                    shape.Width = cm_to_pt(w_cm)
-                    shape.Height = cm_to_pt(h_cm)
+                    max_w_pt = cm_to_pt(self.current_tab2_pic_width_cm)
+                    max_h_pt = cm_to_pt(getattr(self, 'current_tab2_pic_height_cm', self.current_tab2_pic_width_cm * 0.72))
                 elif is_in_table or pic.size == "small":
-                    shape.Width = cm_to_pt(3.8)
-                    shape.Height = cm_to_pt(2.7)
+                    max_w_pt = cm_to_pt(3.8)
+                    max_h_pt = cm_to_pt(2.7)
                 elif pic.size == "large":
-                    shape.Width = cm_to_pt(9.0)
-                    shape.Height = cm_to_pt(6.0)
+                    max_w_pt = cm_to_pt(9.0)
+                    max_h_pt = cm_to_pt(6.0)
                 else:
                     # Standalone medium picture
-                    shape.Width = cm_to_pt(5.0)
-                    shape.Height = cm_to_pt(3.5)
+                    max_w_pt = cm_to_pt(5.0)
+                    max_h_pt = cm_to_pt(3.5)
+
+                orig_w = float(shape.Width)
+                orig_h = float(shape.Height)
+                if orig_w > 0 and orig_h > 0:
+                    scale = min(max_w_pt / orig_w, max_h_pt / orig_h)
+                    try:
+                        shape.LockAspectRatio = -1  # msoTrue
+                    except Exception:
+                        pass
+                    shape.Width = orig_w * scale
+                    shape.Height = orig_h * scale
+                else:
+                    shape.Width = max_w_pt
+                    shape.Height = max_h_pt
                 return
             except Exception as e:
                 print(f"[ULNRenderer] Warning adding picture {target_path}: {e}")
@@ -110,8 +117,21 @@ class PicturesRendererMixin:
                     try:
                         col_w_pt = cm_to_pt(slot_w_cm)
                         shp = sel.InlineShapes.AddPicture(FileName=os.path.abspath(target_path))
-                        shp.Width = min(col_w_pt - 10.0, cm_to_pt(3.6))
-                        shp.Height = cm_to_pt(2.6)
+                        max_w = min(col_w_pt - 10.0, cm_to_pt(3.6))
+                        max_h = cm_to_pt(2.6)
+                        orig_w = float(shp.Width)
+                        orig_h = float(shp.Height)
+                        if orig_w > 0 and orig_h > 0:
+                            scale = min(max_w / orig_w, max_h / orig_h)
+                            try:
+                                shp.LockAspectRatio = -1
+                            except Exception:
+                                pass
+                            shp.Width = orig_w * scale
+                            shp.Height = orig_h * scale
+                        else:
+                            shp.Width = max_w
+                            shp.Height = max_h
                     except Exception as e:
                         print(f"[ULNRenderer] Warning in pic_grid picture: {e}")
                 else:

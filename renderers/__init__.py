@@ -48,7 +48,11 @@ class RendererBlocksMixin(
     pass
 
 
+from renderers.base import ULNWordRenderer
+
+
 __all__ = [
+    "ULNWordRenderer",
     "RendererBlocksMixin",
     "cm_to_pt",
     "pt_to_cm",
