@@ -22,21 +22,25 @@
         <p class="brand-subtitle">Universal Layout Notation Engine for Microsoft Word</p>
       </div>
     </div>
+
+    <!-- Center Navigation Tabs -->
+    <nav class="view-tabs" id="viewTabsNav">
+      <button class="view-tab active" id="tabEditor" data-view="viewEditor">Soạn thảo &amp; Biên dịch</button>
+      <button class="view-tab" id="tabFiles" data-view="viewFiles">Quản lý tệp</button>
+    </nav>
+
     <div class="header-right">
       <button class="btn btn-ghost" id="btnPromptModal">
         Quy tắc &amp; Prompt AI
       </button>
-      <button class="btn btn-ghost" id="btnCheckUpdate">
-        Cập nhật
+      <button class="btn btn-danger-ghost btn-exit" id="btnExitApp" title="Dừng máy chủ và thoát">
+        Thoát ứng dụng
       </button>
-      <div class="connection-status" id="connectionStatus">
-        <span class="status-dot"></span> Localhost Online
-      </div>
     </div>
   </header>
 
-  <!-- Main Workspace -->
-  <main class="app-main">
+  <!-- Main View 1: Editor & Compiler Workspace -->
+  <main class="app-main view-container" id="viewEditor">
     <!-- Left Sidebar: Settings & Image Queue -->
     <aside class="sidebar">
       <!-- Card: Formatting Settings -->
@@ -195,17 +199,17 @@
         <!-- Action Toolbar -->
         <div class="editor-toolbar">
           <div class="toolbar-left">
-            <button class="btn btn-sm btn-info" id="btnImportDocx">
-              Nhập DOCX
-            </button>
-            <button class="btn btn-sm btn-secondary" id="btnEmbedRaw">
-              Nhúng Raw
+            <button class="btn btn-sm btn-primary" id="btnSaveUlnDirect">
+              Lưu tệp ULN
             </button>
             <button class="btn btn-sm btn-secondary" id="btnImportTxt">
               Mở tệp .txt
             </button>
             <button class="btn btn-sm btn-secondary" id="btnLoadSample">
               Mẫu ULN
+            </button>
+            <button class="btn btn-sm btn-secondary" id="btnEmbedRaw">
+              Nhúng Raw
             </button>
             <div class="heading-shortcuts">
               <span class="shortcut-label">Tiêu đề:</span>
@@ -219,9 +223,6 @@
           </div>
 
           <div class="toolbar-right">
-            <button class="btn btn-sm btn-secondary" id="btnToggleSearch">
-              Tìm kiếm (Ctrl+F)
-            </button>
             <button class="btn btn-sm btn-danger-ghost" id="btnClearText">
               Xóa
             </button>
@@ -231,7 +232,7 @@
           </div>
         </div>
 
-        <!-- Floating Find & Replace Bar -->
+        <!-- Floating Find & Replace Bar (Triggered by Ctrl+F) -->
         <div class="search-bar" id="searchBar" hidden>
           <div class="search-row">
             <span class="search-label">Tìm:</span>
@@ -282,6 +283,143 @@
     </div>
   </main>
 
+  <!-- Main View 2: Dedicated File Manager View -->
+  <main class="app-main view-container" id="viewFiles" hidden>
+    <div class="file-manager-page">
+      <!-- Toolbar Controls -->
+      <div class="card file-manager-toolbar">
+        <div class="fm-toolbar-left">
+          <div class="form-group-inline">
+            <label class="fm-label" for="fmFolderSelect">Thư mục:</label>
+            <select class="form-select fm-select-folder" id="fmFolderSelect">
+              <option value="output" selected>Thư mục Output dự án</option>
+              <option value="documents">Thư mục Documents người dùng</option>
+              <option value="custom">Đường dẫn tùy chỉnh...</option>
+            </select>
+          </div>
+          <div class="custom-folder-input-wrap" id="customFolderWrap" hidden>
+            <input type="text" class="form-input fm-input-path" id="fmCustomFolderPath" placeholder="Nhập đường dẫn thư mục...">
+            <button class="btn btn-sm btn-secondary" id="btnApplyCustomFolder">Duyệt</button>
+          </div>
+
+          <div class="fm-filter-group">
+            <button class="fm-filter-btn active" data-category="all">Tất cả</button>
+            <button class="fm-filter-btn" data-category="docx">File DOCX</button>
+            <button class="fm-filter-btn" data-category="uln">File ULN / TXT</button>
+          </div>
+        </div>
+
+        <div class="fm-toolbar-right">
+          <button class="btn btn-sm btn-secondary" id="btnFmOpenFolder">
+            Mở thư mục trên máy
+          </button>
+          <button class="btn btn-sm btn-secondary" id="btnFmRefresh">
+            Làm mới
+          </button>
+          <button class="btn btn-sm btn-primary" id="btnFmSaveCurrent">
+            Lưu nội dung đang soạn thành tệp
+          </button>
+        </div>
+      </div>
+
+      <!-- File Manager Workspace: Split List & Preview -->
+      <div class="file-manager-grid">
+        <!-- Left: File List Table Card -->
+        <div class="card fm-list-card">
+          <div class="card-header space-between">
+            <h3 class="card-title">Danh Sách Tệp</h3>
+            <span class="count-pill" id="fmFileCountPill">0 tệp</span>
+          </div>
+          <div class="fm-table-wrap">
+            <table class="data-table" id="fmTable">
+              <thead>
+                <tr>
+                  <th style="width: 70px;">Loại</th>
+                  <th>Tên tệp</th>
+                  <th style="width: 100px;">Kích thước</th>
+                  <th style="width: 150px;">Ngày sửa</th>
+                  <th style="width: 100px;">Mã nhúng</th>
+                  <th style="width: 160px; text-align: right;">Thao tác</th>
+                </tr>
+              </thead>
+              <tbody id="fmTableBody">
+                <tr><td colspan="6" class="text-center">Đang tải danh sách tệp...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Right: File Details & Preview Card -->
+        <div class="card fm-preview-card">
+          <div class="card-header space-between">
+            <h3 class="card-title">Chi Tiết &amp; Xem Trước</h3>
+            <span class="badge-status" id="fmPreviewBadge">Chưa chọn tệp</span>
+          </div>
+          <div class="card-body fm-preview-body">
+            <div class="fm-meta-box">
+              <div class="fm-meta-row">
+                <span class="fm-meta-label">Tên:</span>
+                <span class="fm-meta-value" id="fmPreviewName">—</span>
+              </div>
+              <div class="fm-meta-row">
+                <span class="fm-meta-label">Đường dẫn:</span>
+                <span class="fm-meta-value fm-meta-path" id="fmPreviewPath">—</span>
+              </div>
+              <div class="fm-meta-row">
+                <span class="fm-meta-label">Kích thước:</span>
+                <span class="fm-meta-value" id="fmPreviewSize">—</span>
+              </div>
+              <div class="fm-meta-row">
+                <span class="fm-meta-label">Ngày sửa:</span>
+                <span class="fm-meta-value" id="fmPreviewDate">—</span>
+              </div>
+            </div>
+
+            <div class="fm-content-box">
+              <h4 class="fm-content-title">Nội dung / Mã nguồn:</h4>
+              <pre class="fm-content-pre" id="fmPreviewPre">Chọn một tệp bên trái để xem trước nội dung...</pre>
+            </div>
+
+            <div class="fm-actions-row">
+              <button class="btn btn-primary flex-1" id="btnFmLoadToEditor" disabled>
+                Nạp vào Trình Soạn Thảo
+              </button>
+              <button class="btn btn-secondary" id="btnFmOpenInWord" disabled>
+                Mở trong Word
+              </button>
+              <button class="btn btn-danger-ghost" id="btnFmDeleteSelected" disabled>
+                Xóa tệp
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <!-- Modal: Save File Dialog -->
+  <div class="modal-backdrop" id="modalSaveFile" hidden>
+    <div class="modal-card modal-md">
+      <div class="modal-header">
+        <h3 class="modal-title">Lưu Mã Nguồn ULN Thành Tệp</h3>
+        <button class="btn-close-modal" data-close="modalSaveFile" aria-label="Đóng">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="saveFileNameInput">Tên tệp:</label>
+          <input type="text" class="form-input" id="saveFileNameInput" placeholder="vi_du_de_thi.uln">
+        </div>
+        <p class="modal-desc">Tệp sẽ được lưu vào thư mục <code>output/</code> của dự án và sẵn sàng quản lý.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="modalSaveFile">Hủy</button>
+        <button class="btn btn-primary" id="btnConfirmSaveFile">Lưu tệp</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: AI System Prompt -->
   <div class="modal-backdrop" id="modalPrompt" hidden>
     <div class="modal-card modal-lg">
@@ -301,59 +439,6 @@
           <button class="btn btn-primary" id="btnCopyPrompt">Sao chép Prompt</button>
           <button class="btn btn-success" id="btnSavePrompt">Lưu thay đổi</button>
         </div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Modal: DOCX Scanner & Importer -->
-  <div class="modal-backdrop" id="modalDocx" hidden>
-    <div class="modal-card modal-xl">
-      <div class="modal-header">
-        <h3 class="modal-title">Quét &amp; Nhập File DOCX Có Nhúng ULN</h3>
-        <button class="btn-close-modal" data-close="modalDocx" aria-label="Đóng">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-        </button>
-      </div>
-      <div class="modal-body docx-scanner-body">
-        <div class="scanner-controls">
-          <div class="form-group flex-1">
-            <label class="form-label" for="docxFolderInput">Thư mục quét:</label>
-            <div class="input-with-button">
-              <input type="text" class="form-input flex-1" id="docxFolderInput" placeholder="Đường dẫn thư mục...">
-              <button class="btn btn-secondary" id="btnScanFolder">Quét lại</button>
-            </div>
-          </div>
-          <label class="switch-row">
-            <input type="checkbox" id="chkOnlyUln" checked>
-            <span class="switch-label">Chỉ hiện file có nhúng mã ULN</span>
-          </label>
-        </div>
-
-        <div class="docx-split">
-          <div class="docx-list-card">
-            <table class="data-table" id="docxTable">
-              <thead>
-                <tr>
-                  <th style="width: 80px;">Nhúng</th>
-                  <th>Tên file</th>
-                  <th style="width: 90px;">Kích thước</th>
-                  <th style="width: 140px;">Thời gian</th>
-                </tr>
-              </thead>
-              <tbody id="docxTableBody">
-                <tr><td colspan="4" class="text-center">Đang tải danh sách file...</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <div class="docx-preview-card">
-            <h4 class="preview-title">Xem trước mã ULN nhúng:</h4>
-            <pre class="docx-preview-pre" id="docxPreviewContent">Chọn một file để xem trước...</pre>
-          </div>
-        </div>
-      </div>
-      <div class="modal-footer">
-        <span class="modal-status-text" id="docxScannerStatus"></span>
-        <button class="btn btn-primary" id="btnLoadDocxToEditor" disabled>Nạp Vào Trình Soạn Thảo</button>
       </div>
     </div>
   </div>

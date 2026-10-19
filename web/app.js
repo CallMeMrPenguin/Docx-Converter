@@ -10,15 +10,41 @@ document.addEventListener('DOMContentLoaded', () => {
     compilePollingInterval: null,
     searchMatches: [],
     currentMatchIndex: -1,
-    selectedDocx: null,
+    // File Manager State
+    fmFolder: null,
+    fmCategory: 'all',
+    fmFiles: [],
+    fmSelectedFile: null,
+    outputFolder: '',
+    documentsFolder: '',
   };
+
+  // ── Heartbeat & Auto-Shutdown on Tab Close ─────────────────────
+  // Send heartbeat every 3 seconds to keep local server alive
+  setInterval(() => {
+    fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+  }, 3000);
+
+  // Send shutdown beacon when tab or window is closed
+  window.addEventListener('beforeunload', () => {
+    navigator.sendBeacon('/api/shutdown');
+  });
+
+  window.addEventListener('pagehide', () => {
+    navigator.sendBeacon('/api/shutdown');
+  });
 
   // ── DOM References ─────────────────────────────────────────────
   const el = {
     versionBadge: document.getElementById('versionBadge'),
-    connectionStatus: document.getElementById('connectionStatus'),
     btnPromptModal: document.getElementById('btnPromptModal'),
-    btnCheckUpdate: document.getElementById('btnCheckUpdate'),
+    btnExitApp: document.getElementById('btnExitApp'),
+
+    // View Navigation Tabs
+    tabEditor: document.getElementById('tabEditor'),
+    tabFiles: document.getElementById('tabFiles'),
+    viewEditor: document.getElementById('viewEditor'),
+    viewFiles: document.getElementById('viewFiles'),
 
     // Settings
     fontFamily: document.getElementById('fontFamily'),
@@ -45,7 +71,7 @@ document.addEventListener('DOMContentLoaded', () => {
     btnClearImages: document.getElementById('btnClearImages'),
 
     // Toolbar & Editor
-    btnImportDocx: document.getElementById('btnImportDocx'),
+    btnSaveUlnDirect: document.getElementById('btnSaveUlnDirect'),
     btnEmbedRaw: document.getElementById('btnEmbedRaw'),
     btnImportTxt: document.getElementById('btnImportTxt'),
     btnLoadSample: document.getElementById('btnLoadSample'),
@@ -63,9 +89,8 @@ document.addEventListener('DOMContentLoaded', () => {
     statWords: document.getElementById('statWords'),
     statChars: document.getElementById('statChars'),
 
-    // Search bar
+    // Search bar (Keyboard Ctrl+F)
     searchBar: document.getElementById('searchBar'),
-    btnToggleSearch: document.getElementById('btnToggleSearch'),
     searchInput: document.getElementById('searchInput'),
     matchCount: document.getElementById('matchCount'),
     btnPrevMatch: document.getElementById('btnPrevMatch'),
@@ -78,21 +103,36 @@ document.addEventListener('DOMContentLoaded', () => {
     btnReplaceOne: document.getElementById('btnReplaceOne'),
     btnReplaceAll: document.getElementById('btnReplaceAll'),
 
+    // File Manager View Elements
+    fmFolderSelect: document.getElementById('fmFolderSelect'),
+    customFolderWrap: document.getElementById('customFolderWrap'),
+    fmCustomFolderPath: document.getElementById('fmCustomFolderPath'),
+    btnApplyCustomFolder: document.getElementById('btnApplyCustomFolder'),
+    btnFmOpenFolder: document.getElementById('btnFmOpenFolder'),
+    btnFmRefresh: document.getElementById('btnFmRefresh'),
+    btnFmSaveCurrent: document.getElementById('btnFmSaveCurrent'),
+    fmFileCountPill: document.getElementById('fmFileCountPill'),
+    fmTableBody: document.getElementById('fmTableBody'),
+    fmPreviewBadge: document.getElementById('fmPreviewBadge'),
+    fmPreviewName: document.getElementById('fmPreviewName'),
+    fmPreviewPath: document.getElementById('fmPreviewPath'),
+    fmPreviewSize: document.getElementById('fmPreviewSize'),
+    fmPreviewDate: document.getElementById('fmPreviewDate'),
+    fmPreviewPre: document.getElementById('fmPreviewPre'),
+    btnFmLoadToEditor: document.getElementById('btnFmLoadToEditor'),
+    btnFmOpenInWord: document.getElementById('btnFmOpenInWord'),
+    btnFmDeleteSelected: document.getElementById('btnFmDeleteSelected'),
+
     // Modals
+    modalSaveFile: document.getElementById('modalSaveFile'),
+    saveFileNameInput: document.getElementById('saveFileNameInput'),
+    btnConfirmSaveFile: document.getElementById('btnConfirmSaveFile'),
+
     modalPrompt: document.getElementById('modalPrompt'),
     promptTextarea: document.getElementById('promptTextarea'),
     btnResetPrompt: document.getElementById('btnResetPrompt'),
     btnCopyPrompt: document.getElementById('btnCopyPrompt'),
     btnSavePrompt: document.getElementById('btnSavePrompt'),
-
-    modalDocx: document.getElementById('modalDocx'),
-    docxFolderInput: document.getElementById('docxFolderInput'),
-    btnScanFolder: document.getElementById('btnScanFolder'),
-    chkOnlyUln: document.getElementById('chkOnlyUln'),
-    docxTableBody: document.getElementById('docxTableBody'),
-    docxPreviewContent: document.getElementById('docxPreviewContent'),
-    docxScannerStatus: document.getElementById('docxScannerStatus'),
-    btnLoadDocxToEditor: document.getElementById('btnLoadDocxToEditor'),
 
     modalPicMatch: document.getElementById('modalPicMatch'),
     picMatchSummary: document.getElementById('picMatchSummary'),
@@ -115,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Ensure all modals start closed
-  [el.modalPrompt, el.modalDocx, el.modalPicMatch].forEach((m) => {
+  [el.modalPrompt, el.modalPicMatch, el.modalSaveFile].forEach((m) => {
     if (m) closeModal(m);
   });
 
@@ -143,13 +183,55 @@ document.addEventListener('DOMContentLoaded', () => {
         closeSearchBar();
         return;
       }
-      [el.modalPrompt, el.modalDocx, el.modalPicMatch].forEach((m) => {
+      [el.modalPrompt, el.modalPicMatch, el.modalSaveFile].forEach((m) => {
         if (m && m.style.display === 'flex') closeModal(m);
       });
     }
   });
 
-  // ── Toast Notification Helper (No Emojis) ──────────────────────
+  // ── Exit App Button ────────────────────────────────────────────
+  el.btnExitApp.addEventListener('click', async () => {
+    if (confirm('Bạn có chắc chắn muốn thoát ứng dụng và dừng máy chủ trên terminal?')) {
+      showToast('Đang tắt máy chủ...', 'info');
+      try {
+        await fetch('/api/shutdown', { method: 'POST' });
+      } catch (err) {}
+      document.body.innerHTML = `
+        <div style="height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;color:#64748b;background:#f8fafc;">
+          <h2 style="color:#0f172a;margin-bottom:8px;font-weight:600;">Máy chủ đã tắt thành công</h2>
+          <p style="font-size:14px;">Bạn có thể đóng tab trình duyệt này.</p>
+        </div>
+      `;
+      setTimeout(() => window.close(), 1200);
+    }
+  });
+
+  // ── View Switching (Editor vs File Manager) ─────────────────────
+  el.tabEditor.addEventListener('click', () => switchView('viewEditor'));
+  el.tabFiles.addEventListener('click', () => {
+    switchView('viewFiles');
+    loadFileManagement();
+  });
+
+  function switchView(viewId) {
+    if (viewId === 'viewEditor') {
+      el.tabEditor.classList.add('active');
+      el.tabFiles.classList.remove('active');
+      el.viewEditor.removeAttribute('hidden');
+      el.viewEditor.style.display = 'flex';
+      el.viewFiles.setAttribute('hidden', '');
+      el.viewFiles.style.display = 'none';
+    } else {
+      el.tabFiles.classList.add('active');
+      el.tabEditor.classList.remove('active');
+      el.viewFiles.removeAttribute('hidden');
+      el.viewFiles.style.display = 'flex';
+      el.viewEditor.setAttribute('hidden', '');
+      el.viewEditor.style.display = 'none';
+    }
+  }
+
+  // ── Toast Notification Helper (Zero Emojis) ────────────────────
   function showToast(message, type = 'info', action = null) {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
@@ -203,17 +285,12 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.version && el.versionBadge) {
           el.versionBadge.textContent = `v${data.version}`;
         }
-        if (data.default_folder && el.docxFolderInput) {
-          el.docxFolderInput.value = data.default_folder;
-        }
+        state.outputFolder = data.output_folder || '';
+        state.documentsFolder = data.default_folder || '';
+        state.fmFolder = state.outputFolder;
       }
     } catch (err) {
       console.warn('API status error:', err);
-      if (el.connectionStatus) {
-        el.connectionStatus.innerHTML = '<span class="status-dot" style="background:#ef4444;box-shadow:none;"></span> Mất kết nối';
-        el.connectionStatus.style.color = '#ef4444';
-        el.connectionStatus.style.backgroundColor = '#fef2f2';
-      }
     }
 
     if (!el.ulnEditor.value.trim()) {
@@ -318,6 +395,51 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   el.btnLoadSample.addEventListener('click', loadSampleUln);
+
+  // ── Save Current ULN Directly to File ──────────────────────────
+  el.btnSaveUlnDirect.addEventListener('click', openSaveFileDialog);
+  el.btnFmSaveCurrent.addEventListener('click', openSaveFileDialog);
+
+  function openSaveFileDialog() {
+    const text = el.ulnEditor.value.trim();
+    if (!text) {
+      showToast('Nội dung trình soạn thảo đang rỗng, không có gì để lưu!', 'warning');
+      return;
+    }
+    const defaultName = `de_thi_${new Date().toISOString().slice(0,10).replace(/-/g,'')}.uln`;
+    el.saveFileNameInput.value = defaultName;
+    openModal(el.modalSaveFile);
+    setTimeout(() => el.saveFileNameInput.focus(), 100);
+  }
+
+  el.btnConfirmSaveFile.addEventListener('click', async () => {
+    const filename = el.saveFileNameInput.value.trim();
+    if (!filename) {
+      showToast('Vui lòng nhập tên tệp!', 'warning');
+      return;
+    }
+    const text = el.ulnEditor.value;
+    try {
+      const res = await fetch('/api/files/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, content: text, folder: state.fmFolder }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        closeModal(el.modalSaveFile);
+        showToast(`Đã lưu tệp: ${data.filename}`, 'success');
+        if (el.viewFiles.style.display === 'flex') {
+          loadFileManagement();
+        }
+      } else {
+        const err = await res.json();
+        showToast(`Lỗi lưu tệp: ${err.detail}`, 'error');
+      }
+    } catch (err) {
+      showToast(`Lỗi: ${err.message}`, 'error');
+    }
+  });
 
   // ── Import .txt File ───────────────────────────────────────────
   el.btnImportTxt.addEventListener('click', () => {
@@ -555,9 +677,15 @@ document.addEventListener('DOMContentLoaded', () => {
     openModal(el.modalPicMatch);
   });
 
-  // ── Find & Replace Floating Bar ────────────────────────────────
-  el.btnToggleSearch.addEventListener('click', toggleSearchBar);
+  // ── Find & Replace Floating Bar (Ctrl+F Keyboard Shortcut) ───────
   el.btnCloseSearch.addEventListener('click', closeSearchBar);
+
+  document.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+      e.preventDefault();
+      toggleSearchBar();
+    }
+  });
 
   function toggleSearchBar() {
     if (el.searchBar.hasAttribute('hidden')) {
@@ -739,96 +867,6 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 
-  // ── DOCX Scanner & Importer Modal ──────────────────────────────
-  el.btnImportDocx.addEventListener('click', () => {
-    openModal(el.modalDocx);
-    scanDocxDirectory();
-  });
-
-  el.btnScanFolder.addEventListener('click', scanDocxDirectory);
-  el.chkOnlyUln.addEventListener('change', scanDocxDirectory);
-
-  async function scanDocxDirectory() {
-    const folder = el.docxFolderInput.value.trim();
-    const onlyUln = el.chkOnlyUln.checked;
-    el.docxTableBody.innerHTML = '<tr><td colspan="4" class="text-center">Đang quét thư mục...</td></tr>';
-    el.btnLoadDocxToEditor.disabled = true;
-    el.docxPreviewContent.textContent = 'Chọn một file để xem trước...';
-    state.selectedDocx = null;
-
-    try {
-      const url = `/api/docx-list?folder=${encodeURIComponent(folder)}&only_uln=${onlyUln}`;
-      const res = await fetch(url);
-      if (!res.ok) throw new Error('Không thể đọc thư mục');
-      const files = await res.json();
-
-      el.docxTableBody.innerHTML = '';
-      if (!files || files.length === 0) {
-        el.docxTableBody.innerHTML = '<tr><td colspan="4" class="text-center">Không tìm thấy file DOCX nào.</td></tr>';
-        el.docxScannerStatus.textContent = '0 file tìm thấy';
-        return;
-      }
-
-      el.docxScannerStatus.textContent = `${files.length} file tìm thấy`;
-
-      files.forEach((file) => {
-        const tr = document.createElement('tr');
-
-        const tdEmbed = document.createElement('td');
-        tdEmbed.innerHTML = file.has_embedded_uln
-          ? '<span class="tag-embedded">Có ULN</span>'
-          : '<span class="tag-none">Không</span>';
-
-        const tdName = document.createElement('td');
-        tdName.textContent = file.filename;
-        tdName.title = file.filepath;
-
-        const tdSize = document.createElement('td');
-        tdSize.textContent = `${(file.size / 1024).toFixed(0)} KB`;
-
-        const tdTime = document.createElement('td');
-        tdTime.textContent = new Date(file.modified * 1000).toLocaleString('vi-VN', {
-          month: '2-digit',
-          day: '2-digit',
-          hour: '2-digit',
-          minute: '2-digit',
-        });
-
-        tr.appendChild(tdEmbed);
-        tr.appendChild(tdName);
-        tr.appendChild(tdSize);
-        tr.appendChild(tdTime);
-
-        tr.addEventListener('click', () => {
-          document.querySelectorAll('#docxTableBody tr').forEach((r) => r.classList.remove('selected'));
-          tr.classList.add('selected');
-          state.selectedDocx = file;
-
-          if (file.has_embedded_uln && file.embedded_preview) {
-            el.docxPreviewContent.textContent = file.embedded_preview;
-            el.btnLoadDocxToEditor.disabled = false;
-          } else {
-            el.docxPreviewContent.textContent = '(File này không chứa mã ULN nhúng trong Custom XML Part)';
-            el.btnLoadDocxToEditor.disabled = true;
-          }
-        });
-
-        el.docxTableBody.appendChild(tr);
-      });
-    } catch (err) {
-      el.docxTableBody.innerHTML = `<tr><td colspan="4" class="text-center" style="color:#ef4444">${err.message}</td></tr>`;
-    }
-  }
-
-  el.btnLoadDocxToEditor.addEventListener('click', () => {
-    if (!state.selectedDocx || !state.selectedDocx.embedded_preview) return;
-    el.ulnEditor.value = state.selectedDocx.embedded_preview;
-    syncLineNumbers();
-    updateEditorStats();
-    closeModal(el.modalDocx);
-    showToast(`Đã nạp mã ULN từ: ${state.selectedDocx.filename}`, 'success');
-  });
-
   // ── Embed Raw ULN to Existing DOCX ─────────────────────────────
   el.btnEmbedRaw.addEventListener('click', async () => {
     const text = el.ulnEditor.value.trim();
@@ -853,27 +891,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     } catch (err) {
       showToast(`Lỗi: ${err.message}`, 'error');
-    }
-  });
-
-  // ── Check Updates ──────────────────────────────────────────────
-  el.btnCheckUpdate.addEventListener('click', async () => {
-    try {
-      showToast('Đang kiểm tra bản cập nhật...', 'info');
-      const res = await fetch('/api/check-update');
-      if (res.ok) {
-        const data = await res.json();
-        if (data.update_available) {
-          showToast(`Có bản cập nhật mới: v${data.latest_version}`, 'info', {
-            label: 'Xem trên GitHub',
-            onClick: () => window.open(data.release_url, '_blank'),
-          });
-        } else {
-          showToast(`Bạn đang sử dụng phiên bản mới nhất (v${data.current_version})`, 'success');
-        }
-      }
-    } catch (err) {
-      showToast('Không thể kiểm tra cập nhật', 'error');
     }
   });
 
@@ -995,6 +1012,279 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     } catch (err) {
       showToast('Không thể mở tệp trong Word: ' + err.message, 'error');
+    }
+  }
+
+  // ── Dedicated File Management Logic ────────────────────────────
+  el.fmFolderSelect.addEventListener('change', () => {
+    const val = el.fmFolderSelect.value;
+    if (val === 'output') {
+      state.fmFolder = state.outputFolder;
+      el.customFolderWrap.setAttribute('hidden', '');
+      loadFileManagement();
+    } else if (val === 'documents') {
+      state.fmFolder = state.documentsFolder;
+      el.customFolderWrap.setAttribute('hidden', '');
+      loadFileManagement();
+    } else {
+      el.customFolderWrap.removeAttribute('hidden');
+      el.fmCustomFolderPath.focus();
+    }
+  });
+
+  el.btnApplyCustomFolder.addEventListener('click', () => {
+    const custom = el.fmCustomFolderPath.value.trim();
+    if (custom) {
+      state.fmFolder = custom;
+      loadFileManagement();
+    }
+  });
+
+  document.querySelectorAll('.fm-filter-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.fm-filter-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      state.fmCategory = btn.getAttribute('data-category') || 'all';
+      loadFileManagement();
+    });
+  });
+
+  el.btnFmRefresh.addEventListener('click', loadFileManagement);
+
+  el.btnFmOpenFolder.addEventListener('click', async () => {
+    try {
+      await fetch('/api/files/open-folder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ folder: state.fmFolder }),
+      });
+    } catch (err) {
+      showToast('Không thể mở thư mục: ' + err.message, 'error');
+    }
+  });
+
+  async function loadFileManagement() {
+    el.fmTableBody.innerHTML = '<tr><td colspan="6" class="text-center">Đang tải danh sách tệp...</td></tr>';
+    resetFmPreview();
+
+    try {
+      const url = `/api/files?folder=${encodeURIComponent(state.fmFolder || '')}&category=${encodeURIComponent(state.fmCategory)}`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Không thể đọc danh sách tệp');
+
+      const data = await res.json();
+      state.fmFiles = data.files || [];
+      state.fmFolder = data.folder || state.fmFolder;
+      el.fmFileCountPill.textContent = `${state.fmFiles.length} tệp`;
+
+      renderFileManagerTable();
+    } catch (err) {
+      el.fmTableBody.innerHTML = `<tr><td colspan="6" class="text-center" style="color:#ef4444">${err.message}</td></tr>`;
+    }
+  }
+
+  function renderFileManagerTable() {
+    el.fmTableBody.innerHTML = '';
+
+    if (state.fmFiles.length === 0) {
+      el.fmTableBody.innerHTML = '<tr><td colspan="6" class="text-center">Không có tệp nào trong thư mục này.</td></tr>';
+      return;
+    }
+
+    state.fmFiles.forEach((file) => {
+      const tr = document.createElement('tr');
+
+      // Ext badge
+      const tdExt = document.createElement('td');
+      const extName = (file.ext || '').replace('.', '');
+      const badgeClass = extName === 'docx' ? 'badge-docx' : (extName === 'uln' ? 'badge-uln' : 'badge-txt');
+      tdExt.innerHTML = `<span class="badge-ext ${badgeClass}">${extName}</span>`;
+
+      // Name
+      const tdName = document.createElement('td');
+      tdName.textContent = file.name;
+      tdName.title = file.path;
+
+      // Size
+      const tdSize = document.createElement('td');
+      tdSize.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+
+      // Date
+      const tdDate = document.createElement('td');
+      tdDate.textContent = file.mtime_formatted;
+
+      // Embedded tag
+      const tdEmbed = document.createElement('td');
+      if (file.is_docx) {
+        tdEmbed.innerHTML = file.has_embedded_uln
+          ? '<span class="tag-embedded">Có ULN</span>'
+          : '<span class="tag-none">Không</span>';
+      } else {
+        tdEmbed.innerHTML = '<span class="tag-embedded">Mã nguồn</span>';
+      }
+
+      // Actions
+      const tdActions = document.createElement('td');
+      tdActions.className = 'fm-table-actions';
+
+      if (file.is_docx) {
+        const btnWord = document.createElement('button');
+        btnWord.className = 'btn btn-xs btn-outline';
+        btnWord.textContent = 'Mở Word';
+        btnWord.addEventListener('click', (e) => {
+          e.stopPropagation();
+          openCompiledDocx(file.path);
+        });
+        tdActions.appendChild(btnWord);
+      }
+
+      if (file.is_text || (file.is_docx && file.has_embedded_uln)) {
+        const btnLoad = document.createElement('button');
+        btnLoad.className = 'btn btn-xs btn-outline';
+        btnLoad.textContent = 'Nạp';
+        btnLoad.title = 'Nạp vào Trình Soạn Thảo';
+        btnLoad.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          await loadFileToEditor(file);
+        });
+        tdActions.appendChild(btnLoad);
+      }
+
+      const btnDel = document.createElement('button');
+      btnDel.className = 'btn btn-xs btn-danger-ghost';
+      btnDel.textContent = 'Xóa';
+      btnDel.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        if (confirm(`Bạn có chắc chắn muốn xóa tệp: ${file.name}?`)) {
+          await deleteManagedFile(file.path);
+        }
+      });
+      tdActions.appendChild(btnDel);
+
+      tr.appendChild(tdExt);
+      tr.appendChild(tdName);
+      tr.appendChild(tdSize);
+      tr.appendChild(tdDate);
+      tr.appendChild(tdEmbed);
+      tr.appendChild(tdActions);
+
+      tr.addEventListener('click', () => {
+        document.querySelectorAll('#fmTableBody tr').forEach((r) => r.classList.remove('selected'));
+        tr.classList.add('selected');
+        selectManagedFile(file);
+      });
+
+      el.fmTableBody.appendChild(tr);
+    });
+  }
+
+  async function selectManagedFile(file) {
+    state.fmSelectedFile = file;
+    el.fmPreviewBadge.textContent = (file.ext || '').toUpperCase();
+    el.fmPreviewName.textContent = file.name;
+    el.fmPreviewPath.textContent = file.path;
+    el.fmPreviewSize.textContent = `${(file.size / 1024).toFixed(1)} KB (${file.size.toLocaleString()} bytes)`;
+    el.fmPreviewDate.textContent = file.mtime_formatted;
+
+    el.btnFmDeleteSelected.disabled = false;
+    el.btnFmOpenInWord.disabled = !file.is_docx;
+
+    el.fmPreviewPre.textContent = 'Đang đọc nội dung tệp...';
+
+    try {
+      const res = await fetch('/api/files/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filepath: file.path }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        el.fmPreviewPre.textContent = data.content || '(Tệp rỗng)';
+        el.btnFmLoadToEditor.disabled = false;
+      } else {
+        const err = await res.json();
+        el.fmPreviewPre.textContent = `[Không thể đọc xem trước]: ${err.detail}`;
+        el.btnFmLoadToEditor.disabled = true;
+      }
+    } catch (err) {
+      el.fmPreviewPre.textContent = `Lỗi: ${err.message}`;
+      el.btnFmLoadToEditor.disabled = true;
+    }
+  }
+
+  function resetFmPreview() {
+    state.fmSelectedFile = null;
+    el.fmPreviewBadge.textContent = 'Chưa chọn tệp';
+    el.fmPreviewName.textContent = '—';
+    el.fmPreviewPath.textContent = '—';
+    el.fmPreviewSize.textContent = '—';
+    el.fmPreviewDate.textContent = '—';
+    el.fmPreviewPre.textContent = 'Chọn một tệp bên trái để xem trước nội dung...';
+    el.btnFmLoadToEditor.disabled = true;
+    el.btnFmOpenInWord.disabled = true;
+    el.btnFmDeleteSelected.disabled = true;
+  }
+
+  el.btnFmLoadToEditor.addEventListener('click', async () => {
+    if (state.fmSelectedFile) {
+      await loadFileToEditor(state.fmSelectedFile);
+    }
+  });
+
+  el.btnFmOpenInWord.addEventListener('click', () => {
+    if (state.fmSelectedFile && state.fmSelectedFile.is_docx) {
+      openCompiledDocx(state.fmSelectedFile.path);
+    }
+  });
+
+  el.btnFmDeleteSelected.addEventListener('click', async () => {
+    if (state.fmSelectedFile) {
+      if (confirm(`Bạn có chắc chắn muốn xóa tệp: ${state.fmSelectedFile.name}?`)) {
+        await deleteManagedFile(state.fmSelectedFile.path);
+      }
+    }
+  });
+
+  async function loadFileToEditor(file) {
+    try {
+      const res = await fetch('/api/files/read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filepath: file.path }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        el.ulnEditor.value = data.content || '';
+        syncLineNumbers();
+        updateEditorStats();
+        switchView('viewEditor');
+        showToast(`Đã nạp nội dung từ: ${file.name}`, 'success');
+      } else {
+        const err = await res.json();
+        showToast(`Không thể nạp tệp: ${err.detail}`, 'error');
+      }
+    } catch (err) {
+      showToast(`Lỗi: ${err.message}`, 'error');
+    }
+  }
+
+  async function deleteManagedFile(filepath) {
+    try {
+      const res = await fetch('/api/files/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filepath }),
+      });
+      if (res.ok) {
+        showToast('Đã xóa tệp thành công', 'success');
+        loadFileManagement();
+      } else {
+        const err = await res.json();
+        showToast(`Xóa thất bại: ${err.detail}`, 'error');
+      }
+    } catch (err) {
+      showToast(`Lỗi: ${err.message}`, 'error');
     }
   }
 
