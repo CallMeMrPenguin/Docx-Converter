@@ -397,6 +397,29 @@
     </div>
   </main>
 
+  <!-- Modal: Embed Raw ULN to Existing DOCX -->
+  <div class="modal-backdrop" id="modalEmbedRaw" hidden>
+    <div class="modal-card modal-md">
+      <div class="modal-header">
+        <h3 class="modal-title">Nhúng Mã Nguồn ULN Vào File DOCX</h3>
+        <button class="btn-close-modal" data-close="modalEmbedRaw" aria-label="Đóng">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+        </button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label" for="embedDocxPathInput">Đường dẫn tệp DOCX:</label>
+          <input type="text" class="form-input" id="embedDocxPathInput" placeholder="Dán đường dẫn tệp DOCX cần nhúng...">
+        </div>
+        <p class="modal-desc">Toàn bộ mã ULN đang soạn thảo sẽ được lưu vào CustomXMLPart của tệp Word. Bạn có thể sao chép đường dẫn (Copy as path) và dán trực tiếp vào đây.</p>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="modalEmbedRaw">Hủy</button>
+        <button class="btn btn-primary" id="btnConfirmEmbedRaw">Tiến hành nhúng</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal: Save File Dialog -->
   <div class="modal-backdrop" id="modalSaveFile" hidden>
     <div class="modal-card modal-md">

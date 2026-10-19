@@ -110,25 +110,50 @@ class OpenFolderRequest(BaseModel):
     folder: Optional[str] = None
 
 
+def sanitize_filepath(p: Optional[str]) -> str:
+    """Strips leading/trailing quotes and extra whitespace from file paths."""
+    if not p:
+        return ""
+    clean = p.strip().strip('"').strip("'").strip()
+    return os.path.abspath(clean)
+
+
 # ── Heartbeat & Shutdown Endpoints ───────────────────────────────
+shutdown_cancel_event = threading.Event()
+shutdown_in_progress = False
+
+
 @app.post("/api/heartbeat")
 def record_heartbeat():
     """Receives ping from browser tab. Keeps local server alive."""
-    global last_heartbeat_time, has_received_first_heartbeat
+    global last_heartbeat_time, has_received_first_heartbeat, shutdown_in_progress
     last_heartbeat_time = time.time()
     has_received_first_heartbeat = True
+    if shutdown_in_progress:
+        shutdown_cancel_event.set()
+        shutdown_in_progress = False
     return {"status": "ok"}
 
 
 @app.post("/api/shutdown")
 def shutdown_server():
-    """Immediately stops server and exits terminal when browser tab is closed."""
+    """Schedules server termination when browser tab is closed."""
+    global shutdown_in_progress
+    if shutdown_in_progress:
+        return {"status": "in_progress"}
+    shutdown_in_progress = True
+    shutdown_cancel_event.clear()
+
     def _delayed_exit():
-        time.sleep(0.3)
-        print("\n[Server] Tab trình duyệt đã đóng. Đang tắt tiến trình máy chủ...")
-        os._exit(0)
+        time.sleep(3.5)
+        if not shutdown_cancel_event.is_set():
+            print("\n[Server] Tab trình duyệt đã đóng. Máy chủ đã dừng.")
+            os._exit(0)
+        else:
+            shutdown_cancel_event.clear()
+
     threading.Thread(target=_delayed_exit, daemon=True).start()
-    return {"status": "shutting down"}
+    return {"status": "scheduled"}
 
 
 # ── REST API Endpoints ───────────────────────────────────────────
@@ -379,19 +404,20 @@ def list_managed_files(folder: Optional[str] = None, category: Optional[str] = "
 @app.post("/api/files/read")
 def read_file_content(req: ReadFileRequest):
     """Reads raw text or extracted embedded ULN from a file."""
-    if not os.path.exists(req.filepath):
-        raise HTTPException(status_code=404, detail="Tệp không tồn tại.")
-    ext = os.path.splitext(req.filepath)[1].lower()
+    filepath = sanitize_filepath(req.filepath)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail=f"Tệp không tồn tại: {filepath}")
+    ext = os.path.splitext(filepath)[1].lower()
     if ext == ".docx":
-        content = extract_raw_uln(req.filepath)
+        content = extract_raw_uln(filepath)
         if not content:
             raise HTTPException(status_code=400, detail="File DOCX này không có nhúng mã nguồn ULN.")
-        return {"content": content, "filepath": req.filepath, "type": "docx_embedded"}
+        return {"content": content, "filepath": filepath, "type": "docx_embedded"}
     else:
         try:
-            with open(req.filepath, "r", encoding="utf-8") as f:
+            with open(filepath, "r", encoding="utf-8") as f:
                 content = f.read()
-            return {"content": content, "filepath": req.filepath, "type": "text"}
+            return {"content": content, "filepath": filepath, "type": "text"}
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Lỗi đọc file: {str(e)}")
 
@@ -399,14 +425,10 @@ def read_file_content(req: ReadFileRequest):
 @app.post("/api/files/save")
 def save_uln_file(req: SaveFileRequest):
     """Saves ULN content to a file in output/ directory."""
-    folder = req.folder
-    output_dir = os.path.join(project_root, "output")
-    os.makedirs(output_dir, exist_ok=True)
+    folder = sanitize_filepath(req.folder) if req.folder else os.path.join(project_root, "output")
+    os.makedirs(folder, exist_ok=True)
 
-    if not folder or not os.path.exists(folder):
-        folder = output_dir
-
-    filename = req.filename.strip()
+    filename = req.filename.strip().strip('"').strip("'")
     if not filename.endswith(".uln") and not filename.endswith(".txt"):
         filename += ".uln"
 
@@ -422,10 +444,11 @@ def save_uln_file(req: SaveFileRequest):
 @app.post("/api/files/delete")
 def delete_file(req: DeleteFileRequest):
     """Deletes a file."""
-    if not os.path.exists(req.filepath):
+    filepath = sanitize_filepath(req.filepath)
+    if not os.path.exists(filepath):
         raise HTTPException(status_code=404, detail="Tệp không tồn tại.")
     try:
-        os.remove(req.filepath)
+        os.remove(filepath)
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -434,13 +457,15 @@ def delete_file(req: DeleteFileRequest):
 @app.post("/api/files/open-folder")
 def open_folder_in_explorer(req: OpenFolderRequest):
     """Opens target folder in Windows Explorer."""
-    path = req.folder or (os.path.dirname(req.filepath) if req.filepath else None)
-    if not path or not os.path.exists(path):
+    target_path = sanitize_filepath(req.filepath) if req.filepath else None
+    target_folder = sanitize_filepath(req.folder) if req.folder else None
+    path = target_folder or (os.path.dirname(target_path) if target_path else os.path.join(project_root, "output"))
+    if not os.path.exists(path):
         path = os.path.join(project_root, "output")
     try:
         if os.name == "nt":
-            if req.filepath and os.path.exists(req.filepath):
-                os.system(f'explorer /select,"{os.path.abspath(req.filepath)}"')
+            if target_path and os.path.exists(target_path):
+                os.system(f'explorer /select,"{os.path.abspath(target_path)}"')
             else:
                 os.startfile(path)
         return {"success": True}
@@ -451,7 +476,7 @@ def open_folder_in_explorer(req: OpenFolderRequest):
 @app.get("/api/docx-list")
 def list_docx_files(folder: Optional[str] = None, only_uln: bool = True):
     """Scans directory for DOCX files and checks for embedded ULN."""
-    target_dir = folder or os.path.join(project_root, "output")
+    target_dir = sanitize_filepath(folder) if folder else os.path.join(project_root, "output")
     if not os.path.exists(target_dir):
         target_dir = os.path.expanduser("~\\Documents") if os.name == "nt" else os.getcwd()
     try:
@@ -463,24 +488,28 @@ def list_docx_files(folder: Optional[str] = None, only_uln: bool = True):
 @app.post("/api/embed-uln")
 def embed_uln_to_docx(req: EmbedRequest):
     """Embeds raw ULN source into an existing DOCX file."""
-    if not os.path.exists(req.filepath):
-        raise HTTPException(status_code=404, detail="File DOCX không tồn tại.")
-    success = embed_raw_uln_docx(req.filepath, req.uln_text)
+    filepath = sanitize_filepath(req.filepath)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail=f"Không tìm thấy file DOCX: {filepath}")
+    if not filepath.lower().endswith(".docx"):
+        raise HTTPException(status_code=400, detail="Tệp được chọn không phải là tệp định dạng .docx.")
+    success = embed_raw_uln_docx(filepath, req.uln_text)
     if not success:
-        raise HTTPException(status_code=500, detail="Nhúng mã ULN thất bại.")
-    return {"success": True}
+        raise HTTPException(status_code=500, detail="Nhúng mã ULN thất bại. Vui lòng đảm bảo file không bị khóa hoặc đang mở ở tiến trình khác.")
+    return {"success": True, "filepath": filepath}
 
 
 @app.post("/api/open-docx")
 def open_docx_file(req: OpenFileRequest):
     """Opens a compiled DOCX file with MS Word in Windows."""
-    if not os.path.exists(req.filepath):
-        raise HTTPException(status_code=404, detail="Tệp không tồn tại.")
+    filepath = sanitize_filepath(req.filepath)
+    if not os.path.exists(filepath):
+        raise HTTPException(status_code=404, detail=f"Tệp không tồn tại: {filepath}")
     try:
         if os.name == "nt":
-            os.startfile(req.filepath)
+            os.startfile(filepath)
         else:
-            webbrowser.open(f"file://{os.path.abspath(req.filepath)}")
+            webbrowser.open(f"file://{os.path.abspath(filepath)}")
         return {"success": True}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -525,13 +554,13 @@ def start_server():
 
     threading.Thread(target=_open_browser, daemon=True).start()
 
-    # Watchdog thread: kills terminal process when web tab is closed
+    # Watchdog thread: kills terminal process when web tab is closed (relaxed to 45s)
     def _watchdog():
-        time.sleep(25) # 25s initial startup grace period
+        time.sleep(30) # 30s initial startup grace period
         while True:
             time.sleep(2.0)
-            if has_received_first_heartbeat and (time.time() - last_heartbeat_time > 8):
-                print("\n[Server] Khong con ket noi tu trinh duyet (tab da dong). Tu dong tat may chu.")
+            if has_received_first_heartbeat and (time.time() - last_heartbeat_time > 45):
+                print("\n[Server] Không còn kết nối từ trình duyệt sau 45s. Tự động tắt máy chủ.")
                 os._exit(0)
 
     threading.Thread(target=_watchdog, daemon=True).start()

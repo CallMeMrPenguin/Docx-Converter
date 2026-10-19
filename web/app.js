@@ -25,12 +25,8 @@ document.addEventListener('DOMContentLoaded', () => {
     fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
   }, 3000);
 
-  // Send shutdown beacon when tab or window is closed
+  // Send shutdown beacon ONLY when tab or window is explicitly unloaded
   window.addEventListener('beforeunload', () => {
-    navigator.sendBeacon('/api/shutdown');
-  });
-
-  window.addEventListener('pagehide', () => {
     navigator.sendBeacon('/api/shutdown');
   });
 
@@ -124,6 +120,10 @@ document.addEventListener('DOMContentLoaded', () => {
     btnFmDeleteSelected: document.getElementById('btnFmDeleteSelected'),
 
     // Modals
+    modalEmbedRaw: document.getElementById('modalEmbedRaw'),
+    embedDocxPathInput: document.getElementById('embedDocxPathInput'),
+    btnConfirmEmbedRaw: document.getElementById('btnConfirmEmbedRaw'),
+
     modalSaveFile: document.getElementById('modalSaveFile'),
     saveFileNameInput: document.getElementById('saveFileNameInput'),
     btnConfirmSaveFile: document.getElementById('btnConfirmSaveFile'),
@@ -155,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Ensure all modals start closed
-  [el.modalPrompt, el.modalPicMatch, el.modalSaveFile].forEach((m) => {
+  [el.modalPrompt, el.modalPicMatch, el.modalSaveFile, el.modalEmbedRaw].forEach((m) => {
     if (m) closeModal(m);
   });
 
@@ -183,7 +183,7 @@ document.addEventListener('DOMContentLoaded', () => {
         closeSearchBar();
         return;
       }
-      [el.modalPrompt, el.modalPicMatch, el.modalSaveFile].forEach((m) => {
+      [el.modalPrompt, el.modalPicMatch, el.modalSaveFile, el.modalEmbedRaw].forEach((m) => {
         if (m && m.style.display === 'flex') closeModal(m);
       });
     }
@@ -868,23 +868,42 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // ── Embed Raw ULN to Existing DOCX ─────────────────────────────
-  el.btnEmbedRaw.addEventListener('click', async () => {
+  el.btnEmbedRaw.addEventListener('click', () => {
     const text = el.ulnEditor.value.trim();
     if (!text) {
       showToast('Trình soạn thảo rỗng, không có gì để nhúng!', 'warning');
       return;
     }
-    const filepath = prompt('Nhập đường dẫn đầy đủ của file DOCX cần nhúng mã ULN:');
-    if (!filepath) return;
+    el.embedDocxPathInput.value = '';
+    openModal(el.modalEmbedRaw);
+    setTimeout(() => el.embedDocxPathInput.focus(), 100);
+  });
+
+  el.btnConfirmEmbedRaw.addEventListener('click', async () => {
+    let rawPath = el.embedDocxPathInput.value.trim();
+    if (!rawPath) {
+      showToast('Vui lòng nhập đường dẫn file DOCX!', 'warning');
+      return;
+    }
+    rawPath = rawPath.replace(/^["']|["']$/g, '').trim();
+    const text = el.ulnEditor.value.trim();
+
+    showToast('Đang nhúng mã ULN vào tệp Word...', 'info');
 
     try {
       const res = await fetch('/api/embed-uln', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ filepath, uln_text: text }),
+        body: JSON.stringify({ filepath: rawPath, uln_text: text }),
       });
+
       if (res.ok) {
-        showToast('Đã nhúng mã ULN thành công vào tệp Word!', 'success');
+        const data = await res.json();
+        closeModal(el.modalEmbedRaw);
+        showToast('Đã nhúng mã ULN thành công vào tệp Word!', 'success', {
+          label: 'Mở Word',
+          onClick: () => openCompiledDocx(data.filepath),
+        });
       } else {
         const err = await res.json();
         showToast(`Nhúng thất bại: ${err.detail}`, 'error');
