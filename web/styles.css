@@ -3,11 +3,12 @@
    Guiding Principles:
    - ZERO component borders (border: none !important)
    - Depth created purely through contrast surfaces & diffuse soft ambient shadows
-   - Canvas: #f8fafc | Card Surface: #ffffff | Inset Panels: #f1f5f9 / #f8fafc
-   - Typography: Inter for clean UI, JetBrains Mono for ULN syntax
+   - Canvas: #f8fafc | Card Surface: #ffffff | Inset Panels: #f1f5f9
+   - Pure Light Theme: No pitch-dark boxes or heavy dark overlays
+   - Zero Emojis: Crisp typography, clean SVG icons, professional aesthetic
    ========================================================================== */
 
-/* ── Reset & Base Variables ─────────────────────────────────────── */
+/* ── Reset & Variables ──────────────────────────────────────────── */
 :root {
   --bg-canvas: #f8fafc;
   --bg-surface: #ffffff;
@@ -61,6 +62,15 @@
   margin: 0;
   padding: 0;
   border: none;
+}
+
+/* ── Crucial Hidden Rule (High Specificity) ─────────────────────── */
+[hidden],
+.modal-backdrop[hidden],
+.search-bar[hidden],
+.replace-row[hidden],
+.progress-wrap[hidden] {
+  display: none !important;
 }
 
 body {
@@ -387,12 +397,12 @@ input, button, select, textarea {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
 }
 
-.dropzone-icon {
-  font-size: 26px;
-  margin-bottom: 2px;
+.dropzone-svg {
+  color: var(--primary);
+  opacity: 0.8;
 }
 
 .dropzone-text {
@@ -482,7 +492,8 @@ input, button, select, textarea {
   padding: 4px 6px;
   border-radius: var(--radius-sm);
   cursor: pointer;
-  font-size: 14px;
+  font-size: 13px;
+  font-weight: 600;
   transition: color 0.15s ease, background-color 0.15s ease;
 }
 
@@ -706,9 +717,10 @@ input, button, select, textarea {
   gap: 8px;
 }
 
-.search-icon {
-  font-size: 14px;
-  color: var(--text-subtle);
+.search-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 .search-input {
@@ -732,19 +744,20 @@ input, button, select, textarea {
 }
 
 .btn-icon {
-  background-color: transparent;
+  background-color: var(--bg-inset);
   color: var(--text-muted);
-  padding: 4px 6px;
+  padding: 4px 8px;
   border-radius: 4px;
   cursor: pointer;
-  font-size: 12px;
+  font-size: 11px;
+  font-weight: 500;
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 .btn-icon:hover {
-  background-color: var(--bg-inset);
+  background-color: var(--bg-hover);
   color: var(--text-main);
 }
 
@@ -753,7 +766,7 @@ input, button, select, textarea {
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text-muted);
   cursor: pointer;
 }
@@ -762,13 +775,13 @@ input, button, select, textarea {
   background-color: transparent;
   color: var(--primary);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   padding: 2px 4px;
 }
 
 .close-search {
-  font-size: 14px;
+  font-size: 11px;
   color: var(--text-subtle);
 }
 
@@ -873,11 +886,11 @@ input, button, select, textarea {
   font-size: 11px;
 }
 
-/* ── Modals (Zero Blur, Crisp Solid Surfaces) ───────────────────── */
+/* ── Modals (Light Minimal Backdrop Scrim & Pure White Cards) ───── */
 .modal-backdrop {
   position: fixed;
   inset: 0;
-  background-color: rgba(15, 23, 42, 0.65);
+  background-color: rgba(15, 23, 42, 0.32);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -932,8 +945,10 @@ input, button, select, textarea {
 .btn-close-modal {
   background-color: transparent;
   color: var(--text-subtle);
-  font-size: 18px;
-  padding: 4px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
   border-radius: var(--radius-sm);
   cursor: pointer;
   transition: color 0.15s ease, background-color 0.15s ease;
@@ -989,7 +1004,7 @@ input, button, select, textarea {
   gap: 10px;
 }
 
-/* ── DOCX Scanner Split View ─────────────────────────────────────── */
+/* ── DOCX Scanner Split View (100% Light Theme) ─────────────────── */
 .docx-scanner-body {
   gap: 14px;
 }
@@ -1073,8 +1088,9 @@ input, button, select, textarea {
   font-size: 11px;
 }
 
+/* Preview Box: Light Theme Surface (replaces dark box) */
 .docx-preview-card {
-  background-color: #0f172a;
+  background-color: var(--bg-subtle);
   border-radius: var(--radius-lg);
   padding: 14px;
   display: flex;
@@ -1085,20 +1101,23 @@ input, button, select, textarea {
 .preview-title {
   font-size: 12px;
   font-weight: 600;
-  color: #94a3b8;
+  color: var(--text-main);
   margin-bottom: 8px;
 }
 
 .docx-preview-pre {
   flex: 1;
-  background-color: transparent;
-  color: #f1f5f9;
+  background-color: #ffffff;
+  color: var(--text-main);
+  border-radius: var(--radius-md);
+  padding: 12px;
   font-family: var(--font-mono);
   font-size: 11px;
   line-height: 1.6;
   overflow: auto;
   white-space: pre-wrap;
   word-break: break-word;
+  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.04);
 }
 
 .modal-status-text {
@@ -1231,29 +1250,25 @@ input, button, select, textarea {
   to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-.toast-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: var(--radius-full);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
+.toast-badge {
+  font-size: 11px;
   font-weight: 700;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
   flex-shrink: 0;
 }
 
-.toast.toast-success .toast-icon {
+.toast.toast-success .toast-badge {
   background-color: var(--success-light);
   color: var(--success);
 }
 
-.toast.toast-error .toast-icon {
+.toast.toast-error .toast-badge {
   background-color: var(--danger-light);
   color: var(--danger);
 }
 
-.toast.toast-info .toast-icon {
+.toast.toast-info .toast-badge {
   background-color: var(--primary-light);
   color: var(--primary);
 }

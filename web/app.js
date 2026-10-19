@@ -1,6 +1,6 @@
 /**
  * ULN to DOCX Studio — Frontend Client Application Logic
- * Flat Minimal Light Architecture (Zero-Borders, Reactive Localhost API)
+ * Flat Minimal Light Architecture (Zero-Borders, Zero-Emojis, Reactive Localhost API)
  */
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -101,27 +101,75 @@ document.addEventListener('DOMContentLoaded', () => {
     toastContainer: document.getElementById('toastContainer'),
   };
 
-  // ── Toast Notification Helper ──────────────────────────────────
+  // ── Modal Handling (Reliable open & close) ─────────────────────
+  function openModal(modalEl) {
+    if (!modalEl) return;
+    modalEl.removeAttribute('hidden');
+    modalEl.style.display = 'flex';
+  }
+
+  function closeModal(modalEl) {
+    if (!modalEl) return;
+    modalEl.setAttribute('hidden', '');
+    modalEl.style.display = 'none';
+  }
+
+  // Ensure all modals start closed
+  [el.modalPrompt, el.modalDocx, el.modalPicMatch].forEach((m) => {
+    if (m) closeModal(m);
+  });
+
+  // Close handlers on [data-close] buttons
+  document.querySelectorAll('[data-close]').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const targetId = btn.getAttribute('data-close');
+      const targetModal = document.getElementById(targetId);
+      if (targetModal) closeModal(targetModal);
+    });
+  });
+
+  // Close when clicking outside modal card (on backdrop)
+  document.querySelectorAll('.modal-backdrop').forEach((backdrop) => {
+    backdrop.addEventListener('click', (e) => {
+      if (e.target === backdrop) closeModal(backdrop);
+    });
+  });
+
+  // Close top modal on Escape key
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (!el.searchBar.hasAttribute('hidden')) {
+        closeSearchBar();
+        return;
+      }
+      [el.modalPrompt, el.modalDocx, el.modalPicMatch].forEach((m) => {
+        if (m && m.style.display === 'flex') closeModal(m);
+      });
+    }
+  });
+
+  // ── Toast Notification Helper (No Emojis) ──────────────────────
   function showToast(message, type = 'info', action = null) {
     const toast = document.createElement('div');
     toast.className = `toast toast-${type}`;
 
-    const iconMap = {
-      success: '✓',
-      error: '✕',
-      info: 'i',
-      warning: '!',
+    const labelMap = {
+      success: 'OK',
+      error: 'LỖI',
+      info: 'TIN',
+      warning: 'Ý',
     };
 
-    const icon = document.createElement('div');
-    icon.className = 'toast-icon';
-    icon.textContent = iconMap[type] || 'i';
+    const badge = document.createElement('div');
+    badge.className = 'toast-badge';
+    badge.textContent = labelMap[type] || 'TIN';
 
     const msg = document.createElement('div');
     msg.className = 'toast-msg';
     msg.textContent = message;
 
-    toast.appendChild(icon);
+    toast.appendChild(badge);
     toast.appendChild(msg);
 
     if (action && action.label && action.onClick) {
@@ -168,7 +216,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
 
-    // Load sample ULN initially if editor is empty
     if (!el.ulnEditor.value.trim()) {
       await loadSampleUln();
     } else {
@@ -183,7 +230,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const res = await fetch('/api/sample');
       if (res.ok) {
         const data = await res.json();
-        el.ulnEditor.value = data.sample_text || '';
+        el.ulnEditor.value = data.sample_text || data.content || '';
         updateEditorStats();
         syncLineNumbers();
         showToast('Đã nạp văn bản mẫu ULN', 'info');
@@ -226,7 +273,6 @@ document.addEventListener('DOMContentLoaded', () => {
     statsDebounceTimer = setTimeout(updateEditorStats, 150);
   });
 
-  // Support Tab key in editor
   el.ulnEditor.addEventListener('keydown', (e) => {
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -393,7 +439,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       const delBtn = document.createElement('button');
       delBtn.className = 'btn-queue-del';
-      delBtn.textContent = '✕';
+      delBtn.textContent = 'Xóa';
       delBtn.title = 'Xóa ảnh này';
       delBtn.addEventListener('click', () => {
         state.images.delete(img.filename.toLowerCase());
@@ -472,7 +518,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const tag = document.createElement('span');
         tag.className = `match-tag ${foundImg ? '' : 'missing'}`;
-        tag.textContent = foundImg ? `✓ ${item.filename}` : `✕ Thiếu: ${item.filename}`;
+        tag.textContent = foundImg ? `Có sẵn: ${item.filename}` : `Chưa có: ${item.filename}`;
 
         headerRow.appendChild(qnum);
         headerRow.appendChild(tag);
@@ -513,18 +559,10 @@ document.addEventListener('DOMContentLoaded', () => {
   el.btnToggleSearch.addEventListener('click', toggleSearchBar);
   el.btnCloseSearch.addEventListener('click', closeSearchBar);
 
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
-      e.preventDefault();
-      toggleSearchBar();
-    } else if (e.key === 'Escape' && !el.searchBar.hasAttribute('hidden')) {
-      closeSearchBar();
-    }
-  });
-
   function toggleSearchBar() {
     if (el.searchBar.hasAttribute('hidden')) {
       el.searchBar.removeAttribute('hidden');
+      el.searchBar.style.display = 'flex';
       el.searchInput.focus();
       el.searchInput.select();
       performSearch();
@@ -535,15 +573,18 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function closeSearchBar() {
     el.searchBar.setAttribute('hidden', '');
+    el.searchBar.style.display = 'none';
     el.ulnEditor.focus();
   }
 
   el.btnToggleReplace.addEventListener('click', () => {
     if (el.replaceRow.hasAttribute('hidden')) {
       el.replaceRow.removeAttribute('hidden');
+      el.replaceRow.style.display = 'flex';
       el.replaceInput.focus();
     } else {
       el.replaceRow.setAttribute('hidden', '');
+      el.replaceRow.style.display = 'none';
     }
   });
 
@@ -647,37 +688,13 @@ document.addEventListener('DOMContentLoaded', () => {
     showToast(`Đã thay thế ${count} vị trí`, 'info');
   });
 
-  // ── Modal Handling ─────────────────────────────────────────────
-  function openModal(modalEl) {
-    modalEl.removeAttribute('hidden');
-  }
-
-  function closeModal(modalEl) {
-    modalEl.setAttribute('hidden', '');
-  }
-
-  document.querySelectorAll('[data-close]').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      const targetId = btn.getAttribute('data-close');
-      const targetModal = document.getElementById(targetId);
-      if (targetModal) closeModal(targetModal);
-    });
-  });
-
-  // Close modals on clicking backdrop
-  document.querySelectorAll('.modal-backdrop').forEach((backdrop) => {
-    backdrop.addEventListener('click', (e) => {
-      if (e.target === backdrop) closeModal(backdrop);
-    });
-  });
-
   // ── AI Prompt Modal ────────────────────────────────────────────
   el.btnPromptModal.addEventListener('click', async () => {
     try {
       const res = await fetch('/api/prompt');
       if (res.ok) {
         const data = await res.json();
-        el.promptTextarea.value = data.prompt_text || '';
+        el.promptTextarea.value = data.prompt_text || data.prompt || '';
       }
     } catch (err) {
       console.error('Failed to load prompt:', err);
@@ -713,7 +730,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const res = await fetch('/api/prompt');
         if (res.ok) {
           const data = await res.json();
-          el.promptTextarea.value = data.default_prompt || '';
+          el.promptTextarea.value = data.default_prompt || data.prompt || '';
           showToast('Đã khôi phục prompt mặc định', 'info');
         }
       } catch (err) {
@@ -892,9 +909,9 @@ document.addEventListener('DOMContentLoaded', () => {
       background_mode: el.backgroundMode.checked,
     };
 
-    // UI state into compiling
     el.btnCompile.disabled = true;
     el.progressWrap.removeAttribute('hidden');
+    el.progressWrap.style.display = 'flex';
     el.progressFill.style.width = '5%';
     el.statusMessage.textContent = 'Đang khởi tạo tài liệu...';
 
@@ -910,7 +927,6 @@ document.addEventListener('DOMContentLoaded', () => {
         throw new Error(err.detail || 'Không thể bắt đầu biên dịch');
       }
 
-      // Start polling
       clearInterval(state.compilePollingInterval);
       state.compilePollingInterval = setInterval(pollCompileStatus, 300);
     } catch (err) {
@@ -965,6 +981,7 @@ document.addEventListener('DOMContentLoaded', () => {
     clearInterval(state.compilePollingInterval);
     el.btnCompile.disabled = false;
     el.progressWrap.setAttribute('hidden', '');
+    el.progressWrap.style.display = 'none';
     el.progressFill.style.width = '0%';
     el.statusMessage.textContent = 'Sẵn sàng';
   }
