@@ -1,4 +1,4 @@
-from uln_parser import ULNBlock
+from core.models import ULNBlock
 
 
 class ContainersRendererMixin:

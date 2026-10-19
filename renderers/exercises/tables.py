@@ -1,7 +1,9 @@
 import os
 import re
 from typing import Optional, List
-from uln_parser import ULNBlock, parse_inline_spans, PicInfo, parse_pic_tag
+from core.models import ULNBlock, PicInfo
+from core.parser import parse_inline_spans, parse_pic_tag
+from renderers.utils import extract_question_prefix_and_body
 from renderers.common.units_and_colors import cm_to_pt
 
 

@@ -1,7 +1,8 @@
 import re
 import math
 from typing import List, Tuple, Optional
-from uln_parser import ULNBlock, parse_inline_spans
+from core.models import ULNBlock
+from core.parser import parse_inline_spans
 from renderers.common.units_and_colors import cm_to_pt
 
 

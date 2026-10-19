@@ -1,6 +1,6 @@
 import re
 from typing import Optional
-from uln_parser import ULNBlock
+from core.models import ULNBlock
 from renderers.common.units_and_colors import parse_color_to_rgb_int
 
 

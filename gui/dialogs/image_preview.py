@@ -14,7 +14,7 @@ from PIL import Image, ImageTk
 
 from gui.theme import Theme
 from services.image_service import ensure_word_compatible_image
-from renderer_utils import extract_question_prefix_and_body, natural_sort_key
+from core.utils import extract_question_prefix_and_body, natural_sort_key
 
 
 def format_file_size(size_bytes: int) -> str:

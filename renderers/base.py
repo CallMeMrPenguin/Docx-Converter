@@ -30,7 +30,7 @@ except Exception:
 
 from core.models import ULNBlock, InlineSpan, PicInfo
 from core.parser import parse_pic_tag, parse_inline_spans
-from renderer_utils import (
+from renderers.utils import (
     cm_to_pt,
     pt_to_cm,
     COLOR_NAME_TO_RGB,

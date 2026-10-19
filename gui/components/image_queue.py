@@ -12,7 +12,7 @@ from PIL import Image, ImageTk
 
 from gui.theme import Theme
 from services.image_service import SUPPORTED_IMAGE_EXTENSIONS, ImageService
-from renderer_utils import natural_sort_key
+from core.utils import natural_sort_key
 
 
 class ImageQueue(tk.Frame):

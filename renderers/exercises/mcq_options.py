@@ -1,7 +1,8 @@
 import re
 from typing import List, Tuple, Optional
-from uln_parser import ULNBlock, parse_inline_spans
-from renderer_utils import split_line_into_option_items, extract_question_prefix_and_body
+from core.models import ULNBlock
+from core.parser import parse_inline_spans
+from renderers.utils import split_line_into_option_items, extract_question_prefix_and_body
 from renderers.common.units_and_colors import cm_to_pt, parse_color_to_rgb_int
 from renderers.common.typography import get_gdi_text_measurer
 

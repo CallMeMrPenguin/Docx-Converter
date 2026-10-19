@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ULN to DOCX Converter — Flat Minimal Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <!-- ── Top Header Navigation ───────────────────────────────── -->
+  <header class="app-header">
+    <div class="header-left">
+      <div class="logo-mark">U</div>
+      <div class="brand-info">
+        <div class="brand-title-row">
+          <h1 class="brand-title">ULN to DOCX Converter</h1>
+          <span class="version-badge" id="versionBadge">v1.0.0</span>
+        </div>
+        <p class="brand-subtitle">Universal Layout Notation Engine for Microsoft Word</p>
+      </div>
+    </div>
+    <div class="header-right">
+      <button class="btn btn-ghost" id="btnPromptModal">
+        <span class="icon">📜</span> Quy tắc & Prompt AI
+      </button>
+      <button class="btn btn-ghost" id="btnCheckUpdate">
+        <span class="icon">🔄</span> Cập nhật
+      </button>
+      <div class="connection-status" id="connectionStatus">
+        <span class="status-dot"></span> Localhost Online
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Main Workspace ──────────────────────────────────────── -->
+  <main class="app-main">
+    <!-- Left Sidebar: Settings & Image Queue -->
+    <aside class="sidebar">
+      <!-- Card: Formatting Settings -->
+      <section class="card settings-card">
+        <div class="card-header">
+          <h2 class="card-title">Tùy Chỉnh Định Dạng</h2>
+        </div>
+        <div class="card-body">
+          <div class="form-group">
+            <label class="form-label" for="fontFamily">Phông chữ:</label>
+            <select class="form-select" id="fontFamily">
+              <option value="Times New Roman" selected>Times New Roman</option>
+              <option value="Arial">Arial</option>
+              <option value="Calibri">Calibri</option>
+              <option value="Cambria">Cambria</option>
+              <option value="Georgia">Georgia</option>
+              <option value="Garamond">Garamond</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="fontSize">Cỡ chữ (pt):</label>
+            <input class="form-input" type="number" id="fontSize" value="12.0" min="8.0" max="24.0" step="0.5">
+          </div>
+
+          <!-- Margins Grid -->
+          <div class="form-group">
+            <label class="form-label">Lề trang (cm):</label>
+            <div class="margins-grid">
+              <div class="margin-item">
+                <span class="sub-label">Trên</span>
+                <input class="form-input text-center" type="number" id="marginTop" value="2.0" min="0.5" max="5.0" step="0.5">
+              </div>
+              <div class="margin-item">
+                <span class="sub-label">Dưới</span>
+                <input class="form-input text-center" type="number" id="marginBottom" value="2.0" min="0.5" max="5.0" step="0.5">
+              </div>
+              <div class="margin-item">
+                <span class="sub-label">Trái</span>
+                <input class="form-input text-center" type="number" id="marginLeft" value="3.0" min="0.5" max="5.0" step="0.5">
+              </div>
+              <div class="margin-item">
+                <span class="sub-label">Phải</span>
+                <input class="form-input text-center" type="number" id="marginRight" value="1.5" min="0.5" max="5.0" step="0.5">
+              </div>
+            </div>
+          </div>
+
+          <!-- Question & Option Styling Inset -->
+          <div class="inset-panel">
+            <div class="form-row">
+              <div class="form-group flex-1">
+                <label class="form-label" for="qPrefix">Tiền tố câu:</label>
+                <select class="form-select" id="qPrefix">
+                  <option value="" selected>(Không)</option>
+                  <option value="Question ">Question </option>
+                  <option value="Câu ">Câu </option>
+                  <option value="Task ">Task </option>
+                  <option value="Exercise ">Exercise </option>
+                </select>
+              </div>
+              <div class="form-group w-80">
+                <label class="form-label" for="qDelim">Dấu tách:</label>
+                <select class="form-select" id="qDelim">
+                  <option value="." selected>.</option>
+                  <option value=":">:</option>
+                  <option value=")">)</option>
+                  <option value="-">-</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="qColor">Màu số câu:</label>
+              <select class="form-select" id="qColor">
+                <option value="Default (Black) #000000" selected>Mặc định (Đen)</option>
+                <option value="Blue #2563eb">Xanh Dương #2563eb</option>
+                <option value="Navy #1e40af">Xanh Navy #1e40af</option>
+                <option value="Red #dc2626">Đỏ #dc2626</option>
+                <option value="Emerald #059669">Xanh Lục #059669</option>
+                <option value="Purple #7c3aed">Tím #7c3aed</option>
+                <option value="Amber #d97706">Hổ Phách #d97706</option>
+              </select>
+            </div>
+
+            <div class="form-group">
+              <label class="form-label" for="optColor">Màu đáp án ABCD:</label>
+              <select class="form-select" id="optColor">
+                <option value="Default (Black) #000000" selected>Mặc định (Đen)</option>
+                <option value="Blue #2563eb">Xanh Dương #2563eb</option>
+                <option value="Navy #1e40af">Xanh Navy #1e40af</option>
+                <option value="Red #dc2626">Đỏ #dc2626</option>
+                <option value="Emerald #059669">Xanh Lục #059669</option>
+                <option value="Purple #7c3aed">Tím #7c3aed</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Toggles -->
+          <div class="toggles-list">
+            <label class="switch-row">
+              <input type="checkbox" id="enablePageNumbers" checked>
+              <span class="switch-label">Đánh số trang (Trang X / Y)</span>
+            </label>
+            <label class="switch-row">
+              <input type="checkbox" id="openWordAfterCompile" checked>
+              <span class="switch-label">Mở Word sau khi xuất</span>
+            </label>
+            <label class="switch-row">
+              <input type="checkbox" id="backgroundMode">
+              <span class="switch-label">Chạy ngầm (0 đóng băng chuột)</span>
+            </label>
+          </div>
+        </div>
+      </section>
+
+      <!-- Card: Image Queue -->
+      <section class="card image-queue-card">
+        <div class="card-header space-between">
+          <h2 class="card-title">Danh Sách Ảnh [PIC]</h2>
+          <span class="count-pill" id="imageCountPill">0 ảnh</span>
+        </div>
+        <div class="card-body">
+          <!-- Dropzone -->
+          <div class="dropzone" id="imageDropzone">
+            <input type="file" id="fileInputImages" multiple accept="image/*,.webp,.heic,.heif,.avif" hidden>
+            <div class="dropzone-content">
+              <span class="dropzone-icon">🖼️</span>
+              <p class="dropzone-text">Kéo thả ảnh hoặc <span class="highlight">Chọn ảnh</span></p>
+              <p class="dropzone-hint">PNG, JPG, WEBP, HEIC, AVIF</p>
+            </div>
+          </div>
+
+          <!-- Controls -->
+          <div class="btn-group-row">
+            <button class="btn btn-sm btn-outline" id="btnSortAZ">A-Z</button>
+            <button class="btn btn-sm btn-outline" id="btnMatchPics">👁️ Đối chiếu câu & ảnh</button>
+            <button class="btn btn-sm btn-danger-ghost" id="btnClearImages">Xóa hết</button>
+          </div>
+
+          <!-- Queue List -->
+          <div class="queue-list" id="queueList">
+            <div class="empty-state">Chưa có ảnh nào trong hàng đợi</div>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <!-- Right: Editor & Compilation Area -->
+    <div class="editor-area">
+      <div class="card editor-card">
+        <!-- Action Toolbar -->
+        <div class="editor-toolbar">
+          <div class="toolbar-left">
+            <button class="btn btn-sm btn-info" id="btnImportDocx">
+              <span class="icon">📥</span> Nhập DOCX
+            </button>
+            <button class="btn btn-sm btn-secondary" id="btnEmbedRaw">
+              <span class="icon">💾</span> Nhúng Raw
+            </button>
+            <button class="btn btn-sm btn-secondary" id="btnImportTxt">
+              <span class="icon">📁</span> Mở Tệp .txt
+            </button>
+            <button class="btn btn-sm btn-secondary" id="btnLoadSample">
+              <span class="icon">📄</span> Mẫu ULN
+            </button>
+            <div class="heading-shortcuts">
+              <span class="shortcut-label">H:</span>
+              <button class="btn-h" data-level="1">H1</button>
+              <button class="btn-h" data-level="2">H2</button>
+              <button class="btn-h" data-level="3">H3</button>
+              <button class="btn-h" data-level="4">H4</button>
+              <button class="btn-h" data-level="5">H5</button>
+              <button class="btn-h" data-level="6">H6</button>
+            </div>
+          </div>
+
+          <div class="toolbar-right">
+            <button class="btn btn-sm btn-secondary" id="btnToggleSearch">
+              <span class="icon">🔍</span> Tìm (Ctrl+F)
+            </button>
+            <button class="btn btn-sm btn-danger-ghost" id="btnClearText">
+              <span class="icon">🗑️</span> Xóa
+            </button>
+            <button class="btn btn-compile" id="btnCompile">
+              <span class="icon">🚀</span> XUẤT FILE DOCX
+            </button>
+          </div>
+        </div>
+
+        <!-- Floating Find & Replace Bar -->
+        <div class="search-bar" id="searchBar" hidden>
+          <div class="search-row">
+            <span class="search-icon">🔍</span>
+            <input type="text" class="search-input" id="searchInput" placeholder="Tìm kiếm...">
+            <span class="match-count" id="matchCount">0 kết quả</span>
+            <button class="btn-icon" id="btnPrevMatch" title="Trước (Shift+Enter)">▲</button>
+            <button class="btn-icon" id="btnNextMatch" title="Sau (Enter)">▼</button>
+            <label class="case-label">
+              <input type="checkbox" id="matchCase"> Aa
+            </label>
+            <button class="btn-text" id="btnToggleReplace">Thay thế...</button>
+            <button class="btn-icon close-search" id="btnCloseSearch">✕</button>
+          </div>
+          <div class="replace-row" id="replaceRow" hidden>
+            <span class="search-icon">🔄</span>
+            <input type="text" class="search-input" id="replaceInput" placeholder="Thay bằng...">
+            <button class="btn btn-sm btn-warning" id="btnReplaceOne">Thay thế</button>
+            <button class="btn btn-sm btn-secondary" id="btnReplaceAll">Thay tất cả</button>
+          </div>
+        </div>
+
+        <!-- Editor Container with Synchronized Line Numbers -->
+        <div class="editor-container">
+          <div class="line-numbers" id="lineNumbers">1</div>
+          <textarea class="code-editor" id="ulnEditor" spellcheck="false" placeholder="Dán hoặc nhập mã nguồn Universal Layout Notation (ULN) tại đây..."></textarea>
+        </div>
+
+        <!-- Bottom Status Bar -->
+        <footer class="editor-statusbar">
+          <div class="status-left">
+            <span class="status-msg" id="statusMessage">Sẵn sàng</span>
+            <div class="progress-wrap" id="progressWrap" hidden>
+              <div class="progress-track">
+                <div class="progress-fill" id="progressFill"></div>
+              </div>
+              <button class="btn btn-xs btn-danger" id="btnCancelCompile">Hủy</button>
+            </div>
+          </div>
+          <div class="status-right">
+            <span class="stat-badge" id="statLines">0 dòng</span>
+            <span class="stat-sep">|</span>
+            <span class="stat-badge" id="statWords">0 từ</span>
+            <span class="stat-sep">|</span>
+            <span class="stat-badge" id="statChars">0 ký tự</span>
+          </div>
+        </footer>
+      </div>
+    </div>
+  </main>
+
+  <!-- ── Modal: AI System Prompt ─────────────────────────────── -->
+  <div class="modal-backdrop" id="modalPrompt" hidden>
+    <div class="modal-card modal-lg">
+      <div class="modal-header">
+        <h3 class="modal-title">📜 Quy Tắc & Prompt AI Trích Xuất ULN</h3>
+        <button class="btn-close-modal" data-close="modalPrompt">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc">Copy toàn bộ prompt này gửi kèm đề thi cho ChatGPT, Claude hoặc Gemini để trích xuất chuẩn định dạng ULN.</p>
+        <textarea class="prompt-textarea" id="promptTextarea" spellcheck="false"></textarea>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" id="btnResetPrompt">↺ Khôi phục gốc</button>
+        <div class="footer-actions">
+          <button class="btn btn-primary" id="btnCopyPrompt">📋 Sao chép Prompt</button>
+          <button class="btn btn-success" id="btnSavePrompt">💾 Lưu thay đổi</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: DOCX Scanner & Importer ──────────────────────── -->
+  <div class="modal-backdrop" id="modalDocx" hidden>
+    <div class="modal-card modal-xl">
+      <div class="modal-header">
+        <h3 class="modal-title">📥 Quét & Nhập File DOCX Có Nhúng ULN</h3>
+        <button class="btn-close-modal" data-close="modalDocx">✕</button>
+      </div>
+      <div class="modal-body docx-scanner-body">
+        <div class="scanner-controls">
+          <div class="form-group flex-1">
+            <label class="form-label">Thư mục quét:</label>
+            <div class="input-with-button">
+              <input type="text" class="form-input flex-1" id="docxFolderInput" placeholder="Đường dẫn thư mục...">
+              <button class="btn btn-secondary" id="btnScanFolder">Quét lại</button>
+            </div>
+          </div>
+          <label class="switch-row">
+            <input type="checkbox" id="chkOnlyUln" checked>
+            <span class="switch-label">Chỉ hiện file có nhúng mã ULN</span>
+          </label>
+        </div>
+
+        <div class="docx-split">
+          <div class="docx-list-card">
+            <table class="data-table" id="docxTable">
+              <thead>
+                <tr>
+                  <th width="80">Nhúng</th>
+                  <th>Tên file</th>
+                  <th width="90">Kích thước</th>
+                  <th width="140">Thời gian</th>
+                </tr>
+              </thead>
+              <tbody id="docxTableBody">
+                <tr><td colspan="4" class="text-center">Đang tải danh sách file...</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="docx-preview-card">
+            <h4 class="preview-title">Xem trước mã ULN nhúng:</h4>
+            <pre class="docx-preview-pre" id="docxPreviewContent">Chọn một file để xem trước...</pre>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <span class="modal-status-text" id="docxScannerStatus"></span>
+        <button class="btn btn-primary" id="btnLoadDocxToEditor" disabled>📥 Nạp Vào Trình Soạn Thảo</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Modal: Exercise & Image Cross-Check Matcher ─────────── -->
+  <div class="modal-backdrop" id="modalPicMatch" hidden>
+    <div class="modal-card modal-xl">
+      <div class="modal-header">
+        <h3 class="modal-title">👁️ Đối Chiếu Câu Hỏi & Ảnh ([PIC])</h3>
+        <button class="btn-close-modal" data-close="modalPicMatch">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-desc" id="picMatchSummary">Đang phân tích cú pháp các thẻ [PIC] trong đề...</p>
+        <div class="match-cards-container" id="matchCardsContainer"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-close="modalPicMatch">Đóng</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Toast Notifications ─────────────────────────────────── -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

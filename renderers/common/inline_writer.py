@@ -1,6 +1,7 @@
 import re
 from typing import List, Optional
-from uln_parser import InlineSpan, PicInfo, parse_pic_tag
+from core.models import InlineSpan, PicInfo
+from core.parser import parse_pic_tag
 from renderers.common.units_and_colors import parse_color_to_rgb_int, HIGHLIGHT_NAME_TO_INDEX
 
 
