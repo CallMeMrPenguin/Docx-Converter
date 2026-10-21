@@ -605,34 +605,50 @@ if os.path.exists(web_dir):
         return FileResponse(os.path.join(web_dir, "index.html"))
 
 
-def find_free_port(start_port: int = 8765, max_port: int = 8800) -> int:
-    """Finds an available TCP port for the local server."""
+def find_free_port(start_port: int = 8899, max_port: int = 8999, host: str = "127.0.0.1") -> int:
+    """Finds an available TCP port for the local server by testing socket bind capability."""
     for p in range(start_port, max_port):
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if s.connect_ex(("127.0.0.1", p)) != 0:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                s.bind((host, p))
                 return p
+        except OSError:
+            continue
     return start_port
 
 
-def start_server():
+def start_server(port: Optional[int] = None, host: str = "127.0.0.1", open_browser: bool = True):
     """Entrypoint to start the server and open localhost in default web browser."""
     import uvicorn
-    port = find_free_port(8765)
-    url = f"http://127.0.0.1:{port}"
+
+    # Priority: explicit arg > env DOCX_STUDIO_PORT / PORT > find_free_port(8899)
+    if port is None:
+        env_port = os.environ.get("DOCX_STUDIO_PORT") or os.environ.get("PORT")
+        if env_port:
+            try:
+                port = int(env_port)
+            except ValueError:
+                port = None
+    if port is None:
+        port = find_free_port(8899, host=host)
+
+    url = f"http://{host}:{port}"
 
     print("=" * 60)
     print(f"ULN to DOCX Studio Localhost Web Server running at: {url}")
     print("=" * 60)
 
     # Browser opener thread
-    def _open_browser():
-        time.sleep(1.0)
-        try:
-            webbrowser.open(url)
-        except Exception:
-            pass
+    if open_browser:
+        def _open_browser():
+            time.sleep(1.0)
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
 
-    threading.Thread(target=_open_browser, daemon=True).start()
+        threading.Thread(target=_open_browser, daemon=True).start()
 
     # Watchdog thread: kills terminal process when web tab is closed (relaxed to 45s)
     def _watchdog():
@@ -645,7 +661,7 @@ def start_server():
 
     threading.Thread(target=_watchdog, daemon=True).start()
 
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+    uvicorn.run(app, host=host, port=port, log_level="warning")
 
 
 if __name__ == "__main__":
