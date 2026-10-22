@@ -218,6 +218,28 @@ input, button, select, textarea {
   flex-direction: column;
   gap: 20px;
   flex-shrink: 0;
+  position: sticky;
+  top: 84px;
+  align-self: flex-start;
+  max-height: calc(100vh - 104px);
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 2px 4px 4px 2px;
+  margin: -2px -4px -4px -2px;
+  scrollbar-width: thin;
+}
+
+.sidebar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: var(--radius-full);
 }
 
 .editor-area {
@@ -659,8 +681,10 @@ input, button, select, textarea {
 .editor-card {
   flex: 1;
   position: relative;
-  overflow: hidden;
-  min-height: 600px;
+  min-height: calc(100vh - 104px);
+  border-radius: var(--radius-xl);
+  display: flex;
+  flex-direction: column;
 }
 
 .editor-toolbar {
@@ -671,8 +695,13 @@ input, button, select, textarea {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  z-index: 10;
-  box-shadow: var(--shadow-sm);
+  position: sticky;
+  top: 64px;
+  z-index: 30;
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+  border-top-left-radius: var(--radius-xl);
+  border-top-right-radius: var(--radius-xl);
+  transition: box-shadow 0.2s ease;
 }
 
 .toolbar-left, .toolbar-right {
@@ -716,10 +745,10 @@ input, button, select, textarea {
 
 /* ── Floating Search & Replace Bar (Ctrl+F) ─────────────────────── */
 .search-bar {
-  position: absolute;
-  top: 56px;
-  right: 20px;
-  z-index: 40;
+  position: fixed;
+  top: 120px;
+  right: max(24px, calc((100vw - 1920px) / 2 + 24px));
+  z-index: 60;
   background-color: var(--bg-surface);
   box-shadow: var(--shadow-dropdown);
   border-radius: var(--radius-lg);
@@ -857,7 +886,12 @@ input, button, select, textarea {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  box-shadow: 0 -1px 2px rgba(15, 23, 42, 0.03);
+  box-shadow: 0 -2px 8px -2px rgba(15, 23, 42, 0.06);
+  border-bottom-left-radius: var(--radius-xl);
+  border-bottom-right-radius: var(--radius-xl);
+  position: sticky;
+  bottom: 0;
+  z-index: 20;
 }
 
 .status-left {
@@ -925,6 +959,9 @@ input, button, select, textarea {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
+  position: sticky;
+  top: 64px;
+  z-index: 25;
 }
 
 .fm-toolbar-left, .fm-toolbar-right {

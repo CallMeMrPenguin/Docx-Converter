@@ -19,17 +19,12 @@ document.addEventListener('DOMContentLoaded', () => {
     documentsFolder: '',
   };
 
-  // ── Heartbeat & Auto-Shutdown on Tab Close ─────────────────────
-  // Send initial heartbeat immediately on load, then every 3 seconds
+  // ── Connection Heartbeat ───────────────────────────────────────
+  // Send initial ping immediately on load, then every 10 seconds
   fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
   setInterval(() => {
     fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
-  }, 3000);
-
-  // Send shutdown beacon ONLY when tab or window is explicitly unloaded
-  window.addEventListener('beforeunload', () => {
-    navigator.sendBeacon('/api/shutdown');
-  });
+  }, 10000);
 
   // ── DOM References ─────────────────────────────────────────────
   const el = {

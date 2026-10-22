@@ -119,40 +119,32 @@ def sanitize_filepath(p: Optional[str]) -> str:
 
 
 # ── Heartbeat & Shutdown Endpoints ───────────────────────────────
-shutdown_cancel_event = threading.Event()
 shutdown_in_progress = False
 
 
 @app.post("/api/heartbeat")
 def record_heartbeat():
-    """Receives ping from browser tab. Keeps local server alive."""
-    global last_heartbeat_time, has_received_first_heartbeat, shutdown_in_progress
+    """Receives ping from browser tab to confirm connection."""
+    global last_heartbeat_time, has_received_first_heartbeat
     last_heartbeat_time = time.time()
     has_received_first_heartbeat = True
-    if shutdown_in_progress:
-        shutdown_cancel_event.set()
-        shutdown_in_progress = False
     return {"status": "ok"}
 
 
 @app.post("/api/shutdown")
 def shutdown_server():
-    """Schedules server termination when browser tab is closed."""
+    """Terminates server when user explicitly clicks 'Thoát ứng dụng'."""
     global shutdown_in_progress
     if shutdown_in_progress:
         return {"status": "in_progress"}
     shutdown_in_progress = True
-    shutdown_cancel_event.clear()
 
-    def _delayed_exit():
-        time.sleep(15.0)
-        if not shutdown_cancel_event.is_set():
-            print("\n[Server] Tab trình duyệt đã đóng. Máy chủ đã dừng.")
-            os._exit(0)
-        else:
-            shutdown_cancel_event.clear()
+    def _exit():
+        time.sleep(0.5)
+        print("\n[Server] Người dùng đã dừng máy chủ. Đang thoát.")
+        os._exit(0)
 
-    threading.Thread(target=_delayed_exit, daemon=True).start()
+    threading.Thread(target=_exit, daemon=True).start()
     return {"status": "scheduled"}
 
 
@@ -649,17 +641,6 @@ def start_server(port: Optional[int] = None, host: str = "127.0.0.1", open_brows
                 pass
 
         threading.Thread(target=_open_browser, daemon=True).start()
-
-    # Watchdog thread: kills terminal process when web tab is closed (relaxed to 45s)
-    def _watchdog():
-        time.sleep(30) # 30s initial startup grace period
-        while True:
-            time.sleep(2.0)
-            if has_received_first_heartbeat and (time.time() - last_heartbeat_time > 45):
-                print("\n[Server] Không còn kết nối từ trình duyệt sau 45s. Tự động tắt máy chủ.")
-                os._exit(0)
-
-    threading.Thread(target=_watchdog, daemon=True).start()
 
     uvicorn.run(app, host=host, port=port, log_level="warning")
 
