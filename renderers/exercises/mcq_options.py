@@ -183,8 +183,7 @@ class McqOptionsRendererMixin:
                         sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
                         sel.ParagraphFormat.FirstLineIndent = 0
 
-                sel.Font.Name = font_name
-                sel.Font.Size = font_size
+                self.apply_font_family(sel.Font, font_name, font_size)
                 sel.Font.Bold = 1
                 sel.Font.Italic = 0
                 sel.Font.Underline = 0
@@ -232,8 +231,7 @@ class McqOptionsRendererMixin:
                         sel.ParagraphFormat.LeftIndent = cm_to_pt(0.5)
                         sel.ParagraphFormat.FirstLineIndent = 0
 
-                sel.Font.Name = font_name
-                sel.Font.Size = font_size
+                self.apply_font_family(sel.Font, font_name, font_size)
                 sel.Font.Bold = 1
                 sel.Font.Italic = 0
                 sel.Font.Underline = 0

@@ -258,8 +258,7 @@ class TableRendererMixin:
                     cell_range.ListFormat.RemoveNumbers()
                 except Exception:
                     pass
-                cell_range.Font.Name = font_name
-                cell_range.Font.Size = font_size
+                self.apply_font_family(cell_range.Font, font_name, font_size)
                 cell_range.ParagraphFormat.SpaceBefore = 0
                 cell_range.ParagraphFormat.SpaceAfter = 0
                 cell_range.ParagraphFormat.LineSpacingRule = 0

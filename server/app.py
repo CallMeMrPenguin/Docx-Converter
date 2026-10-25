@@ -57,6 +57,7 @@ class CompileManager:
         self.output_path: Optional[str] = None
         self.cancel_event = threading.Event()
         self.worker_thread: Optional[threading.Thread] = None
+        self.start_time: float = 0.0
 
     def reset(self):
         self.is_compiling = True
@@ -65,6 +66,7 @@ class CompileManager:
         self.error = None
         self.output_path = None
         self.cancel_event.clear()
+        self.start_time = time.time()
 
 compile_manager = CompileManager()
 
@@ -243,6 +245,9 @@ def start_compilation(req: CompileRequest):
 
         try:
             settings = dict(req.settings)
+            font_name = settings.get("font_name") or settings.get("font_family") or "Times New Roman"
+            settings["font_name"] = font_name
+            settings["font_family"] = font_name
             settings["cancel_event"] = compile_manager.cancel_event
             compiler = ULNCompiler(settings)
 
@@ -274,11 +279,21 @@ def start_compilation(req: CompileRequest):
 
 @app.get("/api/compile/status")
 def get_compile_status():
-    """Polls real-time compilation progress."""
+    """Polls real-time compilation progress with estimated remaining time."""
+    now = time.time()
+    elapsed = max(0.0, now - compile_manager.start_time) if compile_manager.is_compiling else 0.0
+
+    remaining_seconds = 0
+    if compile_manager.is_compiling and compile_manager.progress > 0.05:
+        estimated_total = elapsed / max(0.01, compile_manager.progress)
+        remaining_seconds = max(1, int(round(estimated_total - elapsed)))
+
     return {
         "is_compiling": compile_manager.is_compiling,
-        "progress": compile_manager.progress,
+        "progress": round(compile_manager.progress, 3),
         "message": compile_manager.message,
+        "elapsed_seconds": round(elapsed, 1),
+        "remaining_seconds": remaining_seconds,
         "error": compile_manager.error,
         "output_path": compile_manager.output_path
     }

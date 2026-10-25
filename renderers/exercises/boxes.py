@@ -215,8 +215,7 @@ class BoxesRendererMixin:
                 shape.Line.ForeColor.RGB = 0
 
                 tr = tf.TextRange
-                tr.Font.Name = font_name
-                tr.Font.Size = font_size
+                self.apply_font_family(tr.Font, font_name, font_size)
                 tr.Font.Bold = 1
                 tr.Font.Color = 0
                 tr.Text = "\n".join(self.clean_box_item(l) for l in lines)
@@ -285,8 +284,7 @@ class BoxesRendererMixin:
 
                 lines_text = ["\t".join(self.clean_box_item(it) for it in chunk) for chunk in lines_bank]
                 tr = tf.TextRange
-                tr.Font.Name = font_name
-                tr.Font.Size = font_size
+                self.apply_font_family(tr.Font, font_name, font_size)
                 tr.Font.Bold = 1
                 tr.Font.Color = 0
                 tr.Text = "\n".join(lines_text)

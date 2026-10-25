@@ -77,6 +77,8 @@ document.addEventListener('DOMContentLoaded', () => {
     statusMessage: document.getElementById('statusMessage'),
     progressWrap: document.getElementById('progressWrap'),
     progressFill: document.getElementById('progressFill'),
+    progressPercent: document.getElementById('progressPercent'),
+    progressTime: document.getElementById('progressTime'),
     btnCancelCompile: document.getElementById('btnCancelCompile'),
     statLines: document.getElementById('statLines'),
     statWords: document.getElementById('statWords'),
@@ -941,6 +943,18 @@ document.addEventListener('DOMContentLoaded', () => {
   el.btnCompile.addEventListener('click', startCompilation);
   el.btnCancelCompile.addEventListener('click', cancelCompilation);
 
+  function formatRemainingTime(seconds) {
+    if (seconds === undefined || seconds === null || seconds <= 0) {
+      return 'Còn ~1s';
+    }
+    if (seconds < 60) {
+      return `Còn ~${seconds}s`;
+    }
+    const m = Math.floor(seconds / 60);
+    const s = seconds % 60;
+    return s > 0 ? `Còn ~${m}p ${s}s` : `Còn ~${m}p`;
+  }
+
   async function startCompilation() {
     const text = el.ulnEditor.value.trim();
     if (!text) {
@@ -948,8 +962,10 @@ document.addEventListener('DOMContentLoaded', () => {
       return;
     }
 
+    const selectedFont = el.fontFamily.value;
     const settings = {
-      font_family: el.fontFamily.value,
+      font_name: selectedFont,
+      font_family: selectedFont,
       font_size: parseFloat(el.fontSize.value) || 12.0,
       margin_top: parseFloat(el.marginTop.value) || 2.0,
       margin_bottom: parseFloat(el.marginBottom.value) || 2.0,
@@ -957,8 +973,10 @@ document.addEventListener('DOMContentLoaded', () => {
       margin_right: parseFloat(el.marginRight.value) || 1.5,
       question_prefix: el.qPrefix.value,
       question_delim: el.qDelim.value,
+      question_delimiter: el.qDelim.value,
       question_color: el.qColor.value,
       option_color: el.optColor.value,
+      opt_color: el.optColor.value,
       enable_page_numbers: el.enablePageNumbers.checked,
     };
 
@@ -970,9 +988,12 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     el.btnCompile.disabled = true;
+    el.btnCompile.textContent = 'ĐANG XUẤT...';
     el.progressWrap.removeAttribute('hidden');
     el.progressWrap.style.display = 'flex';
     el.progressFill.style.width = '5%';
+    if (el.progressPercent) el.progressPercent.textContent = '5%';
+    if (el.progressTime) el.progressTime.textContent = 'Đang ước tính...';
     el.statusMessage.textContent = 'Đang khởi tạo tài liệu...';
 
     try {
@@ -1001,8 +1022,22 @@ document.addEventListener('DOMContentLoaded', () => {
       if (!res.ok) return;
 
       const data = await res.json();
-      const pct = Math.round((data.progress || 0) * 100);
+      const pct = Math.max(5, Math.min(100, Math.round((data.progress || 0) * 100)));
       el.progressFill.style.width = `${pct}%`;
+      if (el.progressPercent) el.progressPercent.textContent = `${pct}%`;
+
+      if (el.progressTime) {
+        if (pct >= 100) {
+          el.progressTime.textContent = 'Xong';
+        } else if (data.remaining_seconds && data.remaining_seconds > 0) {
+          el.progressTime.textContent = formatRemainingTime(data.remaining_seconds);
+        } else if (pct > 20) {
+          el.progressTime.textContent = 'Đang xử lý...';
+        } else {
+          el.progressTime.textContent = 'Đang ước tính...';
+        }
+      }
+
       el.statusMessage.textContent = data.message || 'Đang xử lý...';
 
       if (!data.is_compiling) {
@@ -1013,12 +1048,16 @@ document.addEventListener('DOMContentLoaded', () => {
           showToast(`Biên dịch thất bại: ${data.error}`, 'error');
         } else if (data.output_path) {
           el.progressFill.style.width = '100%';
+          if (el.progressPercent) el.progressPercent.textContent = '100%';
+          if (el.progressTime) el.progressTime.textContent = 'Xong';
           el.statusMessage.textContent = 'Xuất tài liệu Word hoàn tất!';
+          el.btnCompile.disabled = false;
+          el.btnCompile.textContent = 'XUẤT FILE DOCX';
           showToast(`Đã xuất thành công: ${data.output_path}`, 'success', {
             label: 'Mở Word',
             onClick: () => openCompiledDocx(data.output_path),
           });
-          setTimeout(resetCompileUI, 3000);
+          setTimeout(resetCompileUI, 4000);
         } else {
           resetCompileUI();
         }
@@ -1040,9 +1079,12 @@ document.addEventListener('DOMContentLoaded', () => {
   function resetCompileUI() {
     clearInterval(state.compilePollingInterval);
     el.btnCompile.disabled = false;
+    el.btnCompile.textContent = 'XUẤT FILE DOCX';
     el.progressWrap.setAttribute('hidden', '');
     el.progressWrap.style.display = 'none';
     el.progressFill.style.width = '0%';
+    if (el.progressPercent) el.progressPercent.textContent = '0%';
+    if (el.progressTime) el.progressTime.textContent = '';
     el.statusMessage.textContent = 'Sẵn sàng';
   }
 

@@ -910,12 +910,15 @@ input, button, select, textarea {
   display: flex;
   align-items: center;
   gap: 10px;
+  background-color: var(--bg-inset);
+  padding: 4px 10px;
+  border-radius: var(--radius-md);
 }
 
 .progress-track {
   width: 180px;
-  height: 6px;
-  background-color: var(--bg-inset);
+  height: 8px;
+  background-color: #cbd5e1;
   border-radius: var(--radius-full);
   overflow: hidden;
 }
@@ -924,7 +927,31 @@ input, button, select, textarea {
   height: 100%;
   background: linear-gradient(90deg, #2563eb, #059669);
   width: 0%;
-  transition: width 0.2s ease;
+  border-radius: var(--radius-full);
+  transition: width 0.25s ease;
+}
+
+.progress-percent {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-main);
+  min-width: 36px;
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.progress-time {
+  font-size: 11px;
+  font-weight: 600;
+  color: #1e40af;
+  background-color: #dbeafe;
+  padding: 2px 7px;
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+.progress-time:empty {
+  display: none;
 }
 
 .status-right {

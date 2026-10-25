@@ -65,8 +65,7 @@ class NumberingMixin:
 
         sel.ParagraphFormat.LeftIndent = 0
         sel.ParagraphFormat.FirstLineIndent = 0
-        sel.Font.Name = getattr(self, "font_name", "Times New Roman")
-        sel.Font.Size = getattr(self, "font_size", 12.0)
+        self.apply_font_family(sel.Font, getattr(self, "font_name", "Times New Roman"), getattr(self, "font_size", 12.0))
         sel.Font.Bold = 1
         sel.Font.Italic = 0
         sel.Font.Underline = 0

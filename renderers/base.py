@@ -58,7 +58,7 @@ class ULNWordRenderer(RendererBlocksMixin):
         self.settings = settings or {}
 
         # Default Typography and Margin Settings
-        self.font_name = self.settings.get("font_name", "Times New Roman")
+        self.font_name = self.settings.get("font_name") or self.settings.get("font_family") or "Times New Roman"
         self.font_size = float(self.settings.get("font_size", 12.0))
         self.margin_top = float(self.settings.get("margin_top", 2.0))
         self.margin_bottom = float(self.settings.get("margin_bottom", 2.0))
@@ -69,11 +69,11 @@ class ULNWordRenderer(RendererBlocksMixin):
 
         # Question & Option Styling Settings
         self.question_prefix = self.settings.get("question_prefix", "")  # e.g. "", "Question ", "Câu "
-        self.question_delimiter = self.settings.get("question_delimiter", ".")  # e.g. ".", ":", ")", "-"
+        self.question_delimiter = self.settings.get("question_delimiter") or self.settings.get("question_delim") or "."
         self.question_color = self.settings.get("question_color", "#000000")  # Hex or color name
-        self.opt_color = self.settings.get("opt_color", self.settings.get("option_color", "#000000"))
+        self.opt_color = self.settings.get("opt_color") or self.settings.get("option_color") or "#000000"
         self.option_color = self.opt_color
-        self.instruction_color = self.settings.get("instruction_color", self.settings.get("ins_color", "#000000"))
+        self.instruction_color = self.settings.get("instruction_color") or self.settings.get("ins_color") or "#000000"
 
         # Image Queue & State
         self.user_images = list(self.settings.get("user_images", []))
@@ -143,7 +143,7 @@ class ULNWordRenderer(RendererBlocksMixin):
         return None
 
     def configure_document(self, doc):
-        """Applies page setup margins."""
+        """Applies page setup margins and configures consistent document-level typography styles."""
         self.check_cancellation()
         ps = doc.PageSetup
         ps.PageWidth = cm_to_pt(21.0)
@@ -152,6 +152,44 @@ class ULNWordRenderer(RendererBlocksMixin):
         ps.BottomMargin = cm_to_pt(self.margin_bottom)
         ps.LeftMargin = cm_to_pt(self.margin_left)
         ps.RightMargin = cm_to_pt(self.margin_right)
+
+        # Enforce Normal style typography
+        try:
+            normal_style = doc.Styles("Normal")
+            self.apply_font_family(normal_style.Font, self.font_name, self.font_size)
+        except Exception:
+            pass
+
+        # Enforce Heading styles typography
+        for h_idx in range(1, 7):
+            try:
+                h_style = doc.Styles(f"Heading {h_idx}")
+                self.apply_font_family(h_style.Font, self.font_name)
+            except Exception:
+                pass
+
+    def unify_document_fonts(self, doc):
+        """Unifies document-wide text runs, tables, and shape text ranges to the configured font."""
+        try:
+            self.apply_font_family(doc.Content.Font, self.font_name)
+        except Exception:
+            pass
+
+        try:
+            for tbl in doc.Tables:
+                self.apply_font_family(tbl.Range.Font, self.font_name)
+        except Exception:
+            pass
+
+        try:
+            for shape in doc.Shapes:
+                try:
+                    if shape.TextFrame.HasText:
+                        self.apply_font_family(shape.TextFrame.TextRange.Font, self.font_name)
+                except Exception:
+                    pass
+        except Exception:
+            pass
 
     def apply_page_numbers(self, doc):
         """Applies footer page numbering AFTER all content has finished rendering to avoid rendering lag."""
@@ -162,8 +200,7 @@ class ULNWordRenderer(RendererBlocksMixin):
             self.check_cancellation()
             for section in doc.Sections:
                 footer = section.Footers(1)  # wdHeaderFooterPrimary = 1
-                footer.Range.Font.Name = self.font_name
-                footer.Range.Font.Size = 10
+                self.apply_font_family(footer.Range.Font, self.font_name, 10.0)
                 footer.Range.Text = ""
 
                 sel_range = footer.Range
@@ -942,3 +979,4 @@ class ULNWordRenderer(RendererBlocksMixin):
 
         if is_root:
             self.apply_page_numbers(doc)
+            self.unify_document_fonts(doc)

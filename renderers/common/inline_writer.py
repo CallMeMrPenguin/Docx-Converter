@@ -36,6 +36,12 @@ class InlineWriterMixin:
 
             # Direct minimal COM property assignment
             f.Name = font_name
+            try:
+                f.NameAscii = font_name
+                f.NameOther = font_name
+                f.NameBi = font_name
+            except Exception:
+                pass
             f.Size = f_size
             f.Bold = is_bold
             f.Italic = is_italic

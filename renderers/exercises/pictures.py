@@ -57,10 +57,9 @@ class PicturesRendererMixin:
                 print(f"[ULNRenderer] Warning adding picture {target_path}: {e}")
 
         # Visual Placeholder Box for OCR / Diagram References
-        desc_text = f"🖼️ [ DIAGRAM / IMAGE: {pic.description} ]"
+        desc_text = f"[ DIAGRAM / IMAGE: {pic.description} ]"
         font_name = getattr(self, "font_name", "Times New Roman")
-        sel.Font.Name = font_name
-        sel.Font.Size = 10.0
+        self.apply_font_family(sel.Font, font_name, 10.0)
         sel.Font.Italic = True
         sel.Font.Bold = True
         try:
@@ -137,15 +136,14 @@ class PicturesRendererMixin:
                     except Exception as e:
                         print(f"[ULNRenderer] Warning in pic_grid picture: {e}")
                 else:
-                    sel.Font.Name = font_name
-                    sel.Font.Size = 9.0
+                    self.apply_font_family(sel.Font, font_name, 9.0)
                     sel.Font.Italic = True
                     sel.Font.Bold = True
                     try:
                         sel.Font.Color = 8421504  # Grey
                     except Exception:
                         pass
-                    sel.TypeText(f"[ 🖼️ {global_idx + 1} ]")
+                    sel.TypeText(f"[ PIC {global_idx + 1} ]")
 
             sel.TypeParagraph()
 

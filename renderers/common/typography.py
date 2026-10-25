@@ -5,6 +5,33 @@ from renderers.common.units_and_colors import cm_to_pt, pt_to_cm
 _gdi_measurer_instance = None
 
 
+def apply_font_family(font_obj, font_name: str, font_size: Optional[float] = None):
+    """Sets font family uniformly across Ascii, Other, and Complex/Bidi to prevent font inconsistencies in Word."""
+    if not font_obj or not font_name:
+        return
+    try:
+        font_obj.Name = font_name
+    except Exception:
+        pass
+    try:
+        font_obj.NameAscii = font_name
+    except Exception:
+        pass
+    try:
+        font_obj.NameOther = font_name
+    except Exception:
+        pass
+    try:
+        font_obj.NameBi = font_name
+    except Exception:
+        pass
+    if font_size is not None:
+        try:
+            font_obj.Size = font_size
+        except Exception:
+            pass
+
+
 class GdiTextMeasurer:
     """Accurately measures physical text width in points using Windows GDI typography engine with caching."""
 
@@ -107,6 +134,11 @@ def get_gdi_text_measurer() -> GdiTextMeasurer:
 
 class TypographyMixin:
     """Provides shared text measurement, markup stripping, and visual line calculations."""
+
+    def apply_font_family(self, font_obj, font_name: Optional[str] = None, font_size: Optional[float] = None):
+        """Sets font family uniformly across Ascii, Other, and Complex/Bidi on any Word Font or Range object."""
+        target_font = font_name or getattr(self, "font_name", "Times New Roman")
+        apply_font_family(font_obj, target_font, font_size)
 
     def measure_text_width_pt(self, doc, text: str, font_name: str = "Times New Roman", font_size: float = 12.0, is_bold: bool = False, is_italic: bool = False) -> float:
         """Accurately measures physical text width in points using Windows GDI typography engine with caching."""

@@ -25,6 +25,9 @@ class ULNCompiler:
     """
     def __init__(self, settings: Optional[Dict[str, Any]] = None):
         self.settings = settings or {}
+        self.font_name = self.settings.get("font_name") or self.settings.get("font_family") or "Times New Roman"
+        self.settings["font_name"] = self.font_name
+        self.settings["font_family"] = self.font_name
         self.renderer = ULNWordRenderer(self.settings)
 
     def compile(
@@ -111,7 +114,16 @@ class ULNCompiler:
                     pass
 
             if progress_callback:
-                progress_callback("Đang kết xuất tài liệu Word...", 0.45)
+                progress_callback("Đang kết xuất tài liệu Word...", 0.25)
+
+                def _render_progress(curr: int, total: int, msg: str):
+                    if total > 0:
+                        pct = 0.25 + (float(curr) / float(total)) * 0.60
+                        progress_callback(f"Đang render khối {curr}/{total}...", pct)
+                    else:
+                        progress_callback(msg, 0.50)
+
+                self.renderer.progress_callback = _render_progress
 
             # Pass cancel_check hook to renderer
             if cancel_check:
@@ -119,6 +131,12 @@ class ULNCompiler:
 
             # Execute pywin32 rendering
             self.renderer.render(blocks, doc, word)
+
+            # Enforce document-wide font consistency
+            try:
+                self.renderer.unify_document_fonts(doc)
+            except Exception:
+                pass
 
             if cancel_check and cancel_check():
                 raise KeyboardInterrupt("Đã tạm dừng tạo DOCX theo yêu cầu.")
