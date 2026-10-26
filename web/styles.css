@@ -213,9 +213,7 @@ input, button, select, textarea {
 }
 
 #viewEditor {
-  height: calc(100vh - 64px);
-  max-height: calc(100vh - 64px);
-  overflow: hidden;
+  min-height: calc(100vh - 64px);
   box-sizing: border-box;
 }
 
@@ -230,8 +228,10 @@ input, button, select, textarea {
   flex-direction: column;
   gap: 16px;
   flex-shrink: 0;
-  height: 100%;
-  max-height: 100%;
+  position: sticky;
+  top: 80px;
+  align-self: flex-start;
+  max-height: calc(100vh - 96px);
   overflow-y: auto;
   overflow-x: hidden;
   padding-right: 4px;
@@ -256,8 +256,7 @@ input, button, select, textarea {
   display: flex;
   flex-direction: column;
   min-width: 0;
-  height: 100%;
-  max-height: 100%;
+  min-height: calc(100vh - 96px);
 }
 
 /* ── Card Surfaces (Zero Border, Soft Shadow) ───────────────────── */
@@ -692,12 +691,10 @@ input, button, select, textarea {
 .editor-card {
   flex: 1;
   position: relative;
-  height: 100%;
-  max-height: 100%;
+  min-height: calc(100vh - 96px);
   border-radius: var(--radius-xl);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   background-color: var(--bg-surface);
   box-shadow: var(--shadow-card);
 }
@@ -710,12 +707,13 @@ input, button, select, textarea {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 10px;
-  position: relative;
-  top: 0;
-  z-index: 20;
+  position: sticky;
+  top: 64px;
+  z-index: 30;
   border-bottom: 1px solid var(--bg-hover);
   border-top-left-radius: var(--radius-xl);
   border-top-right-radius: var(--radius-xl);
+  box-shadow: 0 4px 12px -2px rgba(15, 23, 42, 0.06);
   flex-shrink: 0;
 }
 
@@ -760,10 +758,10 @@ input, button, select, textarea {
 
 /* ── Floating Search & Replace Bar (Ctrl+F) ─────────────────────── */
 .search-bar {
-  position: absolute;
-  top: 8px;
-  right: 18px;
-  z-index: 50;
+  position: fixed;
+  top: 76px;
+  right: max(32px, calc((100vw - 1920px) / 2 + 32px));
+  z-index: 120;
   background-color: var(--bg-surface);
   border: 1px solid var(--bg-hover);
   box-shadow: var(--shadow-dropdown);
@@ -861,6 +859,7 @@ input, button, select, textarea {
   background-color: #fbfcfe;
   overflow: hidden;
   position: relative;
+  min-height: calc(100vh - 220px);
 }
 
 .line-numbers {
