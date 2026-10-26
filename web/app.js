@@ -52,6 +52,8 @@ document.addEventListener('DOMContentLoaded', () => {
     enablePageNumbers: document.getElementById('enablePageNumbers'),
     openWordAfterCompile: document.getElementById('openWordAfterCompile'),
     backgroundMode: document.getElementById('backgroundMode'),
+    btnSaveSettings: document.getElementById('btnSaveSettings'),
+    btnResetSettings: document.getElementById('btnResetSettings'),
 
     // Images
     imageCountPill: document.getElementById('imageCountPill'),
@@ -275,8 +277,140 @@ document.addEventListener('DOMContentLoaded', () => {
     }, 4500);
   }
 
+  // ── Settings Persistence (Auto-Save & Load) ──────────────────────
+  const SETTINGS_STORAGE_KEY = 'docx_studio_settings_v1';
+  const DEFAULT_SETTINGS = {
+    fontFamily: 'Times New Roman',
+    fontSize: 12.0,
+    marginTop: 2.0,
+    marginBottom: 2.0,
+    marginLeft: 3.0,
+    marginRight: 1.5,
+    qPrefix: '',
+    qDelim: '.',
+    qColor: 'Default (Black) #000000',
+    optColor: 'Default (Black) #000000',
+    enablePageNumbers: true,
+    openWordAfterCompile: true,
+    backgroundMode: false,
+  };
+
+  function collectCurrentSettings() {
+    return {
+      fontFamily: el.fontFamily ? el.fontFamily.value : 'Times New Roman',
+      fontSize: el.fontSize ? parseFloat(el.fontSize.value) || 12.0 : 12.0,
+      marginTop: el.marginTop ? parseFloat(el.marginTop.value) || 2.0 : 2.0,
+      marginBottom: el.marginBottom ? parseFloat(el.marginBottom.value) || 2.0 : 2.0,
+      marginLeft: el.marginLeft ? parseFloat(el.marginLeft.value) || 3.0 : 3.0,
+      marginRight: el.marginRight ? parseFloat(el.marginRight.value) || 1.5 : 1.5,
+      qPrefix: el.qPrefix ? el.qPrefix.value : '',
+      qDelim: el.qDelim ? el.qDelim.value : '.',
+      qColor: el.qColor ? el.qColor.value : 'Default (Black) #000000',
+      optColor: el.optColor ? el.optColor.value : 'Default (Black) #000000',
+      enablePageNumbers: el.enablePageNumbers ? el.enablePageNumbers.checked : true,
+      openWordAfterCompile: el.openWordAfterCompile ? el.openWordAfterCompile.checked : true,
+      backgroundMode: el.backgroundMode ? el.backgroundMode.checked : false,
+    };
+  }
+
+  function applySettingsToUI(cfg) {
+    if (!cfg || typeof cfg !== 'object') return;
+    if (cfg.fontFamily && el.fontFamily) el.fontFamily.value = cfg.fontFamily;
+    if (cfg.fontSize !== undefined && el.fontSize) el.fontSize.value = cfg.fontSize;
+    if (cfg.marginTop !== undefined && el.marginTop) el.marginTop.value = cfg.marginTop;
+    if (cfg.marginBottom !== undefined && el.marginBottom) el.marginBottom.value = cfg.marginBottom;
+    if (cfg.marginLeft !== undefined && el.marginLeft) el.marginLeft.value = cfg.marginLeft;
+    if (cfg.marginRight !== undefined && el.marginRight) el.marginRight.value = cfg.marginRight;
+    if (cfg.qPrefix !== undefined && el.qPrefix) el.qPrefix.value = cfg.qPrefix;
+    if (cfg.qDelim !== undefined && el.qDelim) el.qDelim.value = cfg.qDelim;
+    if (cfg.qColor !== undefined && el.qColor) el.qColor.value = cfg.qColor;
+    if (cfg.optColor !== undefined && el.optColor) el.optColor.value = cfg.optColor;
+    if (cfg.enablePageNumbers !== undefined && el.enablePageNumbers) el.enablePageNumbers.checked = Boolean(cfg.enablePageNumbers);
+    if (cfg.openWordAfterCompile !== undefined && el.openWordAfterCompile) el.openWordAfterCompile.checked = Boolean(cfg.openWordAfterCompile);
+    if (cfg.backgroundMode !== undefined && el.backgroundMode) el.backgroundMode.checked = Boolean(cfg.backgroundMode);
+  }
+
+  let saveSettingsTimeout = null;
+  function saveSettings(showToastNotify = false) {
+    const current = collectCurrentSettings();
+    try {
+      localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(current));
+    } catch (_) {}
+
+    fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ settings: current }),
+    }).catch(() => {});
+
+    if (showToastNotify) {
+      showToast('Đã lưu cấu hình thiết lập mặc định thành công!', 'success');
+    }
+  }
+
+  function debounceSaveSettings() {
+    clearTimeout(saveSettingsTimeout);
+    saveSettingsTimeout = setTimeout(() => {
+      saveSettings(false);
+    }, 400);
+  }
+
+  async function loadPersistedSettings() {
+    try {
+      const local = localStorage.getItem(SETTINGS_STORAGE_KEY);
+      if (local) {
+        applySettingsToUI(JSON.parse(local));
+      }
+    } catch (_) {}
+
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.settings && Object.keys(data.settings).length > 0) {
+          applySettingsToUI(data.settings);
+          try {
+            localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(data.settings));
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+  }
+
+  // Auto-save when user changes any setting control
+  [
+    el.fontFamily, el.fontSize, el.marginTop, el.marginBottom,
+    el.marginLeft, el.marginRight, el.qPrefix, el.qDelim,
+    el.qColor, el.optColor, el.enablePageNumbers, el.openWordAfterCompile, el.backgroundMode
+  ].forEach((inputEl) => {
+    if (inputEl) {
+      inputEl.addEventListener('change', debounceSaveSettings);
+      if (inputEl.tagName === 'INPUT' && inputEl.type === 'number') {
+        inputEl.addEventListener('input', debounceSaveSettings);
+      }
+    }
+  });
+
+  if (el.btnSaveSettings) {
+    el.btnSaveSettings.addEventListener('click', () => {
+      saveSettings(true);
+    });
+  }
+
+  if (el.btnResetSettings) {
+    el.btnResetSettings.addEventListener('click', () => {
+      if (confirm('Khôi phục toàn bộ thiết lập về giá trị mặc định?')) {
+        applySettingsToUI(DEFAULT_SETTINGS);
+        saveSettings(true);
+        showToast('Đã khôi phục cài đặt mặc định!', 'info');
+      }
+    });
+  }
+
   // ── Initialize App & Environment ───────────────────────────────
   async function initApp() {
+    await loadPersistedSettings();
+
     try {
       const res = await fetch('/api/status');
       if (res.ok) {
@@ -596,34 +730,88 @@ document.addEventListener('DOMContentLoaded', () => {
     const text = el.ulnEditor.value;
     const lines = text.split('\n');
     const matches = [];
+    const imageList = Array.from(state.images.values());
 
     let currentQuestion = '';
-    const picRegex = /\[PIC:\s*([^\]]+)\]/i;
+    const picRegex = /\[PIC(?::\s*([^\]]*))?\]/gi;
 
     lines.forEach((line) => {
       const trimmed = line.trim();
-      if (/^(Câu|\d+|Question|Task|Exercise)\s*[\d\.\:]/i.test(trimmed)) {
-        currentQuestion = trimmed.slice(0, 70);
+      const qMatch = /(?:(?:\[(?:P\d?|TR|TAB\d?)\]\s*)?)(?:#?\d+[\.\:\)]|\b(?:Câu|Question|Task|Exercise|Bài)\s*\d+[\.\:\)]?)/i.exec(trimmed);
+      if (qMatch) {
+        currentQuestion = trimmed.slice(0, 80);
+      } else if (/^\[H[1-6]\]/i.test(trimmed)) {
+        currentQuestion = trimmed.replace(/^\[H[1-6]\]\s*/i, '').slice(0, 80);
       }
-      const match = picRegex.exec(line);
-      if (match) {
+
+      let match;
+      picRegex.lastIndex = 0;
+      while ((match = picRegex.exec(line)) !== null) {
+        const rawTag = match[0];
+        const arg = (match[1] || '').trim();
+
+        let snippet = trimmed;
+        if (line.includes('|')) {
+          const cells = line.split('|');
+          const foundCell = cells.find((c) => c.includes(rawTag));
+          if (foundCell) snippet = foundCell.trim();
+        }
+
         matches.push({
-          tag: match[0],
-          filename: match[1].trim(),
-          question: currentQuestion || 'Nội dung chung',
+          tag: rawTag,
+          arg: arg,
+          question: currentQuestion || 'Nội dung câu hỏi',
+          snippet: snippet,
           line: trimmed,
         });
       }
     });
 
     el.matchCardsContainer.innerHTML = '';
-    el.picMatchSummary.textContent = `Tìm thấy ${matches.length} thẻ [PIC] trong văn bản.`;
+    const numTags = matches.length;
+    const numImgs = imageList.length;
 
-    if (matches.length === 0) {
-      el.matchCardsContainer.innerHTML = '<div class="empty-state">Không tìm thấy thẻ [PIC] nào trong văn bản soạn thảo.</div>';
+    let statusText = `Tổng số thẻ [PIC]: ${numTags} | Số ảnh trong hàng đợi: ${numImgs}`;
+    if (numTags === 0) {
+      statusText += ' | Chưa tìm thấy thẻ [PIC] nào';
+    } else if (numTags === numImgs) {
+      statusText += ' | ✓ Khớp đủ 100% thứ tự ảnh';
+    } else if (numTags > numImgs) {
+      statusText += ` | ⚠ Còn thiếu ${numTags - numImgs} ảnh trong hàng đợi`;
+    } else {
+      statusText += ` | ℹ Hàng đợi có nhiều hơn ${numImgs - numTags} ảnh so với đề`;
+    }
+    el.picMatchSummary.textContent = statusText;
+
+    if (numTags === 0) {
+      el.matchCardsContainer.innerHTML = `
+        <div class="empty-state" style="padding: 24px 16px; text-align: center;">
+          <p style="font-weight: 600; color: var(--text-main); margin-bottom: 6px;">Không tìm thấy thẻ [PIC] nào trong văn bản soạn thảo.</p>
+          <p style="font-size: 12px; color: var(--text-muted);">Hãy sử dụng thẻ <code>[PIC]</code> (ví dụ: <code>#1. [PIC]</code> hoặc <code>[TAB2] #1. [PIC] | #2. [PIC]</code>) để đối chiếu ảnh minh họa với đề bài.</p>
+        </div>`;
     } else {
       matches.forEach((item, idx) => {
-        const foundImg = state.images.get(item.filename.toLowerCase());
+        let foundImg = null;
+        let matchNote = '';
+
+        // Priority 1: Match by filename or caption if specified in [PIC: name]
+        if (item.arg) {
+          const lowerArg = item.arg.toLowerCase();
+          foundImg = imageList.find((img) => {
+            const lowerName = img.filename.toLowerCase();
+            return lowerName === lowerArg || lowerName.replace(/\.[^/.]+$/, '') === lowerArg;
+          });
+          if (foundImg) {
+            matchNote = `Khớp tên: ${foundImg.filename}`;
+          }
+        }
+
+        // Priority 2: Match by sequential queue position
+        if (!foundImg && idx < imageList.length) {
+          foundImg = imageList[idx];
+          matchNote = `Khớp thứ tự Queue #${idx + 1}: ${foundImg.filename}`;
+        }
+
         const card = document.createElement('div');
         card.className = 'match-card';
 
@@ -635,21 +823,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const qnum = document.createElement('span');
         qnum.className = 'match-qnum';
-        qnum.textContent = `#${idx + 1} ${item.question}`;
+        qnum.textContent = `Thẻ #${idx + 1}: ${item.question}`;
 
         const tag = document.createElement('span');
         tag.className = `match-tag ${foundImg ? '' : 'missing'}`;
-        tag.textContent = foundImg ? `Có sẵn: ${item.filename}` : `Chưa có: ${item.filename}`;
+        tag.textContent = foundImg ? (matchNote || `Ảnh #${idx + 1}`) : `Thiếu ảnh (cần vị trí #${idx + 1})`;
 
         headerRow.appendChild(qnum);
         headerRow.appendChild(tag);
 
-        const snippet = document.createElement('div');
-        snippet.className = 'match-snippet';
-        snippet.textContent = item.line;
+        const snippetEl = document.createElement('div');
+        snippetEl.className = 'match-snippet';
+        snippetEl.textContent = item.snippet || item.line;
 
         info.appendChild(headerRow);
-        info.appendChild(snippet);
+        info.appendChild(snippetEl);
 
         const previewBox = document.createElement('div');
         previewBox.className = 'match-preview-box';
@@ -658,12 +846,20 @@ document.addEventListener('DOMContentLoaded', () => {
           const imgEl = document.createElement('img');
           imgEl.className = 'match-img';
           imgEl.src = foundImg.thumbnail;
-          imgEl.alt = item.filename;
+          imgEl.alt = foundImg.filename;
+          imgEl.title = `Ảnh #${idx + 1}: ${foundImg.filename}`;
+
+          const lblEl = document.createElement('span');
+          lblEl.className = 'match-img-label';
+          lblEl.textContent = `#${idx + 1}: ${foundImg.filename}`;
+          lblEl.title = foundImg.filename;
+
           previewBox.appendChild(imgEl);
+          previewBox.appendChild(lblEl);
         } else {
           const missingMsg = document.createElement('div');
           missingMsg.className = 'match-img-placeholder';
-          missingMsg.textContent = 'Chưa có ảnh';
+          missingMsg.innerHTML = `Chưa có ảnh<br><span style="font-size: 10px; font-weight: normal; color: var(--text-muted);">(Cần ảnh #${idx + 1})</span>`;
           previewBox.appendChild(missingMsg);
         }
 
@@ -980,9 +1176,13 @@ document.addEventListener('DOMContentLoaded', () => {
       enable_page_numbers: el.enablePageNumbers.checked,
     };
 
+    const userImages = Array.from(state.images.values()).map((img) => img.temp_path).filter(Boolean);
+    settings.user_images = userImages;
+
     const payload = {
       uln_text: text,
       settings: settings,
+      user_images: userImages,
       open_word: el.openWordAfterCompile.checked,
       background_mode: el.backgroundMode.checked,
     };

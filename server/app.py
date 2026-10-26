@@ -11,6 +11,7 @@ import socket
 import threading
 import base64
 import io
+import json
 import webbrowser
 from typing import List, Dict, Any, Optional
 
@@ -78,6 +79,11 @@ class CompileRequest(BaseModel):
     output_filename: Optional[str] = None
     open_word: bool = True
     background_mode: bool = False
+    user_images: Optional[List[str]] = None
+
+
+class SettingsRequest(BaseModel):
+    settings: Dict[str, Any]
 
 
 class EmbedRequest(BaseModel):
@@ -213,6 +219,33 @@ def save_prompt(req: PromptRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+SETTINGS_FILE = os.path.join(project_root, "settings.json")
+
+
+@app.get("/api/settings")
+def get_user_settings():
+    """Reads saved user configuration from settings.json."""
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                return {"settings": data}
+        except Exception:
+            pass
+    return {"settings": {}}
+
+
+@app.post("/api/settings")
+def save_user_settings(req: SettingsRequest):
+    """Saves user configuration to settings.json."""
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(req.settings, f, ensure_ascii=False, indent=2)
+        return {"success": True, "saved": req.settings}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/compile")
 def start_compilation(req: CompileRequest):
     """Starts background Word COM compilation thread."""
@@ -248,6 +281,10 @@ def start_compilation(req: CompileRequest):
             font_name = settings.get("font_name") or settings.get("font_family") or "Times New Roman"
             settings["font_name"] = font_name
             settings["font_family"] = font_name
+            if req.user_images:
+                settings["user_images"] = list(req.user_images)
+            elif "user_images" not in settings:
+                settings["user_images"] = []
             settings["cancel_event"] = compile_manager.cancel_event
             compiler = ULNCompiler(settings)
 

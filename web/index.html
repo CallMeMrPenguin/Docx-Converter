@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/styles.css?v=1.0.4">
+  <link rel="stylesheet" href="/static/styles.css?v=1.0.5">
 </head>
 <body>
   <!-- Top Header Navigation -->
@@ -45,8 +45,12 @@
     <aside class="sidebar">
       <!-- Card: Formatting Settings -->
       <section class="card settings-card">
-        <div class="card-header">
+        <div class="card-header space-between">
           <h2 class="card-title">Tùy Chỉnh Định Dạng</h2>
+          <div class="header-actions-inline">
+            <button class="btn btn-xs btn-outline" id="btnSaveSettings" title="Lưu cấu hình hiện tại để lần sau mở tự động nạp">Lưu cài đặt</button>
+            <button class="btn btn-xs btn-ghost" id="btnResetSettings" title="Khôi phục thiết lập gốc">Mặc định</button>
+          </div>
         </div>
         <div class="card-body">
           <div class="form-group">
@@ -493,6 +497,6 @@
   <!-- Toast Notifications -->
   <div class="toast-container" id="toastContainer"></div>
 
-  <script src="/static/app.js?v=1.0.3"></script>
+  <script src="/static/app.js?v=1.0.5"></script>
 </body>
 </html>
