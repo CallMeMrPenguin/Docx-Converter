@@ -47,6 +47,17 @@ from renderers.utils import (
 from renderers import RendererBlocksMixin
 
 
+def count_total_render_blocks(blocks: List[ULNBlock]) -> int:
+    """Recursively counts all leaf/atomic render blocks across the document."""
+    total = 0
+    for b in blocks:
+        if b.children:
+            total += count_total_render_blocks(b.children)
+        else:
+            total += 1
+    return max(1, total)
+
+
 class ULNWordRenderer(RendererBlocksMixin):
     """
     Pure tag-driven pywin32 COM document renderer with adaptive column calculation,
@@ -56,6 +67,10 @@ class ULNWordRenderer(RendererBlocksMixin):
 
     def __init__(self, settings: Optional[Dict[str, Any]] = None):
         self.settings = settings or {}
+
+        # Document-wide Progress Tracking
+        self.total_doc_blocks: int = 0
+        self.processed_doc_blocks: int = 0
 
         # Default Typography and Margin Settings
         self.font_name = self.settings.get("font_name") or self.settings.get("font_family") or "Times New Roman"
@@ -254,10 +269,42 @@ class ULNWordRenderer(RendererBlocksMixin):
                     break
         return False
 
+    def report_progress(self, block: ULNBlock):
+        """Dispatches monotonic whole-document rendering progress updates."""
+        if not self.progress_callback or block.children:
+            return
+        curr = min(self.total_doc_blocks, max(1, self.processed_doc_blocks))
+        total = max(1, self.total_doc_blocks)
+
+        q_info = ""
+        if block.content:
+            pref, delim, q_num, _ = extract_question_prefix_and_body(block.content)
+            if q_num is not None:
+                q_info = f"Câu #{q_num}"
+            elif block.tag.startswith("H"):
+                q_info = f"Tiêu đề {block.tag}"
+        elif block.col1:
+            pref, delim, q_num, _ = extract_question_prefix_and_body(block.col1)
+            if q_num is not None:
+                q_info = f"Câu #{q_num}"
+
+        pct_val = int(round((curr / total) * 100))
+        if q_info:
+            msg = f"Đang kết xuất toàn bộ file ({curr}/{total}): {q_info}..."
+        else:
+            msg = f"Đang kết xuất toàn bộ file: {curr}/{total} khối ({pct_val}%)..."
+
+        try:
+            self.progress_callback(curr, total, msg)
+        except Exception:
+            pass
+
     def render(self, blocks: List[ULNBlock], doc, word, is_root: bool = True):
         """Renders parsed ULNBlocks into the active document purely driven by structural AST tags."""
         if is_root:
             self.configure_document(doc)
+            self.total_doc_blocks = count_total_render_blocks(blocks)
+            self.processed_doc_blocks = 0
         sel = word.Selection
 
         printable_width_cm = 21.0 - self.margin_left - self.margin_right
@@ -266,16 +313,14 @@ class ULNWordRenderer(RendererBlocksMixin):
         idx_block = 0
         while idx_block < total_blocks:
             self.check_cancellation()
-            if self.progress_callback:
-                try:
-                    self.progress_callback(idx_block + 1, total_blocks, f"Đang render khối {idx_block + 1}/{total_blocks}...")
-                except Exception:
-                    pass
-
-            sel = word.Selection
             block = blocks[idx_block]
             tag = block.tag
 
+            if not block.children:
+                self.processed_doc_blocks = min(self.total_doc_blocks, self.processed_doc_blocks + 1)
+                self.report_progress(block)
+
+            sel = word.Selection
             sel.Font.Italic = 0
             sel.Font.Bold = 0
             sel.Font.Underline = 0
@@ -458,6 +503,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                         tab_fake = ULNBlock(tag="TAB2", col1=text_part, col2=pic_str)
                         self.render_side_by_side_pic_mcq(sel, doc, word, tab_fake, blocks[idx_block + 1], printable_width_cm)
                         idx_block += 2
+                        self.processed_doc_blocks = min(self.total_doc_blocks, self.processed_doc_blocks + 1)
                         continue
 
                     pic_info = parse_pic_tag(pic_str) or PicInfo(description="Sign / Picture", pos="center", size="small")
@@ -756,6 +802,7 @@ class ULNWordRenderer(RendererBlocksMixin):
                         tab_fake = ULNBlock(tag="TAB2", col1=text_part, col2=pic_str)
                         self.render_side_by_side_pic_mcq(sel, doc, word, tab_fake, blocks[idx_block + 1], printable_width_cm)
                         idx_block += 2
+                        self.processed_doc_blocks = min(self.total_doc_blocks, self.processed_doc_blocks + 1)
                         continue
 
                     pic_info = parse_pic_tag(pic_str) or PicInfo(description="Activity Picture", pos="right", size="small")
@@ -891,11 +938,17 @@ class ULNWordRenderer(RendererBlocksMixin):
                         has_pic_in_tab = ("[PIC" in c1_txt.upper() or "[PIC" in c2_txt.upper() or parse_pic_tag(c1_txt) is not None or parse_pic_tag(c2_txt) is not None)
                         if has_pic_in_tab and k < len(blocks) and blocks[k].tag == "OPT":
                             self.render_side_by_side_pic_mcq(sel, doc, word, single_tab, blocks[k], printable_width_cm)
+                            advanced = (k + 1) - idx_block
                             idx_block = k + 1
+                            if advanced > 1:
+                                self.processed_doc_blocks = min(self.total_doc_blocks, self.processed_doc_blocks + advanced - 1)
                             continue
 
                     self.render_tab2_group(sel, doc, word, tab2_group, printable_width_cm)
-                    idx_block += len(tab2_group)
+                    group_len = len(tab2_group)
+                    idx_block += group_len
+                    if group_len > 1:
+                        self.processed_doc_blocks = min(self.total_doc_blocks, self.processed_doc_blocks + group_len - 1)
                     continue
 
             elif tag == "PIC_GRID":

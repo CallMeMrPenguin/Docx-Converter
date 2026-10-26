@@ -118,10 +118,11 @@ class ULNCompiler:
 
                 def _render_progress(curr: int, total: int, msg: str):
                     if total > 0:
-                        pct = 0.25 + (float(curr) / float(total)) * 0.60
-                        progress_callback(f"Đang render khối {curr}/{total}...", pct)
+                        pct = 0.25 + (min(1.0, float(curr) / float(total))) * 0.60
+                        status_text = msg if msg else f"Đang kết xuất toàn bộ file ({curr}/{total} khối)..."
+                        progress_callback(status_text, pct)
                     else:
-                        progress_callback(msg, 0.50)
+                        progress_callback(msg or "Đang kết xuất tài liệu Word...", 0.50)
 
                 self.renderer.progress_callback = _render_progress
 
